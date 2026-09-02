@@ -1,0 +1,26 @@
+name: Deploy 5G Simulator to LXC
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Detener infraestructura previa
+        run: docker compose down -v
+        
+      - name: Desplegar entorno 5G y Panel Streamlit
+        run: |
+          # Levanta la base de datos, el core 5G, la antena virtual y el monitor Python
+          docker compose up -d --build
+          
+      - name: Verificar estado de los servicios
+        run: docker compose ps
