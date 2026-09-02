@@ -1,0 +1,10 @@
+info:
+  version: 1.0.3
+  description: Routing information for UE
+
+ueRoutingInfo:
+  UE1:
+    members:
+      - imsi-001010000000001    # debe coincidir con ueconfig.yaml -> supi
+    topology: []
+    specificPath: []

@@ -1,0 +1,92 @@
+info:
+  version: 1.0.3
+  description: AMF initial local configuration
+
+configuration:
+  amfName: AMF
+  ngapIpList:
+    - 10.100.0.12          # IP del AMF, debe coincidir con gnbconfig.yaml -> amfConfigs.address
+  sbi:
+    scheme: http
+    registerIPv4: 10.100.0.12
+    bindingIPv4: 0.0.0.0
+    port: 8000
+  nrfUri: http://10.100.0.11:8000   # IP del NRF
+
+  servedGuamiList:
+    - plmnId:
+        mcc: '001'
+        mnc: '01'
+      amfId: 8000              # debe coincidir con ueconfig.yaml -> amf: '8000'
+
+  supportTAIList:
+    - plmnId:
+        mcc: '001'
+        mnc: '01'
+      tac: 1                  # debe coincidir con gnbconfig.yaml -> tac: 1
+
+  plmnSupportList:
+    - plmnId:
+        mcc: '001'
+        mnc: '01'
+      snssaiList:
+        - sst: 1              # debe coincidir con el slice del gNB/UE
+          sd: '010203'
+
+  supportDnnList:
+    - internet
+
+  security:
+    integrityOrder:
+      - NIA2
+      - NIA1
+      - NIA0
+    cipheringOrder:
+      - NEA0
+      - NEA1
+      - NEA2
+
+  networkName:
+    full: free5GC
+    short: free5GC
+
+  networkFeatureSupport5GS:
+    enable: true
+    length: 1
+    imsVoPS: 0
+    emc: 0
+    emf: 0
+    iwkN26: 0
+    mpsi: 0
+    emcN3: 0
+    mcsi: 0
+
+  locality: area1
+  t3502Value: 720
+  t3512Value: 3600
+  non3gppDeregTimerValue: 3240
+  t3513:
+    enable: true
+    expireTime: 6s
+    maxRetryTimes: 4
+  t3522:
+    enable: true
+    expireTime: 6s
+    maxRetryTimes: 4
+  t3550:
+    enable: true
+    expireTime: 6s
+    maxRetryTimes: 4
+  t3560:
+    enable: true
+    expireTime: 6s
+    maxRetryTimes: 4
+  t3565:
+    enable: true
+    expireTime: 6s
+    maxRetryTimes: 4
+
+logger:
+  AMF:
+    debugLevel: info
+    ReportCaller: false

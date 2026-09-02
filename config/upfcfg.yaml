@@ -1,0 +1,23 @@
+version: 1.0.3
+description: UPF initial local configuration
+
+pfcp:
+  addr: 10.100.0.14        # IP del propio UPF (interfaz PFCP hacia el SMF)
+  nodeID: 10.100.0.14
+  retransTimeout: 1s
+  maxRetrans: 3
+
+gtpu:
+  forwarder: gtp5g
+  ifList:
+    - addr: 10.100.0.14    # IP del propio UPF (interfaz GTP-U hacia el gNB)
+      type: N3
+
+dnnList:
+  - dnn: internet
+    cidr: 10.60.0.0/16     # debe coincidir con el pool definido en smfcfg.yaml
+
+logger:
+  UPF:
+    debugLevel: info
+    ReportCaller: false

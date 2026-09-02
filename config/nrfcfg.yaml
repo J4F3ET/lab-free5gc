@@ -1,0 +1,24 @@
+info:
+  version: 1.0.3
+  description: NRF initial local configuration
+
+configuration:
+  sbi:
+    scheme: http
+    registerIPv4: 10.100.0.11   # IP del propio NRF en la red 5g_net
+    bindingIPv4: 0.0.0.0
+    port: 8000
+  mongodb:
+    name: free5gc
+    url: mongodb://10.100.0.10:27017   # IP de free5gc-db
+  serviceNameList:
+    - nnrf-nfm
+    - nnrf-disc
+  DefaultPlmnId:
+    mcc: '001'
+    mnc: '01'
+
+logger:
+  NRF:
+    debugLevel: info
+    ReportCaller: false

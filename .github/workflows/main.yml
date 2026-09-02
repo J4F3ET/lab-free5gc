@@ -9,53 +9,58 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    
+
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
       - name: Detener infraestructura previa
         run: docker compose down -v
-        
+
       - name: Desplegar entorno 5G y Panel Streamlit
         run: docker compose up -d --build
-      - name: Desplegando ambulance-monitor
-        run: |
-                  echo "Mostrando logs del contenedor ambulance-monitor durante 12 minutos..."
-                  
-                  # Inicia los logs en segundo plano y guarda su PID
-                  docker logs -f ambulance-monitor &
-                  LOG_PID=$!
-                  
-                  # Espera 720 segundos (12 minutos) mientras se imprimen los logs
-                  sleep 720
-                  
-                  # Detiene el proceso de seguimiento de logs para continuar con el workflow
-                  kill $LOG_PID || true
-      - name: Esperar a que ambulance-monitor responda (200 OK)
 
+      - name: Mostrar logs de ambulance-monitor (background, no bloqueante)
+        run: |
+          echo "Mostrando logs de ambulance-monitor en background..."
+          nohup docker logs -f ambulance-monitor > ambulance-monitor.log 2>&1 &
+          echo $! > log_pid.txt
+
+      - name: Esperar a que ambulance-monitor responda (200 OK)
+        run: |
           echo "Esperando a que Streamlit instale dependencias y esté listo..."
-          
+
           timeout=240 # Tiempo máximo de espera en segundos (4 minutos)
           elapsed=0
-          
+
           until curl -s -o /dev/null -w "%{http_code}" http://localhost:8501 | grep -q "200"; do
             if [ $elapsed -ge $timeout ]; then
               echo "Error: El servicio tardó demasiado en responder."
+              echo "--- Últimos logs de ambulance-monitor ---"
+              docker logs --tail 100 ambulance-monitor || true
               exit 1
             fi
             sleep 5
             elapsed=$((elapsed + 5))
             echo "Intentando conectar... (${elapsed}s)"
           done
-          
+
           echo "¡El servicio ambulance-monitor está activo y respondiendo 200 OK!"
+
+      - name: Detener logs en background
+        if: always()
+        run: |
+          if [ -f log_pid.txt ]; then
+            kill "$(cat log_pid.txt)" 2>/dev/null || true
+            rm -f log_pid.txt
+          fi
+
       - name: Esperar a que el servicio responda vía Tailscale (200 OK)
         run: |
           echo "Esperando a que https://red5g.tail5afc32.ts.net esté disponible..."
           timeout=180
           elapsed=0
-          
+
           until curl -s -L -o /dev/null -w "%{http_code}" https://red5g.tail5afc32.ts.net | grep -q "200"; do
             if [ $elapsed -ge $timeout ]; then
               echo "Error: El servicio tardó demasiado en responder a través de Tailscale."
@@ -65,7 +70,20 @@ jobs:
             elapsed=$((elapsed + 5))
             echo "Intentando conectar... (${elapsed}s)"
           done
-          
+
           echo "¡El servicio responde correctamente a través de la red de Tailscale!"
+
       - name: Verificar estado de los servicios
-        run: docker compose ps
+        run: |
+          docker compose ps
+
+          echo "Verificando que ningún contenedor esté caído o reiniciando..."
+          BAD_STATE=$(docker compose ps --format json | grep -Ei '"State":"(restarting|exited|dead)"' || true)
+
+          if [ -n "$BAD_STATE" ]; then
+            echo "Error: al menos un contenedor no está en estado saludable."
+            docker compose ps
+            exit 1
+          fi
+
+          echo "Todos los servicios están arriba correctamente."

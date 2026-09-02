@@ -12,13 +12,21 @@ services:
     networks:
       5g_net:
         ipv4_address: 10.100.0.10
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: always
 
   free5gc-nrf:
     image: free5gc/nrf:latest
     container_name: free5gc-nrf
+    volumes:
+      - ./config/nrfcfg.yaml:/free5gc/config/nrfcfg.yaml
     depends_on:
-      - free5gc-db
+      free5gc-db:
+        condition: service_healthy
     networks:
       5g_net:
         ipv4_address: 10.100.0.11
@@ -27,16 +35,21 @@ services:
   free5gc-amf:
     image: free5gc/amf:latest
     container_name: free5gc-amf
+    volumes:
+      - ./config/amfcfg.yaml:/free5gc/config/amfcfg.yaml
     depends_on:
       - free5gc-nrf
     networks:
       5g_net:
-        ipv4_address: 10.100.0.12
+        ipv4_address: 10.100.0.12   # <-- esta es la IP real del AMF
     restart: always
 
   free5gc-smf:
     image: free5gc/smf:latest
     container_name: free5gc-smf
+    volumes:
+      - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml
+      - ./config/uerouting.yaml:/free5gc/config/uerouting.yaml
     depends_on:
       - free5gc-nrf
     networks:
@@ -48,6 +61,8 @@ services:
     image: free5gc/upf:latest
     container_name: free5gc-upf
     privileged: true
+    volumes:
+      - ./config/upfcfg.yaml:/free5gc/config/upfcfg.yaml
     depends_on:
       - free5gc-smf
     networks:
@@ -71,6 +86,23 @@ services:
       5g_net:
         ipv4_address: 10.100.0.30
     restart: always
+    
+  ueransim-ue:
+    image: free5gc/ueransim:latest
+    container_name: ueransim-ue
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    command: ./nr-ue -c ./config/ueconfig.yaml
+    volumes:
+      - ./config:/ueransim/config
+    depends_on:
+      - ueransim-gnb
+    networks:
+      5g_net:
+        ipv4_address: 10.100.0.31
+    restart: always
 
   ambulance-monitor:
     image: python:3.10-slim
@@ -84,11 +116,12 @@ services:
     ports:
       - "80:8501"
     depends_on:
-      - ueransim-gnb
+      - ueransim-ue
     networks:
       5g_net:
         ipv4_address: 10.100.0.40
     restart: always
+
   dozzle:
     image: amir20/dozzle:latest
     container_name: monitor-dozzle
