@@ -1,0 +1,14 @@
+mcc: '001'
+mnc: '01'
+tac: 1
+gnbId: 1
+nci: '0x00000001'
+linkIp: '10.100.0.30'
+ngapIp: '10.100.0.30'
+gtpIp: '10.100.0.30'
+amfConfigs:
+  - address: '10.100.0.20'
+    port: 38412
+slices:
+  - sst: 1
+    sd: 0x010203
