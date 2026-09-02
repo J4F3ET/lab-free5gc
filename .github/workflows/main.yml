@@ -23,7 +23,8 @@ jobs:
       - name: Esperar a que ambulance-monitor responda (200 OK)
         run: |
           echo "Esperando a que Streamlit instale dependencias y esté listo..."
-          timeout=180 # Tiempo máximo de espera en segundos (3 minutos)
+          sleep 480 # Duerme mientras se instala dependencias y se prepara el servidor
+          timeout=240 # Tiempo máximo de espera en segundos (4 minutos)
           elapsed=0
           
           until curl -s -o /dev/null -w "%{http_code}" http://localhost:8501 | grep -q "200"; do
