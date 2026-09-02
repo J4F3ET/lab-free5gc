@@ -1,0 +1,67 @@
+version: '3.8'
+
+networks:
+  5g_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.0.0/16
+
+services:
+  open5gs-db:
+    image: mongo:4.4
+    container_name: open5gs-db
+    networks:
+      5g_net:
+        ipv4_address: 10.100.0.10
+    volumes:
+      - mongodb_data:/data/db
+    restart: always
+
+  open5gs-cc:
+    image: open5gs/mme:latest
+    container_name: open5gs-cc
+    environment:
+      - DB_URI=mongodb://10.100.0.10/open5gs
+    depends_on:
+      - open5gs-db
+    networks:
+      5g_net:
+        ipv4_address: 10.100.0.20
+    restart: always
+
+  srsran-gnb:
+    image: srsran/srsran:latest
+    container_name: srsran-gnb
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    depends_on:
+      - open5gs-cc
+    networks:
+      5g_net:
+        ipv4_address: 10.100.0.30
+    command: gnb -m rfsim --rfsim.server_addr 10.100.0.20
+    restart: always
+
+  ambulance-monitor:
+    image: python:3.10-slim
+    container_name: ambulance-monitor
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      bash -c "pip install streamlit pandas numpy requests &&
+               streamlit run app.py --server.address=0.0.0.0 --server.port=8501"
+    ports:
+      - "8501:8501"
+    depends_on:
+      - srsran-gnb
+    networks:
+      5g_net:
+        ipv4_address: 10.100.0.40
+    restart: always
+
+volumes:
+  mongodb_data:
