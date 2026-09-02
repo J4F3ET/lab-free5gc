@@ -3,7 +3,7 @@ name: Deploy 5G Simulator to LXC
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
 
 jobs:
