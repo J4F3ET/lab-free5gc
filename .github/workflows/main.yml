@@ -21,19 +21,19 @@ jobs:
         run: docker compose up -d --build
       - name: Desplegando ambulance-monitor
         run: |
-                  echo "Mostrando logs del contenedor ambulance-monitor durante 12 minutos..."
-                  
-                  # Inicia los logs en segundo plano y guarda su PID
-                  docker logs -f ambulance-monitor &
-                  LOG_PID=$!
-                  
-                  # Espera 720 segundos (12 minutos) mientras se imprimen los logs
-                  sleep 720
-                  
-                  # Detiene el proceso de seguimiento de logs para continuar con el workflow
-                  kill $LOG_PID || true
+            echo "Mostrando logs del contenedor ambulance-monitor durante 12 minutos..."
+            
+            # Inicia los logs en segundo plano y guarda su PID
+            docker logs -f ambulance-monitor &
+            LOG_PID=$!
+            
+            # Espera 720 segundos (12 minutos) mientras se imprimen los logs
+            sleep 720
+            
+            # Detiene el proceso de seguimiento de logs para continuar con el workflow
+            kill $LOG_PID || true
       - name: Esperar a que ambulance-monitor responda (200 OK)
-
+        run: |
           echo "Esperando a que Streamlit instale dependencias y esté listo..."
           
           timeout=240 # Tiempo máximo de espera en segundos (4 minutos)
