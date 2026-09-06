@@ -1,135 +1,327 @@
+# =====================================================================
+#  lab-free5gc — nucleo 5G emulado + observabilidad
+# =====================================================================
+
+x-f5gc-common: &f5gc-common
+  restart: unless-stopped
+  environment:
+    GIN_MODE: release
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "3" }
+
 networks:
-  5g_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.100.0.0/16
+  sbi_net:
+    name: sbi_net
+    ipam: { config: [ { subnet: 10.100.200.0/24 } ] }
+    driver_opts: { com.docker.network.driver.mtu: "1400" }
+  n3_net:
+    name: n3_net
+    ipam: { config: [ { subnet: 10.100.201.0/24 } ] }
+    driver_opts: { com.docker.network.driver.mtu: "1400" }
+  radio_net:
+    name: radio_net
+    ipam: { config: [ { subnet: 10.100.203.0/24 } ] }
+    driver_opts: { com.docker.network.driver.mtu: "1400" }
+  dn_net:
+    name: dn_net
+    ipam: { config: [ { subnet: 10.100.204.0/24 } ] }
+    driver_opts: { com.docker.network.driver.mtu: "1400" }
+  obs_net:
+    name: obs_net
+    ipam: { config: [ { subnet: 10.100.205.0/24 } ] }
+
+volumes:
+  mongo-data:
+  prom-data:
+  grafana-data:
 
 services:
-  free5gc-db:
-    image: mongo:4.4
-    container_name: free5gc-db
+
+  # ------------------------------------------------------------------
+  #  Datos
+  # ------------------------------------------------------------------
+  mongodb:
+    image: mongo:${MONGO_TAG}
+    container_name: mongodb
+    restart: unless-stopped
+    command: mongod --port 27017
+    volumes: [ mongo-data:/data/db ]
     networks:
-      5g_net:
-        ipv4_address: 10.100.0.10
+      sbi_net: { ipv4_address: 10.100.200.40 }
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo --quiet
-      interval: 5s
+      test: ["CMD","mongosh","--quiet","--eval","db.adminCommand('ping')"]
+      interval: 10s
       timeout: 5s
-      retries: 10
-    restart: always
+      retries: 12
 
-  free5gc-nrf:
-    image: free5gc/nrf:latest
-    container_name: free5gc-nrf
-    volumes:
-      - ./config/nrfcfg.yaml:/free5gc/config/nrfcfg.yaml
-    depends_on:
-      free5gc-db:
-        condition: service_healthy
+  # ------------------------------------------------------------------
+  #  Plano de control
+  # ------------------------------------------------------------------
+  nrf:
+    <<: *f5gc-common
+    image: free5gc/nrf:${FREE5GC_TAG}
+    container_name: nrf
+    command: ./nrf -c ../config/nrfcfg.yaml
+    environment:
+      DB_URI: mongodb://mongodb:27017/free5gc
+      GIN_MODE: release
+    volumes: [ ./config/nrfcfg.yaml:/free5gc/config/nrfcfg.yaml:ro ]
     networks:
-      5g_net:
-        ipv4_address: 10.100.0.11
-    restart: always
-
-  free5gc-amf:
-    image: free5gc/amf:latest
-    container_name: free5gc-amf
-    volumes:
-      - ./config/amfcfg.yaml:/free5gc/config/amfcfg.yaml
+      sbi_net: { ipv4_address: 10.100.200.10 }
     depends_on:
-      - free5gc-nrf
-    networks:
-      5g_net:
-        ipv4_address: 10.100.0.12   # <-- esta es la IP real del AMF
-    restart: always
+      mongodb: { condition: service_healthy }
 
-  free5gc-smf:
-    image: free5gc/smf:latest
-    container_name: free5gc-smf
+  udr:
+    <<: *f5gc-common
+    image: free5gc/udr:${FREE5GC_TAG}
+    container_name: udr
+    command: ./udr -c ../config/udrcfg.yaml
+    environment:
+      DB_URI: mongodb://mongodb:27017/free5gc
+      GIN_MODE: release
+    volumes: [ ./config/udrcfg.yaml:/free5gc/config/udrcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.15 } }
+    depends_on: [ nrf ]
+
+  udm:
+    <<: *f5gc-common
+    image: free5gc/udm:${FREE5GC_TAG}
+    container_name: udm
+    command: ./udm -c ../config/udmcfg.yaml
+    volumes: [ ./config/udmcfg.yaml:/free5gc/config/udmcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.14 } }
+    depends_on: [ nrf, udr ]
+
+  ausf:
+    <<: *f5gc-common
+    image: free5gc/ausf:${FREE5GC_TAG}
+    container_name: ausf
+    command: ./ausf -c ../config/ausfcfg.yaml
+    volumes: [ ./config/ausfcfg.yaml:/free5gc/config/ausfcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.13 } }
+    depends_on: [ nrf ]
+
+  pcf:
+    <<: *f5gc-common
+    image: free5gc/pcf:${FREE5GC_TAG}
+    container_name: pcf
+    command: ./pcf -c ../config/pcfcfg.yaml
+    volumes: [ ./config/pcfcfg.yaml:/free5gc/config/pcfcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.16 } }
+    depends_on: [ nrf ]
+
+  nssf:
+    <<: *f5gc-common
+    image: free5gc/nssf:${FREE5GC_TAG}
+    container_name: nssf
+    command: ./nssf -c ../config/nssfcfg.yaml
+    volumes: [ ./config/nssfcfg.yaml:/free5gc/config/nssfcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.17 } }
+    depends_on: [ nrf ]
+
+  amf:
+    <<: *f5gc-common
+    image: free5gc/amf:${FREE5GC_TAG}
+    container_name: amf
+    command: ./amf -c ../config/amfcfg.yaml
+    volumes: [ ./config/amfcfg.yaml:/free5gc/config/amfcfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.11 } }
+    depends_on: [ nrf, ausf, udm, pcf, nssf ]
+
+  smf:
+    <<: *f5gc-common
+    image: free5gc/smf:${FREE5GC_TAG}
+    container_name: smf
+    command: ./smf -c ../config/smfcfg.yaml -u ../config/uerouting.yaml
     volumes:
-      - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml
-      - ./config/uerouting.yaml:/free5gc/config/uerouting.yaml
-    depends_on:
-      - free5gc-nrf
-    networks:
-      5g_net:
-        ipv4_address: 10.100.0.13
-    restart: always
+      - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml:ro
+      - ./config/uerouting.yaml:/free5gc/config/uerouting.yaml:ro
+    networks: { sbi_net: { ipv4_address: 10.100.200.12 } }
+    depends_on: [ nrf, amf, upf ]
 
-  free5gc-upf:
-    image: free5gc/upf:latest
-    container_name: free5gc-upf
+  # ------------------------------------------------------------------
+  #  Plano de usuario  (requiere gtp5g cargado en el host Proxmox)
+  # ------------------------------------------------------------------
+  upf:
+    image: free5gc/upf:${FREE5GC_TAG}
+    container_name: upf
+    restart: unless-stopped
+    command: bash -c "/free5gc/upf-nat.sh && ./upf -c ../config/upfcfg.yaml"
+    volumes:
+      - ./config/upfcfg.yaml:/free5gc/config/upfcfg.yaml:ro
+      - ./config/upf-nat.sh:/free5gc/upf-nat.sh:ro
+    cap_add: [ NET_ADMIN, SYS_MODULE ]
     privileged: true
-    volumes:
-      - ./config/upfcfg.yaml:/free5gc/config/upfcfg.yaml
-    depends_on:
-      - free5gc-smf
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.rp_filter: "2"
     networks:
-      5g_net:
-        ipv4_address: 10.100.0.14
-    restart: always
+      sbi_net: { ipv4_address: 10.100.200.20 }   # N4 (PFCP)
+      n3_net:  { ipv4_address: 10.100.201.20 }   # N3 (GTP-U)
+      dn_net:  { ipv4_address: 10.100.204.20 }   # Data Network
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "3" }
 
-  ueransim-gnb:
-    image: free5gc/ueransim:latest
-    container_name: ueransim-gnb
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-    command: ./nr-gnb -c ./config/gnbconfig.yaml
-    volumes:
-      - ./config:/ueransim/config
-    depends_on:
-      - free5gc-amf
+  # ------------------------------------------------------------------
+  #  RAN emulada
+  # ------------------------------------------------------------------
+  gnb:
+    image: free5gc/ueransim:${UERANSIM_TAG}
+    container_name: gnb
+    restart: unless-stopped
+    command: ./nr-gnb -c ./config/gnb.yaml
+    volumes: [ ./ueransim/gnb.yaml:/ueransim/config/gnb.yaml:ro ]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
     networks:
-      5g_net:
-        ipv4_address: 10.100.0.30
-    restart: always
-    
-  ueransim-ue:
-    image: free5gc/ueransim:latest
-    container_name: ueransim-ue
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-    command: ./nr-ue -c ./config/ueconfig.yaml
-    volumes:
-      - ./config:/ueransim/config
-    depends_on:
-      - ueransim-gnb
-    networks:
-      5g_net:
-        ipv4_address: 10.100.0.31
-    restart: always
+      sbi_net:   { ipv4_address: 10.100.200.30 }   # N2 (NGAP/SCTP)
+      n3_net:    { ipv4_address: 10.100.201.30 }   # N3 (GTP-U)
+      radio_net: { ipv4_address: 10.100.203.30 }   # radio emulada
+    depends_on: [ amf, upf ]
 
-  ambulance-monitor:
-    image: python:3.10-slim
-    container_name: ambulance-monitor
-    working_dir: /app
+  ue:
+    image: free5gc/ueransim:${UERANSIM_TAG}
+    container_name: ue
+    restart: unless-stopped
+    entrypoint: [ "/bin/bash", "/ueransim/ue-entrypoint.sh" ]
     volumes:
-      - .:/app
-    command: >
-      bash -c "pip install streamlit pandas numpy requests matplotlib &&
-               streamlit run app.py --server.address=0.0.0.0 --server.port=8501"
-    ports:
-      - "80:8501"
-    depends_on:
-      - ueransim-ue
+      - ./ueransim/ue.yaml:/ueransim/config/ue.yaml:ro
+      - ./ueransim/ue-entrypoint.sh:/ueransim/ue-entrypoint.sh:ro
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    sysctls:
+      net.ipv4.conf.all.rp_filter: "2"
     networks:
-      5g_net:
-        ipv4_address: 10.100.0.40
-    restart: always
+      radio_net: { ipv4_address: 10.100.203.31 }
+      obs_net:   { ipv4_address: 10.100.205.31 }   # solo para exponer sondas
+    depends_on: [ gnb, smf ]
 
-  dozzle:
-    image: amir20/dozzle:latest
-    container_name: monitor-dozzle
+  webui:
+    <<: *f5gc-common
+    image: free5gc/webui:${FREE5GC_TAG}
+    container_name: webui
+    command: ./webui -c ../config/webuicfg.yaml
+    environment:
+      DB_URI: mongodb://mongodb:27017/free5gc
+      GIN_MODE: release
+    volumes: [ ./config/webuicfg.yaml:/free5gc/config/webuicfg.yaml:ro ]
+    networks: { sbi_net: { ipv4_address: 10.100.200.41 } }
+    ports: [ "5000:5000" ]
+    depends_on:
+      mongodb: { condition: service_healthy }
+
+  # ------------------------------------------------------------------
+  #  Data Network — destino del trafico del UE
+  # ------------------------------------------------------------------
+  dn-iperf:
+    image: networkstatic/iperf3   # ⚠️ verifica el tag antes de usar
+    container_name: dn-iperf
+    restart: unless-stopped
+    command: -s
+    networks: { dn_net: { ipv4_address: 10.100.204.10 } }
+
+  # ==================================================================
+  #  OBSERVABILIDAD
+  # ==================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "8080:8080"
-    networks:
-      5g_net:
-        ipv4_address: 10.100.0.60
-    restart: always
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    networks: { obs_net: { ipv4_address: 10.100.205.10 } }
+    ports: [ "9090:9090" ]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: { obs_net: { ipv4_address: 10.100.205.11 } }
+    ports: [ "3000:3000" ]
+    depends_on: [ prometheus ]
+
+  # Recursos del contenedor LXC por contenedor Docker
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=10s
+      - --store_container_labels=false
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices: [ "/dev/kmsg:/dev/kmsg" ]
+    networks: { obs_net: { ipv4_address: 10.100.205.12 } }
+
+  # CPU / RAM / red del LXC completo
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      - --collector.netdev.device-include=^(eth\d+|tailscale0|upfgtp|uesimtun\d+|br-.*)$$
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    networks: { obs_net: { ipv4_address: 10.100.205.13 } }
+
+  # Latencia medida DESDE el UE, a traves de uesimtun0
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox
+    restart: unless-stopped
+    command: --config.file=/config/blackbox.yml
+    volumes: [ ./observability/blackbox/blackbox.yml:/config/blackbox.yml:ro ]
+    cap_add: [ NET_RAW ]
+    network_mode: "service:ue"      # <-- vive en el netns del UE
+    depends_on: [ ue ]
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    restart: unless-stopped
+    networks: { obs_net: { ipv4_address: 10.100.205.14 } }
+
+  # Throughput periodico a traves del tunel
+  iperf-probe:
+    image: alpine:3.20
+    container_name: iperf-probe
+    restart: unless-stopped
+    entrypoint: [ "/bin/sh", "/probe/iperf-probe.sh" ]
+    volumes: [ ./observability/probe/iperf-probe.sh:/probe/iperf-probe.sh:ro ]
+    environment:
+      IPERF_TARGET: 10.100.204.10
+      PUSHGATEWAY: http://10.100.205.14:9091
+      INTERVAL: "300"
+      DURATION: "10"
+    network_mode: "service:ue"      # <-- tambien en el netns del UE
+    depends_on: [ ue ]
