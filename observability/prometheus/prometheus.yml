@@ -1,1 +1,82 @@
-g
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    lab: lab-free5gc
+    plmn: "732101"
+
+scrape_configs:
+
+  - job_name: prometheus
+    static_configs: [ { targets: [ "localhost:9090" ] } ]
+
+  # Recursos del LXC completo
+  - job_name: node
+    static_configs:
+      - targets: [ "10.100.205.13:9100" ]
+        labels: { scope: lxc }
+
+  # Recursos por contenedor Docker
+  - job_name: cadvisor
+    static_configs:
+      - targets: [ "10.100.205.12:8080" ]
+        labels: { scope: container }
+    metric_relabel_configs:
+      # Reduce cardinalidad: quedate con los contenedores del lab
+      - source_labels: [ name ]
+        regex: "(nrf|amf|smf|upf|ausf|udm|udr|pcf|nssf|gnb|ue|mongodb)"
+        action: keep
+
+  # Latencia ICMP DESDE el UE a traves de uesimtun0
+  - job_name: blackbox-ue-icmp
+    metrics_path: /probe
+    params: { module: [ icmp_ue ] }
+    static_configs:
+      - targets:
+          - 10.100.204.10        # servidor iperf en el DN
+          - 10.100.204.20        # interfaz DN del propio UPF
+    relabel_configs:
+      - source_labels: [ __address__ ]
+        target_label: __param_target
+      - source_labels: [ __param_target ]
+        target_label: instance
+      - target_label: __address__
+        replacement: 10.100.205.31:9115    # blackbox en el netns del UE
+      - target_label: plane
+        replacement: user
+
+  # Salud del plano de control por TCP
+  - job_name: blackbox-sbi-tcp
+    metrics_path: /probe
+    params: { module: [ tcp_connect ] }
+    static_configs:
+      - targets:
+          - 10.100.200.10:8000   # NRF
+          - 10.100.200.11:8000   # AMF SBI
+          - 10.100.200.12:8000   # SMF SBI
+          - 10.100.200.40:27017  # MongoDB
+    relabel_configs:
+      - source_labels: [ __address__ ]
+        target_label: __param_target
+      - source_labels: [ __param_target ]
+        target_label: instance
+      - target_label: __address__
+        replacement: 10.100.205.31:9115
+      - target_label: plane
+        replacement: control
+
+  # Throughput empujado por la sonda iperf3
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs: [ { targets: [ "10.100.205.14:9091" ] } ]
+
+  # ⚠️ free5GC no expone /metrics de Prometheus de forma nativa en todas
+  # las versiones. Comprueba con:
+  #     curl -s http://10.100.200.11:8000/metrics
+  # Si responde, descomenta este bloque.
+  # - job_name: free5gc-nfs
+  #   static_configs:
+  #     - targets:
+  #         - 10.100.200.11:8000
+  #         - 10.100.200.12:8000
+  #         - 10.100.200.20:8000
