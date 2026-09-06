@@ -1,23 +1,69 @@
 version: 1.0.3
-description: UPF initial local configuration
+description: UPF configuration - lab5g
 
 pfcp:
-  addr: 10.100.0.14        # IP del propio UPF (interfaz PFCP hacia el SMF)
-  nodeID: 10.100.0.14
+  addr: 10.100.200.20
+  nodeID: 10.100.200.20
   retransTimeout: 1s
   maxRetrans: 3
 
 gtpu:
   forwarder: gtp5g
   ifList:
-    - addr: 10.100.0.14    # IP del propio UPF (interfaz GTP-U hacia el gNB)
+    - addr: 10.100.201.20        # n3_net
       type: N3
 
 dnnList:
   - dnn: internet
-    cidr: 10.60.0.0/16     # debe coincidir con el pool definido en smfcfg.yaml
+    cidr: 10.60.0.0/16
+    natifname: dn0               # nombre lógico; ver script de iptables
 
 logger:
-  UPF:
-    debugLevel: info
-    ReportCaller: false
+  enable: true
+  level: debug
+  reportCaller: false
+```
+
+**`config/nssfcfg.yaml`** — el fichero que más se olvida:
+
+```yaml
+configuration:
+  nssfName: NSSF
+  sbi:
+    scheme: http
+    registerIPv4: nssf
+    bindingIPv4: 0.0.0.0
+    port: 8000
+  nrfUri: http://nrf:8000
+  supportedPlmnList:
+    - mcc: '732'
+      mnc: '101'
+  supportedNssaiInPlmnList:
+    - plmnId:
+        mcc: '732'
+        mnc: '101'
+      supportedSnssaiList:
+        - sst: 1
+          sd: '010203'
+  amfSetList:
+    - amfSetId: '1'
+      nrfAmfSet: http://nrf:8000/nnrf-nfm/v1/nf-instances
+      supportedNssaiAvailabilityData:
+        - tai:
+            plmnId:
+              mcc: '732'
+              mnc: '101'
+            tac: '000001'
+          supportedSnssaiList:
+            - sst: 1
+              sd: '010203'
+  taList:
+    - tai:
+        plmnId:
+          mcc: '732'
+          mnc: '101'
+        tac: '000001'
+      accessType: 3GPP_ACCESS
+      supportedSnssaiList:
+        - sst: 1
+          sd: '010203'
