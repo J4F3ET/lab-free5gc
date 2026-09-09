@@ -328,3 +328,18 @@ services:
       DURATION: "10"
     network_mode: "service:ue"      # <-- tambien en el netns del UE
     depends_on: [ ue ]
+  # Visor de logs de los contenedores en vivo.
+  # Prometheus recoge metricas, no logs: cAdvisor y node-exporter no cubren
+  # esto. La alternativa "nativa" seria Loki+Promtail, pero pesa ~250 MB de
+  # RAM frente a los ~20 MB de dozzle.
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    environment:
+      DOZZLE_LEVEL: info
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: { obs_net: { ipv4_address: 10.100.205.15 } }
+    ports: [ "8888:8080" ]
