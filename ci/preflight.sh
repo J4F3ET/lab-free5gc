@@ -8,13 +8,25 @@ ok()   { printf '  \033[32mOK\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
 
-# El runner de CI corre como usuario 'deploy', no como root. Las
+# Rutas absolutas: el runner arranca con un PATH restringido (secure_path)
+# y 'sysctl' no siempre esta en el, asi que "command not found" se
+# confundia con "el sysctl vale 0".
+IP_BIN="$(command -v ip || echo /sbin/ip)"
+IPT_BIN="$(command -v iptables || echo /sbin/iptables)"
+
+# El runner de CI corre como usuario 'deploy', no como root. Solo las
 # comprobaciones de iptables y de netdevs necesitan privilegios: se elevan
-# solo esas, via sudo -n (ver /etc/sudoers.d/lab5g-deploy).
-if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
-if [ -n "$SUDO" ] && ! $SUDO true 2>/dev/null; then
-  bad "sin sudo sin contrasena para $(id -un) -> instala /etc/sudoers.d/lab5g-deploy"
+# esas, via sudo -n (ver /etc/sudoers.d/lab5g-deploy).
+if [ "$(id -u)" -eq 0 ]; then
   SUDO=""
+else
+  SUDO="sudo -n"
+  # Se prueba con un comando que SI esta en el sudoers ('ip -V' es inocuo).
+  # Probar con 'true' daba un falso negativo: no esta en la lista permitida.
+  if ! $SUDO "$IP_BIN" -V >/dev/null 2>&1; then
+    bad "sin sudo sin contrasena para $(id -un) -> ejecuta deploy/bootstrap-runner.sh"
+    SUDO=""
+  fi
 fi
 
 echo "=== Preflight lab-free5gc ==="
@@ -31,6 +43,7 @@ if grep -q '^sctp ' /proc/modules; then
   ok "modulo sctp cargado"
 else
   bad "sctp NO cargado -> N2/NGAP fallara. En el HOST: modprobe sctp"
+  bad "  (persistelo en /etc/modules-load.d/ o se pierde al reiniciar)"
 fi
 
 # --- Capa 1: devices y capabilities ---
@@ -38,28 +51,34 @@ fi
   && ok "/dev/net/tun presente" \
   || bad "/dev/net/tun ausente -> revisa lxc.mount.entry en la config del LXC"
 
-if capsh --print 2>/dev/null | grep -q 'cap_net_admin'; then
-  ok "CAP_NET_ADMIN disponible"
+# Se consulta el bounding set de PID 1, no las caps del usuario actual:
+# 'deploy' es un usuario sin privilegios y capsh siempre daria negativo,
+# lo que hacia parecer que el LXC no tenia la capability.
+capbnd=$(awk '/^CapBnd:/{print $2}' /proc/1/status 2>/dev/null)
+if [ -n "$capbnd" ] && [ $(( 0x$capbnd & (1 << 12) )) -ne 0 ]; then
+  ok "CAP_NET_ADMIN en el bounding set del contenedor"
 else
   bad "sin CAP_NET_ADMIN -> el LXC no es privilegiado o hay cap.drop"
 fi
 
 # Prueba real: crear y borrar un netdev dummy
-if $SUDO ip link add lab5gtest type dummy 2>/dev/null; then
-  $SUDO ip link del lab5gtest
+if $SUDO "$IP_BIN" link add lab5gtest type dummy 2>/dev/null; then
+  $SUDO "$IP_BIN" link del lab5gtest
   ok "puedo crear interfaces de red"
 else
   bad "no puedo crear netdevs -> falta lxc.apparmor.profile: unconfined"
 fi
 
 # --- Capa 2: sysctl ---
-[ "$(sysctl -n net.ipv4.ip_forward)" = "1" ] \
+# Se leen de /proc/sys directamente: no depende del binario sysctl ni del PATH.
+fwd=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)
+[ "$fwd" = "1" ] \
   && ok "ip_forward activo" \
-  || bad "ip_forward=0 -> sysctl -w net.ipv4.ip_forward=1"
+  || bad "ip_forward=${fwd:-?} -> sysctl -w net.ipv4.ip_forward=1"
 
-rp=$(sysctl -n net.ipv4.conf.all.rp_filter)
+rp=$(cat /proc/sys/net/ipv4/conf/all/rp_filter 2>/dev/null)
 [ "$rp" = "2" ] && ok "rp_filter en modo loose (2)" \
-                || warn "rp_filter=$rp; recomendado 2 con multiples redes Docker"
+                || warn "rp_filter=${rp:-?}; recomendado 2 con multiples redes Docker"
 
 # --- Capa 2: Docker ---
 docker info >/dev/null 2>&1 \
@@ -75,8 +94,8 @@ mtu=$(docker network inspect bridge -f '{{index .Options "com.docker.network.dri
 LAN_SUBNET="${LAN_SUBNET:-192.168.1.0/24}"
 LAN_GW="${LAN_GW:-192.168.1.1}"
 
-lan_if=$(ip -o -4 route show to default | awk '{print $5; exit}')
-lan_ip=$(ip -o -4 addr show dev "${lan_if:-eth0}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+lan_if=$("$IP_BIN" -o -4 route show to default | awk '{print $5; exit}')
+lan_ip=$("$IP_BIN" -o -4 addr show dev "${lan_if:-eth0}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
 
 if [ -n "$lan_ip" ]; then
   ok "IP en la LAN: ${lan_ip} (iface ${lan_if})"
@@ -84,17 +103,24 @@ else
   bad "sin IP en la LAN -> revisa net0 en la config del LXC"
 fi
 
+# ICMP no esta permitido a usuarios sin privilegios en este contenedor
+# (ping_group_range), asi que un ping fallido NO implica falta de red.
+# Se cae hacia la tabla de vecinos y la ruta por defecto, legibles sin sudo.
 if ping -c1 -W2 "$LAN_GW" >/dev/null 2>&1; then
-  ok "gateway ${LAN_GW} alcanzable"
+  ok "gateway ${LAN_GW} alcanzable (ICMP)"
+elif "$IP_BIN" neigh show "$LAN_GW" 2>/dev/null | grep -qE 'REACHABLE|STALE|DELAY'; then
+  ok "gateway ${LAN_GW} presente en la tabla de vecinos"
+elif "$IP_BIN" route show default 2>/dev/null | grep -q "$LAN_GW"; then
+  warn "gateway ${LAN_GW} en la ruta por defecto, sin confirmar por ICMP ni ARP"
 else
-  bad "gateway ${LAN_GW} NO responde -> el lab quedara aislado de la red"
+  bad "gateway ${LAN_GW} inalcanzable -> el lab quedara aislado de la red"
 fi
 
 # Los puertos publicados por Docker (3000/5000/9090) deben ser accesibles
 # desde el resto de la LAN. Docker pone FORWARD en DROP: sin estas reglas,
 # el trafico entrante desde 192.168.1.0/24 hacia las bridges se descarta.
-if $SUDO iptables -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
-   || $SUDO iptables -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
+if $SUDO "$IPT_BIN" -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
+   || $SUDO "$IPT_BIN" -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
   ok "reglas DOCKER-USER para la LAN presentes"
 else
   bad "faltan ACCEPT en DOCKER-USER para ${LAN_SUBNET}"

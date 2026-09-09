@@ -7,6 +7,8 @@ echo "[diag] recolectando en $OUT"
 
 # El runner de CI corre como usuario 'deploy', no como root: iptables e
 # ip route del host necesitan privilegios (ver /etc/sudoers.d/lab5g-deploy).
+IP_BIN="$(command -v ip || echo /sbin/ip)"
+IPT_BIN="$(command -v iptables || echo /sbin/iptables)"
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
 
 # Logs de cada contenedor
@@ -16,10 +18,10 @@ done
 
 # Estado de red del host LXC
 { echo "=== ip addr ==="        ; ip addr
-  echo "=== ip route ==="       ; $SUDO ip route show table all
-  echo "=== iptables filter ===" ; $SUDO iptables -L -n -v
-  echo "=== iptables nat ==="   ; $SUDO iptables -t nat -L -n -v
-  echo "=== iptables mangle ===" ; $SUDO iptables -t mangle -L -n -v
+  echo "=== ip route ==="       ; $SUDO "$IP_BIN" route show table all
+  echo "=== iptables filter ===" ; $SUDO "$IPT_BIN" -L -n -v
+  echo "=== iptables nat ==="   ; $SUDO "$IPT_BIN" -t nat -L -n -v
+  echo "=== iptables mangle ===" ; $SUDO "$IPT_BIN" -t mangle -L -n -v
   echo "=== sysctl ==="         ; sysctl net.ipv4.ip_forward \
                                           net.ipv4.conf.all.rp_filter
   echo "=== modulos ==="        ; grep -E '^(gtp5g|sctp)' /proc/modules
