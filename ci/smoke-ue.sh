@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-TIMEOUT="${TIMEOUT:-120}"
+# 120 s no alcanzan en este host: el UE tiene que completar registro NAS y
+# sesion PDU, y el arranque de los NF va lento por el I/O del LXC.
+TIMEOUT="${TIMEOUT:-300}"
 DN_TARGET="${DN_TARGET:-10.100.204.10}"
 fail=0
 
@@ -9,9 +11,23 @@ step() { printf '\n\033[1m>>> %s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32mOK\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 
+# Espera a que un patron aparezca en el log de un servicio.
+# Los pasos 1 y 2 consultaban el log UNA sola vez: cuando el job de smoke
+# arranca justo despues del de deploy, el gNB puede no haber completado
+# todavia el NG Setup, y el test fallaba por carrera, no por un fallo real.
+wait_log() {
+  local svc="$1" pat="$2" budget="${3:-120}"
+  local deadline=$(( $(date +%s) + budget ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    docker compose logs "$svc" 2>&1 | grep -qiE "$pat" && return 0
+    sleep 3
+  done
+  return 1
+}
+
 # ---- 1. NG Setup: el gNB hablo con el AMF ----
 step "1/6  NG Setup (N2)"
-if docker compose logs gnb 2>&1 | grep -qi 'NG Setup procedure is successful'; then
+if wait_log gnb 'NG Setup procedure is successful' 240; then
   ok "gNB registrado en el AMF"
 else
   bad "sin NG Setup Response"
@@ -21,7 +37,7 @@ fi
 
 # ---- 2. Registro NAS del UE ----
 step "2/6  Registro NAS del UE"
-if docker compose logs ue 2>&1 | grep -qiE 'Registration is successful|RM-REGISTERED'; then
+if wait_log ue 'Registration is successful|RM-REGISTERED' 300; then
   ok "UE en estado registrado"
 else
   bad "UE no registrado"

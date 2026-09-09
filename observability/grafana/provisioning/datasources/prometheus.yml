@@ -2,6 +2,10 @@ apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
+    # uid explicito: los dashboards provisionados lo referencian por uid, y
+    # sin declararlo Grafana genera uno aleatorio en cada arranque, con lo
+    # que los paneles quedan sin datasource ("Datasource not found").
+    uid: prometheus
     access: proxy
     url: http://10.100.205.10:9090
     isDefault: true
