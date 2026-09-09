@@ -1,0 +1,23 @@
+modules:
+
+  icmp_ue:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      # Sin source_ip_address: la ruta especifica que anade
+      # ue-entrypoint.sh ya fuerza la salida por uesimtun0.
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: []
+      preferred_ip_protocol: ip4
