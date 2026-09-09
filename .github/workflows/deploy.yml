@@ -15,6 +15,10 @@ on:
         description: 'Saltar el smoke test del UE'
         type: boolean
         default: false
+      con_observabilidad:
+        description: 'Levantar tambien Prometheus, Grafana, cAdvisor y sondas (6+2 contenedores mas)'
+        type: boolean
+        default: false
 
 # Nunca dos despliegues simultaneos sobre el mismo LXC
 concurrency:
@@ -24,6 +28,11 @@ concurrency:
 env:
   COMPOSE_PROJECT_NAME: lab5g
   DOCKER_BUILDKIT: '1'
+  # Con perfiles, 'docker compose exec/logs/ps' no ve los servicios de un
+  # perfil inactivo. El smoke test opera sobre 'ue', 'gnb' y 'dn-iperf', que
+  # viven en el perfil 'ran', asi que se declara aqui para todos los jobs.
+  # La observabilidad NO va aqui: se activa solo con --profile en su paso.
+  COMPOSE_PROFILES: ran
 
 jobs:
 
@@ -74,11 +83,15 @@ jobs:
       - name: Descargar imagenes
         run: docker compose pull --quiet
 
-      # El arranque va por etapas a proposito. Arrancar los 16 servicios de
-      # golpe hacia que compose esperase el healthcheck de mongodb mientras
-      # competia con ellos por el disco; agotaba su paciencia, abortaba, y
-      # dejaba los 9 NF en estado 'created' sin un mensaje util. En este host
-      # mongod tarda ~90 s solo en arrancar.
+      # El arranque va por etapas y con perfiles, a proposito.
+      #
+      # Arrancar los 22 servicios de golpe llevo el host (4 nucleos, 3.8 GB)
+      # a un load average de 105: los NF entraban en crash-loop, cada
+      # reinicio consumia el I/O que los demas necesitaban para arrancar, y
+      # el host dejaba de atender hasta SSH. No convergia.
+      #
+      # Por eso el perfil por defecto es SOLO el nucleo (10 contenedores) y
+      # la observabilidad queda detras de un flag explicito.
       - name: Levantar la base de datos y esperar a que este sana
         run: |
           docker compose up -d --remove-orphans --wait --wait-timeout 600 mongodb
@@ -86,13 +99,8 @@ jobs:
 
       - name: Levantar el plano de control
         run: |
-          docker compose up -d nrf udr udm ausf pcf nssf amf upf smf webui
+          docker compose up -d nrf udr udm ausf pcf nssf amf upf smf
           docker compose ps
-
-      - name: Levantar observabilidad
-        run: |
-          docker compose up -d \
-            dn-iperf prometheus grafana cadvisor node-exporter pushgateway dozzle
 
       - name: Esperar a que el plano de control este listo
         run: bash ci/wait-ready.sh
@@ -100,8 +108,22 @@ jobs:
       - name: Aprovisionar suscriptor en MongoDB
         run: bash ci/provision-subscriber.sh
 
-      - name: Levantar RAN emulada y sondas
-        run: docker compose up -d gnb ue blackbox iperf-probe
+      # Perfil 'ran': gnb, ue y dn-iperf (el destino del trafico del UE).
+      - name: Levantar RAN emulada
+        run: |
+          docker compose --profile ran up -d
+          docker compose ps
+
+      # Observabilidad solo si se pide de forma explicita. Son 6 contenedores
+      # del perfil 'obs' mas 2 sondas del perfil 'probes', y en un host
+      # ajustado la diferencia entre arrancar y no arrancar.
+      # 'probes' necesita 'ran': blackbox e iperf-probe viven en el netns
+      # del UE (network_mode: service:ue).
+      - name: Levantar observabilidad
+        if: ${{ inputs.con_observabilidad }}
+        run: |
+          docker compose --profile obs --profile probes up -d
+          docker compose ps
 
   # ------------------------------------------------------------------
   #  3. Smoke test end-to-end
@@ -145,8 +167,13 @@ jobs:
     if: failure()
     runs-on: [ self-hosted, lxc, free5gc ]
     steps:
-      - name: Detener RAN para no dejar el lab en estado inconsistente
-        run: docker compose stop gnb ue blackbox iperf-probe || true
+      # Se detiene la RAN y las sondas, dejando el nucleo en pie para poder
+      # inspeccionarlo. 'probes' se nombra explicitamente porque no esta en
+      # COMPOSE_PROFILES y de otro modo compose no lo veria.
+      - name: Detener RAN y sondas para no dejar el lab inconsistente
+        run: |
+          docker compose --profile ran --profile probes stop \
+            gnb ue dn-iperf blackbox iperf-probe || true
       - name: Resumen
         run: |
           echo "::error::Smoke test fallido. El nucleo sigue en pie para" \

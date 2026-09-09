@@ -1,6 +1,34 @@
 # =====================================================================
 #  lab-free5gc — nucleo 5G emulado + observabilidad
 # =====================================================================
+#
+#  PERFILES
+#
+#  Arrancar los 22 servicios de golpe llevo el host (4 nucleos, 3.8 GB) a
+#  un load average de 105: los NF entraban en crash-loop, cada reinicio
+#  consumia el I/O que los demas necesitaban para arrancar, y el host
+#  dejaba de atender hasta SSH. No convergia. De ahi los perfiles.
+#
+#    (sin perfil)   Nucleo 5G: mongodb + NRF UDR UDM AUSF PCF NSSF AMF SMF
+#                   + UPF.  10 contenedores. Es lo minimo utilizable.
+#    ran            gnb, ue, dn-iperf (destino del trafico del UE).  +3
+#    obs            prometheus, grafana, cadvisor, node-exporter,
+#                   pushgateway, dozzle.  +6
+#    probes         blackbox, iperf-probe.  +2
+#                   REQUIERE 'ran': viven en el netns del UE
+#                   (network_mode: service:ue).
+#    tools          webui, la consola de suscriptores. No hace falta para
+#                   aprovisionar: ci/provision-subscriber.sh usa mongosh.
+#
+#  Uso:
+#    docker compose up -d                                  # solo nucleo
+#    docker compose --profile ran up -d                    # nucleo + RAN
+#    docker compose --profile ran --profile obs \
+#                   --profile probes up -d                 # todo
+#
+#  Ojo: 'docker compose exec|logs|ps' no ve los servicios de un perfil
+#  inactivo. Para operar sobre 'ue' o 'gnb':  export COMPOSE_PROFILES=ran
+# =====================================================================
 
 x-f5gc-common: &f5gc-common
   restart: unless-stopped
@@ -177,6 +205,7 @@ services:
   gnb:
     image: free5gc/ueransim:${UERANSIM_TAG}
     container_name: gnb
+    profiles: [ ran ]
     restart: unless-stopped
     command: ./nr-gnb -c ./config/gnb.yaml
     volumes: [ ./ueransim/gnb.yaml:/ueransim/config/gnb.yaml:ro ]
@@ -191,6 +220,7 @@ services:
   ue:
     image: free5gc/ueransim:${UERANSIM_TAG}
     container_name: ue
+    profiles: [ ran ]
     restart: unless-stopped
     entrypoint: [ "/bin/bash", "/ueransim/ue-entrypoint.sh" ]
     environment:
@@ -212,6 +242,7 @@ services:
     <<: *f5gc-common
     image: free5gc/webui:${FREE5GC_TAG}
     container_name: webui
+    profiles: [ tools ]
     command: ./webui -c ../config/webuicfg.yaml
     environment:
       DB_URI: mongodb://mongodb:27017/free5gc
@@ -228,6 +259,7 @@ services:
   dn-iperf:
     image: networkstatic/iperf3   # ⚠️ verifica el tag antes de usar
     container_name: dn-iperf
+    profiles: [ ran ]
     restart: unless-stopped
     command: -s
     networks: { dn_net: { ipv4_address: 10.100.204.10 } }
@@ -239,6 +271,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    profiles: [ obs ]
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -254,6 +287,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    profiles: [ obs ]
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -270,6 +304,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor
+    profiles: [ obs ]
     restart: unless-stopped
     privileged: true
     command:
@@ -289,6 +324,7 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
+    profiles: [ obs ]
     restart: unless-stopped
     pid: host
     command:
@@ -307,6 +343,7 @@ services:
   blackbox:
     image: prom/blackbox-exporter:latest
     container_name: blackbox
+    profiles: [ probes ]
     restart: unless-stopped
     command: --config.file=/config/blackbox.yml
     volumes: [ ./observability/blackbox/blackbox.yml:/config/blackbox.yml:ro ]
@@ -317,6 +354,7 @@ services:
   pushgateway:
     image: prom/pushgateway:latest
     container_name: pushgateway
+    profiles: [ obs ]
     restart: unless-stopped
     networks: { obs_net: { ipv4_address: 10.100.205.14 } }
 
@@ -324,6 +362,7 @@ services:
   iperf-probe:
     image: alpine:3.20
     container_name: iperf-probe
+    profiles: [ probes ]
     restart: unless-stopped
     entrypoint: [ "/bin/sh", "/probe/iperf-probe.sh" ]
     volumes: [ ./observability/probe/iperf-probe.sh:/probe/iperf-probe.sh:ro ]
@@ -341,6 +380,7 @@ services:
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
+    profiles: [ obs ]
     restart: unless-stopped
     environment:
       DOZZLE_LEVEL: info
