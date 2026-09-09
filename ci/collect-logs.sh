@@ -7,8 +7,12 @@ echo "[diag] recolectando en $OUT"
 
 # El runner de CI corre como usuario 'deploy', no como root: iptables e
 # ip route del host necesitan privilegios (ver /etc/sudoers.d/lab5g-deploy).
-IP_BIN="$(command -v ip || echo /sbin/ip)"
-IPT_BIN="$(command -v iptables || echo /sbin/iptables)"
+# Se fijan las rutas administrativas: el PATH del runner no incluye /sbin y
+# "command -v ip" resolvia a /usr/bin/ip, que NO esta en el sudoers.
+for c in /usr/sbin/ip /sbin/ip; do [ -x "$c" ] && IP_BIN="$c" && break; done
+IP_BIN="${IP_BIN:-$(command -v ip || echo /sbin/ip)}"
+for c in /usr/sbin/iptables /sbin/iptables; do [ -x "$c" ] && IPT_BIN="$c" && break; done
+IPT_BIN="${IPT_BIN:-$(command -v iptables || echo /sbin/iptables)}"
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
 
 # Logs de cada contenedor

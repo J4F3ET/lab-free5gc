@@ -8,11 +8,13 @@ ok()   { printf '  \033[32mOK\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
 
-# Rutas absolutas: el runner arranca con un PATH restringido (secure_path)
-# y 'sysctl' no siempre esta en el, asi que "command not found" se
-# confundia con "el sysctl vale 0".
-IP_BIN="$(command -v ip || echo /sbin/ip)"
-IPT_BIN="$(command -v iptables || echo /sbin/iptables)"
+# El PATH del runner es /usr/local/bin:/usr/bin:/bin y no incluye /sbin.
+# "command -v ip" resolvia a /usr/bin/ip, que NO esta en el sudoers, asi que
+# el sudo daba denegado. Se fijan las rutas administrativas.
+for c in /usr/sbin/ip /sbin/ip; do [ -x "$c" ] && IP_BIN="$c" && break; done
+IP_BIN="${IP_BIN:-$(command -v ip || echo /sbin/ip)}"
+for c in /usr/sbin/iptables /sbin/iptables; do [ -x "$c" ] && IPT_BIN="$c" && break; done
+IPT_BIN="${IPT_BIN:-$(command -v iptables || echo /sbin/iptables)}"
 
 # El runner de CI corre como usuario 'deploy', no como root. Solo las
 # comprobaciones de iptables y de netdevs necesitan privilegios: se elevan
@@ -116,15 +118,24 @@ else
   bad "gateway ${LAN_GW} inalcanzable -> el lab quedara aislado de la red"
 fi
 
-# Los puertos publicados por Docker (3000/5000/9090) deben ser accesibles
-# desde el resto de la LAN. Docker pone FORWARD en DROP: sin estas reglas,
-# el trafico entrante desde 192.168.1.0/24 hacia las bridges se descarta.
-if $SUDO "$IPT_BIN" -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
-   || $SUDO "$IPT_BIN" -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
-  ok "reglas DOCKER-USER para la LAN presentes"
+# Los puertos publicados por Docker (3000/5000/8888/9090) deben ser
+# accesibles desde el resto de la LAN. Docker pone FORWARD en DROP: sin
+# estas reglas el trafico entrante hacia las bridges se descarta en
+# silencio (dentro del LXC todo responde, desde la LAN nada).
+#
+# Se comprueba la MISMA forma de regla que crea lab5g-netrules.sh
+# (-i <iface> -d <subred> -j ACCEPT). Antes se buscaba '-s 192.168.1.0/24',
+# que ese script nunca genera: el check fallaba con las reglas ya puestas.
+missing=""
+for net in 10.100.200.0/24 10.100.205.0/24 10.60.0.0/16; do
+  $SUDO "$IPT_BIN" -C DOCKER-USER -i "${lan_if:-eth0}" -d "$net" -j ACCEPT 2>/dev/null \
+    || missing="$missing $net"
+done
+if [ -z "$missing" ]; then
+  ok "reglas DOCKER-USER para la LAN presentes (SBI, observabilidad, pool de UE)"
 else
-  bad "faltan ACCEPT en DOCKER-USER para ${LAN_SUBNET}"
-  bad "  -> ejecuta /usr/local/sbin/lab5g-netrules.sh"
+  bad "faltan ACCEPT en DOCKER-USER para:$missing"
+  bad "  -> ejecuta sudo /usr/local/sbin/lab5g-netrules.sh"
 fi
 
 # --- Recursos ---
