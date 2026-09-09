@@ -43,7 +43,15 @@ jobs:
 
       - name: Coherencia de PLMN / TAC / S-NSSAI / nodeID
         run: |
-          python3 -m pip install --quiet --user pyyaml
+          # pyyaml va como paquete del sistema (python3-yaml), instalado por
+          # deploy/bootstrap-runner.sh. Antes este paso hacia
+          # 'pip install --user pyyaml', que aqui falla siempre: Debian 13
+          # marca el entorno como externally-managed (PEP 668) y en este
+          # runner pip no esta ni instalado.
+          python3 -c 'import yaml' 2>/dev/null || {
+            echo "::error::falta python3-yaml en el runner -> ejecuta deploy/bootstrap-runner.sh"
+            exit 1
+          }
           python3 ci/check-plmn.py
 
   # ------------------------------------------------------------------

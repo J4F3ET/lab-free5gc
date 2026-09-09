@@ -33,7 +33,22 @@ else
   exit 1
 fi
 
-# --- 3. Comprobaciones -------------------------------------------------
+# --- 3. Dependencias de los checks de CI -------------------------------
+# ci/check-plmn.py necesita pyyaml. Se instala como paquete del sistema:
+# Debian 13 marca el entorno como externally-managed (PEP 668) y en este
+# runner pip no esta instalado, asi que 'pip install --user' no es opcion.
+if python3 -c 'import yaml' 2>/dev/null; then
+  echo "[bootstrap] OK: python3-yaml disponible"
+else
+  echo "[bootstrap] instalando python3-yaml..."
+  apt-get update -qq
+  apt-get install -y -qq python3-yaml
+  python3 -c 'import yaml' 2>/dev/null \
+    && echo "[bootstrap] OK: python3-yaml instalado" \
+    || { echo "[bootstrap] ERROR: no pude instalar python3-yaml" >&2; exit 1; }
+fi
+
+# --- 4. Comprobaciones -------------------------------------------------
 if id -nG "$RUNNER_USER" | tr ' ' '\n' | grep -qx docker; then
   echo "[bootstrap] OK: $RUNNER_USER pertenece al grupo docker"
 else
