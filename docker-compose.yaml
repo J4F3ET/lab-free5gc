@@ -14,19 +14,19 @@ networks:
   sbi_net:
     name: sbi_net
     ipam: { config: [ { subnet: 10.100.200.0/24 } ] }
-    driver_opts: { com.docker.network.driver.mtu: "1400" }
+    driver_opts: { com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}" }
   n3_net:
     name: n3_net
     ipam: { config: [ { subnet: 10.100.201.0/24 } ] }
-    driver_opts: { com.docker.network.driver.mtu: "1400" }
+    driver_opts: { com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}" }
   radio_net:
     name: radio_net
     ipam: { config: [ { subnet: 10.100.203.0/24 } ] }
-    driver_opts: { com.docker.network.driver.mtu: "1400" }
+    driver_opts: { com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}" }
   dn_net:
     name: dn_net
     ipam: { config: [ { subnet: 10.100.204.0/24 } ] }
-    driver_opts: { com.docker.network.driver.mtu: "1400" }
+    driver_opts: { com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}" }
   obs_net:
     name: obs_net
     ipam: { config: [ { subnet: 10.100.205.0/24 } ] }
@@ -187,6 +187,9 @@ services:
     container_name: ue
     restart: unless-stopped
     entrypoint: [ "/bin/bash", "/ueransim/ue-entrypoint.sh" ]
+    environment:
+      UE_MTU: "${UE_MTU:-1464}"
+      DN_SUBNET: "${DN_SUBNET:-10.100.204.0/24}"
     volumes:
       - ./ueransim/ue.yaml:/ueransim/config/ue.yaml:ro
       - ./ueransim/ue-entrypoint.sh:/ueransim/ue-entrypoint.sh:ro
@@ -287,7 +290,7 @@ services:
       - --path.sysfs=/host/sys
       - --path.rootfs=/host/root
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
-      - --collector.netdev.device-include=^(eth\d+|tailscale0|upfgtp|uesimtun\d+|br-.*)$$
+      - --collector.netdev.device-include=^(eth\d+|upfgtp|uesimtun\d+|br-.*)$$
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -325,3 +328,18 @@ services:
       DURATION: "10"
     network_mode: "service:ue"      # <-- tambien en el netns del UE
     depends_on: [ ue ]
+  # Visor de logs de los contenedores en vivo.
+  # Prometheus recoge metricas, no logs: cAdvisor y node-exporter no cubren
+  # esto. La alternativa "nativa" seria Loki+Promtail, pero pesa ~250 MB de
+  # RAM frente a los ~20 MB de dozzle.
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    environment:
+      DOZZLE_LEVEL: info
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: { obs_net: { ipv4_address: 10.100.205.15 } }
+    ports: [ "8888:8080" ]
