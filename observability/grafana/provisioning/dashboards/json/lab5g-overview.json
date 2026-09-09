@@ -1,0 +1,251 @@
+{
+  "uid": "lab5g-overview",
+  "title": "lab5g — Estado de la red 5G",
+  "tags": ["lab5g", "free5gc"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Plano de control",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Alcanzabilidad de los NF (TCP)",
+      "description": "probe_success del job blackbox-sbi-tcp. 1 = el puerto SBI acepta conexiones. Si el NRF esta caido, todos los demas caen detras.",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{plane=\"control\"}",
+          "legendFormat": "{{instance}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "CAIDO", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "OK", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latencia de conexion al SBI",
+      "description": "probe_duration_seconds: cuanto tarda el TCP handshake contra cada NF. Un crecimiento sostenido suele ser saturacion de disco del host, no de la red.",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_duration_seconds{plane=\"control\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Plano de usuario — tunel del UE",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "uesimtun0 activo",
+      "description": "ue_tunnel_up lo empuja iperf-probe.sh al pushgateway. 1 = la interfaz existe con IP del pool 10.60.0.0/16. Es la senal de que el registro NAS y la sesion PDU funcionaron.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "ue_tunnel_up", "legendFormat": "{{instance}}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "SIN TUNEL", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "ARRIBA", "color": "green", "index": 1 } } }
+          ],
+          "noValue": "sin datos"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "ICMP desde el UE al Data Network",
+      "description": "probe_success del job blackbox-ue-icmp. Blackbox vive en el netns del UE, asi que esto mide de verdad el trafico GTP-U de extremo a extremo: UE -> gNB -> UPF -> DN.",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "probe_success{plane=\"user\"}", "legendFormat": "{{instance}}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "SIN PASO", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "OK", "color": "green", "index": 1 } } }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latencia a traves de uesimtun0",
+      "description": "RTT ICMP medido desde el UE. Incluye la encapsulacion GTP-U completa.",
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_icmp_duration_seconds{plane=\"user\"}",
+          "legendFormat": "{{instance}} — {{phase}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Throughput por el tunel (iperf3)",
+      "description": "Lo empuja iperf-probe.sh cada INTERVAL segundos (300 por defecto), asi que la serie es escalonada, no continua. Si el UL/DL se hunde mientras el ICMP sigue OK, sospecha del MTU: UE_MTU debe ser DOCKER_MTU menos 36 bytes de cabecera GTP-U.",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "ue_throughput_downlink_bps", "legendFormat": "downlink" },
+        { "refId": "B", "expr": "ue_throughput_uplink_bps", "legendFormat": "uplink" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Recursos",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU por contenedor del lab",
+      "description": "cadvisor, con metric_relabel_configs que deja solo los contenedores del lab para bajar cardinalidad.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]))",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memoria por contenedor del lab",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name) (container_memory_working_set_bytes{name!=\"\"})",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Espera de I/O del LXC",
+      "description": "Panel deliberado: en este host el I/O es el cuello de botella real. Un iowait alto explica arranques lentos, healthchecks que expiran y falsos fallos de PFCP o NGAP que parecen de configuracion.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"iowait\"}[5m]))",
+          "legendFormat": "iowait"
+        },
+        {
+          "refId": "B",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"system\"}[5m]))",
+          "legendFormat": "system"
+        },
+        {
+          "refId": "C",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"user\"}[5m]))",
+          "legendFormat": "user"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 1, "fillOpacity": 8, "stacking": { "mode": "normal" } } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memoria y swap del LXC",
+      "description": "El swap en uso es la senal temprana de que el host esta sobrecomprometido: precede a los arranques lentos y a los timeouts.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "legendFormat": "en uso"
+        },
+        {
+          "refId": "B",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "legendFormat": "swap en uso"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": []
+      }
+    }
+  ]
+}
