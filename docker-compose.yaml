@@ -52,8 +52,14 @@ services:
     healthcheck:
       test: ["CMD","mongosh","--quiet","--eval","db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s
-      retries: 12
+      timeout: 10s
+      # start_period es la correccion clave: sin el, el healthcheck empieza a
+      # contar fallos desde el segundo cero. Aqui mongod tarda ~90 s solo en
+      # arrancar, asi que los 120 s de presupuesto (12 x 10 s) se agotaban
+      # antes de que respondiera, compose abortaba el 'up' y dejaba los NF
+      # que dependen de el en estado 'created'.
+      start_period: 180s
+      retries: 20
 
   # ------------------------------------------------------------------
   #  Plano de control

@@ -74,11 +74,25 @@ jobs:
       - name: Descargar imagenes
         run: docker compose pull --quiet
 
-      - name: Levantar el nucleo (sin RAN todavia)
+      # El arranque va por etapas a proposito. Arrancar los 16 servicios de
+      # golpe hacia que compose esperase el healthcheck de mongodb mientras
+      # competia con ellos por el disco; agotaba su paciencia, abortaba, y
+      # dejaba los 9 NF en estado 'created' sin un mensaje util. En este host
+      # mongod tarda ~90 s solo en arrancar.
+      - name: Levantar la base de datos y esperar a que este sana
         run: |
-          docker compose up -d --remove-orphans \
-            mongodb nrf udr udm ausf pcf nssf amf upf smf webui \
-            dn-iperf prometheus grafana cadvisor node-exporter pushgateway
+          docker compose up -d --remove-orphans --wait --wait-timeout 600 mongodb
+          docker compose ps mongodb
+
+      - name: Levantar el plano de control
+        run: |
+          docker compose up -d nrf udr udm ausf pcf nssf amf upf smf webui
+          docker compose ps
+
+      - name: Levantar observabilidad
+        run: |
+          docker compose up -d \
+            dn-iperf prometheus grafana cadvisor node-exporter pushgateway dozzle
 
       - name: Esperar a que el plano de control este listo
         run: bash ci/wait-ready.sh
@@ -98,6 +112,15 @@ jobs:
     runs-on: [ self-hosted, lxc, free5gc ]
     steps:
       - uses: actions/checkout@v4
+
+      # checkout limpia el workspace con 'git clean -ffdx', que borra el .env
+      # generado en el job de deploy porque no esta trackeado. Sin el, las
+      # variables de imagen quedan vacias y 'docker compose exec' apunta a
+      # servicios equivocados. Se regenera aqui.
+      - name: Regenerar .env
+        run: |
+          cp .env.example .env
+          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
 
       - name: Validar tunel uesimtun0 y conectividad
         run: bash ci/smoke-ue.sh
