@@ -1,0 +1,122 @@
+name: deploy-5g-lab
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'config/**'
+      - 'ueransim/**'
+      - 'observability/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      skip_smoke:
+        description: 'Saltar el smoke test del UE'
+        type: boolean
+        default: false
+
+# Nunca dos despliegues simultaneos sobre el mismo LXC
+concurrency:
+  group: lab5g-deploy
+  cancel-in-progress: false
+
+env:
+  COMPOSE_PROJECT_NAME: lab5g
+  DOCKER_BUILDKIT: '1'
+
+jobs:
+
+  # ------------------------------------------------------------------
+  #  1. Validacion estatica — sin tocar el despliegue vivo
+  # ------------------------------------------------------------------
+  validate:
+    runs-on: [ self-hosted, lxc, free5gc ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar kernel, modulos y devices
+        run: bash ci/preflight.sh
+
+      - name: Validar sintaxis de docker-compose
+        run: docker compose config --quiet
+
+      - name: Coherencia de PLMN / TAC / S-NSSAI / nodeID
+        run: |
+          python3 -m pip install --quiet --user pyyaml
+          python3 ci/check-plmn.py
+
+  # ------------------------------------------------------------------
+  #  2. Despliegue
+  # ------------------------------------------------------------------
+  deploy:
+    needs: validate
+    runs-on: [ self-hosted, lxc, free5gc ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar .env con secretos
+        run: |
+          cp .env.example .env
+          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
+
+      - name: Reaplicar reglas de red del host
+        run: sudo -n /usr/local/sbin/lab5g-netrules.sh || true
+
+      - name: Descargar imagenes
+        run: docker compose pull --quiet
+
+      - name: Levantar el nucleo (sin RAN todavia)
+        run: |
+          docker compose up -d --remove-orphans \
+            mongodb nrf udr udm ausf pcf nssf amf upf smf webui \
+            dn-iperf prometheus grafana cadvisor node-exporter pushgateway
+
+      - name: Esperar a que el plano de control este listo
+        run: bash ci/wait-ready.sh
+
+      - name: Aprovisionar suscriptor en MongoDB
+        run: bash ci/provision-subscriber.sh
+
+      - name: Levantar RAN emulada y sondas
+        run: docker compose up -d gnb ue blackbox iperf-probe
+
+  # ------------------------------------------------------------------
+  #  3. Smoke test end-to-end
+  # ------------------------------------------------------------------
+  smoke:
+    needs: deploy
+    if: ${{ !inputs.skip_smoke }}
+    runs-on: [ self-hosted, lxc, free5gc ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar tunel uesimtun0 y conectividad
+        run: bash ci/smoke-ue.sh
+
+      - name: Recolectar diagnostico si algo fallo
+        if: failure()
+        run: bash ci/collect-logs.sh
+
+      - name: Publicar diagnostico
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-${{ github.run_number }}
+          path: /tmp/lab5g-diag/
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  #  4. Rollback si el smoke test fallo
+  # ------------------------------------------------------------------
+  rollback:
+    needs: [ deploy, smoke ]
+    if: failure()
+    runs-on: [ self-hosted, lxc, free5gc ]
+    steps:
+      - name: Detener RAN para no dejar el lab en estado inconsistente
+        run: docker compose stop gnb ue blackbox iperf-probe || true
+      - name: Resumen
+        run: |
+          echo "::error::Smoke test fallido. El nucleo sigue en pie para" \
+               "inspeccion; RAN detenida. Revisa el artefacto de diagnostico."
