@@ -1,0 +1,17 @@
+info:
+  version: 1.0.0
+  description: WebUI initial local configuration - lab5g
+
+configuration:
+  mongodb:
+    name: free5gc
+    url: mongodb://mongodb:27017
+  webServer:
+    scheme: http
+    ipv4Address: 0.0.0.0       # publicado en la LAN via ports: 5000:5000
+    port: 5000
+
+logger:
+  enable: true
+  level: info
+  reportCaller: false

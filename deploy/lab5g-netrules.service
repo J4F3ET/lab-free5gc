@@ -1,0 +1,12 @@
+[Unit]
+Description=Reglas de red del lab 5G (LAN)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lab5g-netrules.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

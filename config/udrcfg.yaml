@@ -1,0 +1,19 @@
+info:
+  version: 1.0.2
+  description: UDR initial local configuration - lab5g
+
+configuration:
+  sbi:
+    scheme: http
+    registerIPv4: udr          # nombre DNS de Docker, no IP fija
+    bindingIPv4: 0.0.0.0
+    port: 8000
+  mongodb:
+    name: free5gc
+    url: mongodb://mongodb:27017
+  nrfUri: http://nrf:8000
+
+logger:
+  enable: true
+  level: info
+  reportCaller: false

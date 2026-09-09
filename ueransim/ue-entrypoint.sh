@@ -17,8 +17,8 @@ for i in $(seq 1 "$TIMEOUT"); do
       echo "[ue] ${TUN_IFACE} arriba con IP ${UE_IP} (tras ${i}s)"
       # Fuerza el trafico hacia el Data Network por el tunel 5G.
       ip route replace "$DN_SUBNET" dev "$TUN_IFACE" src "$UE_IP"
-      # MTU explicito: 1400 (docker) - 36 (GTP-U) = 1364
-      ip link set dev "$TUN_IFACE" mtu 1364
+      # MTU del tunel = MTU de la bridge Docker - 36 bytes de cabecera GTP-U
+      ip link set dev "$TUN_IFACE" mtu "${UE_MTU:-1464}"
       echo "[ue] ruta y MTU configurados"
       break
     fi

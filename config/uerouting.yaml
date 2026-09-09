@@ -1,10 +1,12 @@
 info:
   version: 1.0.3
-  description: Routing information for UE
+  description: Routing information for UE - lab5g
 
 ueRoutingInfo:
   UE1:
     members:
-      - imsi-001010000000001    # debe coincidir con ueconfig.yaml -> supi
+      # Antes: imsi-001010000000001 (PLMN 001/01). Debe coincidir con
+      # ueransim/ue.yaml -> supi y con el suscriptor dado de alta en MongoDB.
+      - imsi-732101000000001
     topology: []
     specificPath: []

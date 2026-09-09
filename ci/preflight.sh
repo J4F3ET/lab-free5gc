@@ -59,27 +59,37 @@ docker info >/dev/null 2>&1 \
 
 mtu=$(docker network inspect bridge -f '{{index .Options "com.docker.network.driver.mtu"}}' 2>/dev/null)
 [ -n "$mtu" ] && ok "MTU por defecto de Docker: $mtu" \
-              || warn "MTU de Docker sin fijar; con Tailscale puede dar problemas de TCP"
+              || warn "MTU de Docker sin fijar (informativo; en LAN pura no es critico)"
 
-# --- Capa 3: Tailscale ---
-if command -v tailscale >/dev/null 2>&1; then
-  if tailscale status >/dev/null 2>&1; then
-    ok "tailscale conectado"
-    routes=$(tailscale status --json 2>/dev/null \
-             | grep -o '"AdvertisedRoutes":\[[^]]*\]' || true)
-    [ -n "$routes" ] && ok "rutas anunciadas: $routes" \
-                     || warn "sin rutas anunciadas"
-  else
-    warn "tailscale instalado pero no conectado"
-  fi
+# --- Capa 3: LAN (192.168.1.0/24) ---
+# El lab se publica directamente en la LAN; ya no hay capa Tailscale.
+LAN_SUBNET="${LAN_SUBNET:-192.168.1.0/24}"
+LAN_GW="${LAN_GW:-192.168.1.1}"
 
-  if iptables -C DOCKER-USER -i tailscale0 -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
-     || iptables -C DOCKER-USER -i tailscale0 -j ACCEPT 2>/dev/null; then
-    ok "regla DOCKER-USER para tailscale0 presente"
-  else
-    bad "falta ACCEPT en DOCKER-USER para tailscale0"
-    bad "  -> ejecuta /usr/local/sbin/lab5g-netrules.sh"
-  fi
+lan_if=$(ip -o -4 route show to default | awk '{print $5; exit}')
+lan_ip=$(ip -o -4 addr show dev "${lan_if:-eth0}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+
+if [ -n "$lan_ip" ]; then
+  ok "IP en la LAN: ${lan_ip} (iface ${lan_if})"
+else
+  bad "sin IP en la LAN -> revisa net0 en la config del LXC"
+fi
+
+if ping -c1 -W2 "$LAN_GW" >/dev/null 2>&1; then
+  ok "gateway ${LAN_GW} alcanzable"
+else
+  bad "gateway ${LAN_GW} NO responde -> el lab quedara aislado de la red"
+fi
+
+# Los puertos publicados por Docker (3000/5000/9090) deben ser accesibles
+# desde el resto de la LAN. Docker pone FORWARD en DROP: sin estas reglas,
+# el trafico entrante desde 192.168.1.0/24 hacia las bridges se descarta.
+if iptables -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
+   || iptables -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
+  ok "reglas DOCKER-USER para la LAN presentes"
+else
+  bad "faltan ACCEPT en DOCKER-USER para ${LAN_SUBNET}"
+  bad "  -> ejecuta /usr/local/sbin/lab5g-netrules.sh"
 fi
 
 # --- Recursos ---

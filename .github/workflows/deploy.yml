@@ -7,7 +7,7 @@ on:
       - 'config/**'
       - 'ueransim/**'
       - 'observability/**'
-      - 'docker-compose.yml'
+      - 'docker-compose.yaml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:

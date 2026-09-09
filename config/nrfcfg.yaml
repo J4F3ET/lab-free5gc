@@ -1,24 +1,28 @@
 info:
   version: 1.0.3
-  description: NRF initial local configuration
+  description: NRF initial local configuration - lab5g
 
 configuration:
   sbi:
     scheme: http
-    registerIPv4: 10.100.0.11   # IP del propio NRF en la red 5g_net
+    # El NRF vive en 10.100.200.10 (sbi_net) segun docker-compose.yaml.
+    # Antes decia 10.100.0.11: subred inexistente -> ningun NF lograba registrarse.
+    registerIPv4: nrf
     bindingIPv4: 0.0.0.0
     port: 8000
   mongodb:
     name: free5gc
-    url: mongodb://10.100.0.10:27017   # IP de free5gc-db
+    # Antes: mongodb://10.100.0.10:27017 (IP inexistente).
+    # mongodb esta en 10.100.200.40; se usa el nombre DNS de Docker.
+    url: mongodb://mongodb:27017
   serviceNameList:
     - nnrf-nfm
     - nnrf-disc
   DefaultPlmnId:
-    mcc: '001'
-    mnc: '01'
+    mcc: '732'                 # antes '001' -> no casaba con AMF/NSSF/gNB/UE
+    mnc: '101'                 # antes '01'
 
 logger:
-  NRF:
-    debugLevel: info
-    ReportCaller: false
+  enable: true
+  level: info
+  reportCaller: false
