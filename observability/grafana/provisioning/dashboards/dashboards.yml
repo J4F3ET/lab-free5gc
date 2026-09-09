@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: lab5g
+    orgId: 1
+    folder: 'lab-free5gc'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
