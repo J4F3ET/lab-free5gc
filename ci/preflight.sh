@@ -8,6 +8,15 @@ ok()   { printf '  \033[32mOK\033[0m   %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
 
+# El runner de CI corre como usuario 'deploy', no como root. Las
+# comprobaciones de iptables y de netdevs necesitan privilegios: se elevan
+# solo esas, via sudo -n (ver /etc/sudoers.d/lab5g-deploy).
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
+if [ -n "$SUDO" ] && ! $SUDO true 2>/dev/null; then
+  bad "sin sudo sin contrasena para $(id -un) -> instala /etc/sudoers.d/lab5g-deploy"
+  SUDO=""
+fi
+
 echo "=== Preflight lab-free5gc ==="
 
 # --- Capa 0: modulos de kernel (compartidos con el host Proxmox) ---
@@ -36,8 +45,8 @@ else
 fi
 
 # Prueba real: crear y borrar un netdev dummy
-if ip link add lab5gtest type dummy 2>/dev/null; then
-  ip link del lab5gtest
+if $SUDO ip link add lab5gtest type dummy 2>/dev/null; then
+  $SUDO ip link del lab5gtest
   ok "puedo crear interfaces de red"
 else
   bad "no puedo crear netdevs -> falta lxc.apparmor.profile: unconfined"
@@ -84,8 +93,8 @@ fi
 # Los puertos publicados por Docker (3000/5000/9090) deben ser accesibles
 # desde el resto de la LAN. Docker pone FORWARD en DROP: sin estas reglas,
 # el trafico entrante desde 192.168.1.0/24 hacia las bridges se descarta.
-if iptables -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
-   || iptables -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
+if $SUDO iptables -C DOCKER-USER -s "$LAN_SUBNET" -d 10.100.200.0/24 -j ACCEPT 2>/dev/null \
+   || $SUDO iptables -C DOCKER-USER -i "${lan_if:-eth0}" -j ACCEPT 2>/dev/null; then
   ok "reglas DOCKER-USER para la LAN presentes"
 else
   bad "faltan ACCEPT en DOCKER-USER para ${LAN_SUBNET}"

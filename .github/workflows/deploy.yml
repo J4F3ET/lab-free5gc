@@ -2,7 +2,7 @@ name: deploy-5g-lab
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     paths:
       - 'config/**'
       - 'ueransim/**'
@@ -61,7 +61,7 @@ jobs:
           echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
 
       - name: Reaplicar reglas de red del host
-        run: sudo -n /usr/local/sbin/lab5g-netrules.sh || true
+        run: sudo -n /usr/local/sbin/lab5g-netrules.sh
 
       - name: Descargar imagenes
         run: docker compose pull --quiet

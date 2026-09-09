@@ -1,0 +1,22 @@
+# /etc/sudoers.d/lab5g-deploy
+#
+# El runner de GitHub Actions corre como el usuario 'deploy'. El pipeline
+# necesita privilegios en tres puntos concretos:
+#   - aplicar las reglas DOCKER-USER que publican el lab en la LAN
+#   - las comprobaciones de iptables/netdev de ci/preflight.sh
+#   - la captura de estado de red de ci/collect-logs.sh
+#
+# Sin esto, el paso de netrules falla en silencio y el lab queda
+# inalcanzable desde la LAN sin ningun error visible en CI.
+#
+# Nota: 'deploy' ya pertenece al grupo docker, que en la practica equivale
+# a root. Esto no amplia su superficie real; solo hace explicito y acotado
+# lo que el pipeline necesita.
+#
+# Instalar con:
+#   visudo -cf deploy/sudoers-lab5g-deploy
+#   install -m 440 deploy/sudoers-lab5g-deploy /etc/sudoers.d/lab5g-deploy
+
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g-netrules.sh
+deploy ALL=(root) NOPASSWD: /sbin/iptables
+deploy ALL=(root) NOPASSWD: /sbin/ip

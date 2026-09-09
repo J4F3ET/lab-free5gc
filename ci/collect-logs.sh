@@ -5,6 +5,10 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 
 echo "[diag] recolectando en $OUT"
 
+# El runner de CI corre como usuario 'deploy', no como root: iptables e
+# ip route del host necesitan privilegios (ver /etc/sudoers.d/lab5g-deploy).
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
+
 # Logs de cada contenedor
 for c in $(docker compose ps --services 2>/dev/null); do
   docker compose logs --no-color --tail=500 "$c" > "$OUT/log-${c}.txt" 2>&1 || true
@@ -12,10 +16,10 @@ done
 
 # Estado de red del host LXC
 { echo "=== ip addr ==="        ; ip addr
-  echo "=== ip route ==="       ; ip route show table all
-  echo "=== iptables filter ===" ; iptables -L -n -v
-  echo "=== iptables nat ==="   ; iptables -t nat -L -n -v
-  echo "=== iptables mangle ===" ; iptables -t mangle -L -n -v
+  echo "=== ip route ==="       ; $SUDO ip route show table all
+  echo "=== iptables filter ===" ; $SUDO iptables -L -n -v
+  echo "=== iptables nat ==="   ; $SUDO iptables -t nat -L -n -v
+  echo "=== iptables mangle ===" ; $SUDO iptables -t mangle -L -n -v
   echo "=== sysctl ==="         ; sysctl net.ipv4.ip_forward \
                                           net.ipv4.conf.all.rp_filter
   echo "=== modulos ==="        ; grep -E '^(gtp5g|sctp)' /proc/modules
