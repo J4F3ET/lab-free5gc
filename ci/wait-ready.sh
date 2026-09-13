@@ -47,7 +47,7 @@ done
 
 # La asociacion PFCP es el punto critico (fallo F3)
 wait_for "asociacion PFCP SMF<->UPF" \
-  "docker compose logs smf 2>&1 | grep -qiE 'association setup response|pfcp association.*success'" \
+  "docker compose logs smf 2>&1 | grep -qiE 'association setup accepted response|pfcp association.*success'" \
   300 \
   || { echo
        echo '  >>> La asociacion PFCP no se establecio.'
