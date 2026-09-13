@@ -1,3 +1,7 @@
+info:
+  version: 1.0.2
+  description: NSSF initial local configuration - lab5g
+
 configuration:
   nssfName: NSSF
   sbi:
@@ -38,3 +42,8 @@ configuration:
       supportedSnssaiList:
         - sst: 1
           sd: '010203'
+
+logger:
+  enable: true
+  level: info
+  reportCaller: false

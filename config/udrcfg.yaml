@@ -8,6 +8,9 @@ configuration:
     registerIPv4: udr          # nombre DNS de Docker, no IP fija
     bindingIPv4: 0.0.0.0
     port: 8000
+  # Requerido por el validador ("Invalid DbConnectorType"); sin este campo
+  # el UDR abortaba antes incluso de leer el bloque mongodb.
+  dbConnectorType: mongodb
   mongodb:
     name: free5gc
     url: mongodb://mongodb:27017

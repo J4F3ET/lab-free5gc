@@ -3,6 +3,11 @@ info:
   description: NRF initial local configuration - lab5g
 
 configuration:
+  # MongoDBName/MongoDBUrl van al nivel de 'configuration', no anidados bajo
+  # 'mongodb:'. Con el nombre anidado el validador los ve vacios y el NRF
+  # aborta con "Invalid MongoDBName/MongoDBUrl: non zero value required".
+  MongoDBName: free5gc
+  MongoDBUrl: mongodb://mongodb:27017
   sbi:
     scheme: http
     # El NRF vive en 10.100.200.10 (sbi_net) segun docker-compose.yaml.
@@ -10,11 +15,6 @@ configuration:
     registerIPv4: nrf
     bindingIPv4: 0.0.0.0
     port: 8000
-  mongodb:
-    name: free5gc
-    # Antes: mongodb://10.100.0.10:27017 (IP inexistente).
-    # mongodb esta en 10.100.200.40; se usa el nombre DNS de Docker.
-    url: mongodb://mongodb:27017
   serviceNameList:
     - nnrf-nfm
     - nnrf-disc

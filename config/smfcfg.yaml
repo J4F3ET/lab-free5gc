@@ -7,6 +7,16 @@ configuration:
     port: 8000
   nrfUri: http://nrf:8000
 
+  # Requeridos por el validador ("invalid T3591/T3592").
+  t3591:
+    enable: true
+    expireTime: 16s
+    maxRetryTimes: 3
+  t3592:
+    enable: true
+    expireTime: 16s
+    maxRetryTimes: 3
+
   serviceNameList:
     - nsmf-pdusession
     - nsmf-event-exposure

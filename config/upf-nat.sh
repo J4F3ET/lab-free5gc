@@ -4,7 +4,10 @@ set -euo pipefail
 UE_POOL="${UE_POOL:-10.60.0.0/16}"
 DN_PREFIX="${DN_PREFIX:-10.100.204.}"
 
-sysctl -w net.ipv4.ip_forward=1
+# ip_forward ya lo aplica docker-compose.yaml via 'sysctls:' a nivel de
+# contenedor (se necesita antes de que arranque el proceso). La imagen
+# free5gc/upf no trae el binario sysctl, asi que llamarlo aqui solo
+# abortaba el script (set -e) antes de llegar a las reglas de NAT.
 
 # Resolver la interfaz del Data Network POR SU IP, no por nombre.
 # Docker no garantiza que dn_net sea eth0/eth1/eth2 de forma estable.
