@@ -4,6 +4,13 @@ info:
 
 configuration:
   nssfName: NSSF
+  # Sin esto, el NSSF se registra en el NRF sin anunciar nnssf-nsselection,
+  # y el AMF (SearchNssfNSSelectionInstance) nunca encuentra el servicio,
+  # fallando siempre con "AMF can not select an NSSF by NRF" aunque el
+  # NSSF este bien registrado.
+  serviceNameList:
+    - nnssf-nsselection
+    - nnssf-nssaiavailability
   sbi:
     scheme: http
     registerIPv4: nssf
