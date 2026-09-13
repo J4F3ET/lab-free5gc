@@ -14,14 +14,14 @@ configuration:
     port: 8000
   nrfUri: http://nrf:8000
 
-  # Requerido por el validador ("Invalid ServiceNameList").
+  # Requerido por el validador ("Invalid ServiceNameList"). namf-callback
+  # NO es un valor aceptado en v3.4.4 (el validador solo admite estos 5).
   serviceNameList:
     - namf-comm
     - namf-evts
     - namf-mt
     - namf-loc
     - namf-oam
-    - namf-callback
 
   servedGuamiList:
     - plmnId:

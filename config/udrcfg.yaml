@@ -1,5 +1,6 @@
 info:
-  version: 1.0.2
+  # El validador exige EXACTAMENTE esta version: "does not validate as in(1.1.0)".
+  version: 1.1.0
   description: UDR initial local configuration - lab5g
 
 configuration:
