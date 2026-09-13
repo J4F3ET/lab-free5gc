@@ -31,6 +31,7 @@ ocurriendo dentro de un servidor tuyo y con cada paso visible.
 10. [Cuando algo falla](#10-cuando-algo-falla)
 11. [Mapa del repositorio](#11-mapa-del-repositorio)
 12. [Documentación detallada](#12-documentación-detallada)
+13. [El camino exacto de una señal, y por qué cada pieza es indispensable](#13-el-camino-exacto-de-una-señal-y-por-qué-cada-pieza-es-indispensable)
 
 ---
 
@@ -750,6 +751,63 @@ Este README cubre el camino normal. Cuando necesites el "por qué":
 | [05 — Diagnóstico](docs/05-diagnostico.md) | Algo se rompió y necesitas el árbol completo síntoma → comando |
 | [06 — PLMN e identidades](docs/06-plmn-e-identidades.md) | Vas a cambiar el operador, el IMSI o el slice |
 | [07 — CI/CD](docs/07-cicd.md) | Quieres que se despliegue solo al hacer push |
+
+---
+
+## 13. El camino exacto de una señal, y por qué cada pieza es indispensable
+
+Esta sección responde a una pregunta distinta a la de la sección 1: no "qué
+hace cada servicio" sino **por qué interfaz concreta pasa la señal** de un
+sitio a otro, y qué se rompe exactamente si falta cada pieza. Son las
+interfaces estándar de 3GPP que aparecen en los logs de free5GC y UERANSIM.
+
+```
+Plano de usuario (los datos reales del "teléfono"):
+
+   UE ──N1──▶ gNB ──N3──▶ UPF ──N6──▶ DN (red externa)
+
+Plano de control (la señalización que hace posible ese camino):
+
+   gNB ──N2──▶ AMF ──────▶ SMF ──N4──▶ UPF
+                 │            │
+                 ▼            ▼
+                NRF ◀── (todos se registran aquí) ──▶ NSSF
+                 ▲
+                 │
+     AUSF · UDM · UDR · PCF   (datos y políticas del suscriptor)
+```
+
+| Interfaz | Entre quién | Si falta |
+|---|---|---|
+| **N1** | UE ↔ AMF (vía gNB) | El teléfono no tiene forma de pedir el registro |
+| **N2** | gNB ↔ AMF | La antena no puede avisar al núcleo de que hay un teléfono |
+| **N3** | gNB ↔ UPF | El túnel de datos no tiene por dónde entrar al núcleo |
+| **N4** | SMF ↔ UPF | El SMF decide abrir una sesión pero el UPF nunca se entera: no hay `uesimtun0` |
+| **N6** | UPF ↔ DN | El paquete llega al UPF pero no sale a ningún sitio |
+
+### Por qué cada servicio es indispensable, no solo "útil"
+
+La tentación es pensar que solo el AMF, el SMF y el UPF importan porque son los
+que aparecen en los logs del `ue`. En la práctica, **dos incidentes reales de
+este laboratorio demuestran lo contrario**: una pieza que nunca se menciona en
+un log del teléfono puede tumbar todo el registro igual.
+
+| Servicio | Por qué es indispensable, no solo "útil" |
+|---|---|
+| `nrf` | Es la única forma en que las demás piezas se encuentran. Si un NF se registra pero no anuncia el servicio correcto, el resto lo ve "registrado" y aun así no lo puede usar — exactamente lo que le pasaba al `nssf` (ver abajo). |
+| `amf` | Punto de entrada único del teléfono. Sin él no hay ni siquiera un intento de registro que depurar. |
+| `ausf` | Sin el desafío criptográfico, cualquiera con un IMSI válido (sin la clave) entraría a la red. |
+| `udm` / `udr` | La fuente de verdad del abonado. Si falta un solo documento en Mongo (`amData`, `smfSelectionSubscriptionData`, `policyData.ues.amData`...), el AMF no falla con un mensaje claro: falla con una causa genérica (`PLMN_NOT_ALLOWED`) que no tiene nada que ver con la causa real. |
+| `pcf` | Sin política AM asociada al UE, el propio AMF de free5GC (v3.4.4) hace **panic** (`nil pointer dereference` en `BuildIEMobilityRestrictionList`) justo al enviar el `Configuration Update Command`, tumbando la conexión NGAP entera un segundo después de un registro aparentemente exitoso. |
+| `nssf` | Decide el *slice* que usará la sesión. Si el NSSF no declara `serviceNameList: [nnssf-nsselection, nnssf-nssaiavailability]` en su config, se registra en el NRF sin anunciar ese servicio: el AMF lo ve en el directorio pero nunca encuentra el endpoint, y la sesión PDU falla siempre con `AMF can not select an NSSF by NRF` — aunque el NSSF esté sano y alcanzable. |
+| `smf` / `upf` | Sin la asociación PFCP (N4) entre ambos, no existe ningún túnel que abrir, sin importar cuán bien haya ido todo lo anterior. |
+
+**La lección general:** un fallo en el plano de control casi nunca se anuncia
+con su causa real. El AMF absorbe errores de UDM, UDR, PCF o NSSF y los
+traduce a una causa NAS genérica del lado del teléfono. Cuando el `ue` diga
+`PLMN_NOT_ALLOWED` o simplemente deje de responder tras el registro, **el
+primer sitio donde mirar son los logs del `amf`**, no los del `ue` — ahí está
+el error real, no la traducción.
 
 ---
 
