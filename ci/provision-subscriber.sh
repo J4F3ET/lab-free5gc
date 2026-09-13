@@ -43,6 +43,22 @@ db.subscriptionData.provisionedData.amData.replaceOne(
   { upsert: true }
 );
 
+// Sin este documento, UDR devuelve 404 en smf-selection-subscription-data,
+// UDM propaga "communicateWithUDM error: DATA_NOT_FOUND" y el AMF rechaza
+// el registro con la causa generica PLMN_NOT_ALLOWED (11), aunque amData
+// y smData si existan.
+const snssaiKey = (${SST}).toString(16).padStart(2, "0") + "${SD}";
+db.subscriptionData.provisionedData.smfSelectionSubscriptionData.replaceOne(
+  { ueId: ueId, servingPlmnId: plmnID },
+  {
+    ueId: ueId, servingPlmnId: plmnID,
+    subscribedSnssaiInfos: {
+      [snssaiKey]: { dnnInfos: [ { dnn: "${DNN}" } ] }
+    }
+  },
+  { upsert: true }
+);
+
 db.subscriptionData.provisionedData.smData.replaceOne(
   { ueId: ueId, servingPlmnId: plmnID, singleNssai: snssai },
   {
@@ -82,6 +98,9 @@ print("subscriptionData.authenticationSubscription: " +
         .countDocuments({ueId: ueId}));
 print("provisionedData.amData: " +
       db.subscriptionData.provisionedData.amData.countDocuments({ueId: ueId}));
+print("provisionedData.smfSelectionSubscriptionData: " +
+      db.subscriptionData.provisionedData.smfSelectionSubscriptionData
+        .countDocuments({ueId: ueId}));
 print("provisionedData.smData: " +
       db.subscriptionData.provisionedData.smData.countDocuments({ueId: ueId}));
 EOF
