@@ -1,5 +1,6 @@
 info:
-  version: 1.0.3
+  # Mismo validador que smfcfg.yaml: exige version 1.0.7 exacta.
+  version: 1.0.7
   description: Routing information for UE - lab5g
 
 ueRoutingInfo:
