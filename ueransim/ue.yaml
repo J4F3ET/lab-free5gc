@@ -3,7 +3,11 @@ mcc: '732'
 mnc: '101'
 
 protectionScheme: 0              # 0 = null scheme (SUCI sin cifrar, útil para depurar)
-homeNetworkPublicKey: ''
+# No se usa con protectionScheme 0, pero el validador de UERANSIM exige
+# igualmente una clave Profile A valida de 64 caracteres hex (32 bytes);
+# vacio da "Field 'homeNetworkPublicKey' is too small". Valor tomado del
+# ejemplo oficial de UERANSIM (config/open5gs-ue.yaml).
+homeNetworkPublicKey: '5a8d38864820197c3394b92613b20b91633cbd897119273bf8e4a6f4eec0a650'
 homeNetworkPublicKeyId: 0
 routingIndicator: '0000'
 
