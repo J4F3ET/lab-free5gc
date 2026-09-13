@@ -96,7 +96,7 @@ services:
     <<: *f5gc-common
     image: free5gc/nrf:${FREE5GC_TAG}
     container_name: nrf
-    command: ./nrf -c ../config/nrfcfg.yaml
+    command: ./nrf -c ./config/nrfcfg.yaml
     environment:
       DB_URI: mongodb://mongodb:27017/free5gc
       GIN_MODE: release
@@ -110,7 +110,7 @@ services:
     <<: *f5gc-common
     image: free5gc/udr:${FREE5GC_TAG}
     container_name: udr
-    command: ./udr -c ../config/udrcfg.yaml
+    command: ./udr -c ./config/udrcfg.yaml
     environment:
       DB_URI: mongodb://mongodb:27017/free5gc
       GIN_MODE: release
@@ -122,7 +122,7 @@ services:
     <<: *f5gc-common
     image: free5gc/udm:${FREE5GC_TAG}
     container_name: udm
-    command: ./udm -c ../config/udmcfg.yaml
+    command: ./udm -c ./config/udmcfg.yaml
     volumes: [ ./config/udmcfg.yaml:/free5gc/config/udmcfg.yaml:ro ]
     networks: { sbi_net: { ipv4_address: 10.100.200.14 } }
     depends_on: [ nrf, udr ]
@@ -131,7 +131,7 @@ services:
     <<: *f5gc-common
     image: free5gc/ausf:${FREE5GC_TAG}
     container_name: ausf
-    command: ./ausf -c ../config/ausfcfg.yaml
+    command: ./ausf -c ./config/ausfcfg.yaml
     volumes: [ ./config/ausfcfg.yaml:/free5gc/config/ausfcfg.yaml:ro ]
     networks: { sbi_net: { ipv4_address: 10.100.200.13 } }
     depends_on: [ nrf ]
@@ -140,7 +140,7 @@ services:
     <<: *f5gc-common
     image: free5gc/pcf:${FREE5GC_TAG}
     container_name: pcf
-    command: ./pcf -c ../config/pcfcfg.yaml
+    command: ./pcf -c ./config/pcfcfg.yaml
     volumes: [ ./config/pcfcfg.yaml:/free5gc/config/pcfcfg.yaml:ro ]
     networks: { sbi_net: { ipv4_address: 10.100.200.16 } }
     depends_on: [ nrf ]
@@ -149,7 +149,7 @@ services:
     <<: *f5gc-common
     image: free5gc/nssf:${FREE5GC_TAG}
     container_name: nssf
-    command: ./nssf -c ../config/nssfcfg.yaml
+    command: ./nssf -c ./config/nssfcfg.yaml
     volumes: [ ./config/nssfcfg.yaml:/free5gc/config/nssfcfg.yaml:ro ]
     networks: { sbi_net: { ipv4_address: 10.100.200.17 } }
     depends_on: [ nrf ]
@@ -158,7 +158,7 @@ services:
     <<: *f5gc-common
     image: free5gc/amf:${FREE5GC_TAG}
     container_name: amf
-    command: ./amf -c ../config/amfcfg.yaml
+    command: ./amf -c ./config/amfcfg.yaml
     volumes: [ ./config/amfcfg.yaml:/free5gc/config/amfcfg.yaml:ro ]
     networks: { sbi_net: { ipv4_address: 10.100.200.11 } }
     depends_on: [ nrf, ausf, udm, pcf, nssf ]
@@ -167,7 +167,7 @@ services:
     <<: *f5gc-common
     image: free5gc/smf:${FREE5GC_TAG}
     container_name: smf
-    command: ./smf -c ../config/smfcfg.yaml -u ../config/uerouting.yaml
+    command: ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml
     volumes:
       - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml:ro
       - ./config/uerouting.yaml:/free5gc/config/uerouting.yaml:ro
@@ -181,7 +181,7 @@ services:
     image: free5gc/upf:${FREE5GC_TAG}
     container_name: upf
     restart: unless-stopped
-    command: bash -c "/free5gc/upf-nat.sh && ./upf -c ../config/upfcfg.yaml"
+    command: bash -c "/free5gc/upf-nat.sh && ./upf -c ./config/upfcfg.yaml"
     volumes:
       - ./config/upfcfg.yaml:/free5gc/config/upfcfg.yaml:ro
       - ./config/upf-nat.sh:/free5gc/upf-nat.sh:ro
@@ -243,7 +243,7 @@ services:
     image: free5gc/webui:${FREE5GC_TAG}
     container_name: webui
     profiles: [ tools ]
-    command: ./webui -c ../config/webuicfg.yaml
+    command: ./webui -c ./config/webuicfg.yaml
     environment:
       DB_URI: mongodb://mongodb:27017/free5gc
       GIN_MODE: release
