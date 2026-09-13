@@ -9,5 +9,10 @@ ueRoutingInfo:
       # Antes: imsi-001010000000001 (PLMN 001/01). Debe coincidir con
       # ueransim/ue.yaml -> supi y con el suscriptor dado de alta en MongoDB.
       - imsi-732101000000001
-    topology: []
+    # Requerido por el validador ("invalid Topology: non zero value
+    # required"); un array vacio no vale aunque solo haya un UPF. Nombres
+    # de nodo deben coincidir con smfcfg.yaml -> userplaneInformation.upNodes.
+    topology:
+      - A: gNB1
+        B: UPF
     specificPath: []
