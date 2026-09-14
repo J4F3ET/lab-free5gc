@@ -69,17 +69,19 @@ jobs:
 
       # El host es de 4 nucleos / 3.8 GB: no aguanta el nucleo+RAN a la vez
       # que obs+probes (Grafana, Prometheus, cAdvisor, phy-sim, blackbox...).
-      # La corrida 34793481927 lo demostro: quedaron 9 contenedores de
-      # obs/probes corriendo de una sesion manual anterior, el load average
-      # llego a 11.99, y el smoke test fallo en el paso 1/6 (NG Setup) por
-      # pura inanicion de CPU/IO en docker, no por un fallo real del core ni
-      # de la RAN (los pasos 2 a 5 del mismo smoke, incluida la conectividad
-      # real por el tunel, pasaron bien). Por eso se detienen aqui, ANTES de
-      # tocar el nucleo, sin importar si quedaron de una corrida manual o de
-      # una ejecucion del workflow 'deploy-observability.yml'. Ese workflow
-      # comparte el mismo concurrency.group ('lab5g-deploy'), asi que si
-      # este despliegue esta corriendo, GitHub Actions lo deja en cola en
-      # vez de dejarlo competir por el host - y 'rollback' nunca los toca.
+      # En la corrida 34793481927 quedaron 9 contenedores de obs/probes
+      # corriendo de una sesion manual anterior y el load average llego a
+      # 11.99 durante el smoke test. Esa carga NO resulto ser la causa del
+      # fallo de esa corrida en concreto -eso era un bug de 'pipefail' en
+      # ci/smoke-ue.sh, ver ese fichero-, pero sigue siendo un riesgo real
+      # para los pasos funcionales del smoke (registro NAS, sesion PDU,
+      # throughput), asi que este paso se queda como precaucion: detener
+      # obs/probes ANTES de tocar el nucleo, sin importar si quedaron de una
+      # corrida manual o de una ejecucion del workflow
+      # 'deploy-observability.yml'. Ese workflow comparte el mismo
+      # concurrency.group ('lab5g-deploy'), asi que si este despliegue esta
+      # corriendo, GitHub Actions lo deja en cola en vez de dejarlo competir
+      # por el host - y 'rollback' nunca los toca.
       # OJO: '--profile' por CLI NO se une con COMPOSE_PROFILES del entorno
       # en esta version de docker compose (v5.5.1) - lo reemplaza. 'ran' se
       # repite aqui explicitamente porque 'probes' (blackbox/iperf-probe)

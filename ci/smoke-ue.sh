@@ -15,11 +15,25 @@ bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 # Los pasos 1 y 2 consultaban el log UNA sola vez: cuando el job de smoke
 # arranca justo despues del de deploy, el gNB puede no haber completado
 # todavia el NG Setup, y el test fallaba por carrera, no por un fallo real.
+#
+# El 'grep -qiE' de mas abajo va con substitucion de proceso (< <(...)), NO
+# con un pipe (docker compose logs ... | grep ...). Es el mismo bug que ya
+# se encontro y arreglo en ci/wait-ready.sh (Bug 3 en la memoria del
+# proyecto): 'grep -q' cierra su stdin en cuanto encuentra la coincidencia,
+# 'docker compose logs' recibe SIGPIPE mientras todavia escribe el resto del
+# historial, y con 'pipefail' (activo en la linea 2 de este script) ese
+# SIGPIPE hace fallar la tuberia ENTERA aunque grep si haya encontrado el
+# patron y devuelto 0. El resultado, verificado en vivo dos veces (runs
+# 34793481927 y 34796529773): el paso 1/6 reporta "sin NG Setup Response"
+# durante los 240s completos aunque esa linea exacta ya este en el log de
+# gnb desde el primer segundo - el check nunca podia pasar, sin importar la
+# carga del host. La substitucion de proceso saca a 'docker compose logs'
+# de la tuberia (deja de ser una tuberia), asi que 'pipefail' no la toca.
 wait_log() {
   local svc="$1" pat="$2" budget="${3:-120}"
   local deadline=$(( $(date +%s) + budget ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    docker compose logs "$svc" 2>&1 | grep -qiE "$pat" && return 0
+    grep -qiE "$pat" < <(docker compose logs "$svc" 2>&1) && return 0
     sleep 3
   done
   return 1
