@@ -37,12 +37,25 @@ Consecuencias que hay que aceptar antes de instalarlo:
 
 ## 2. Qué hace el pipeline
 
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) tiene cuatro
-trabajos encadenados:
+Son **dos workflows separados**, que comparten el mismo `concurrency.group`
+para no competir nunca por el host (ver la [sección de
+concurrencia](#concurrencia) más abajo):
+
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) — núcleo +
+RAN, con cuatro trabajos encadenados:
 
 ```
 validate  →  deploy  →  smoke  →  (rollback, solo si algo falló)
 ```
+
+[`.github/workflows/deploy-observability.yml`](../.github/workflows/deploy-observability.yml)
+— Grafana, Prometheus, cAdvisor y las sondas, en un único trabajo.
+
+Antes eran un solo workflow, con la observabilidad como un quinto trabajo al
+final. Se separaron porque cualquier cambio en `observability/**` (un panel
+de Grafana, el exportador `phy_sim_exporter.py`) disparaba el pipeline
+completo del core — `validate`+`deploy`+`smoke`, ~15 minutos — sin ninguna
+necesidad de tocar el 5G core para nada.
 
 ### `validate` — sin tocar nada de lo que está corriendo
 
@@ -60,25 +73,32 @@ más barato fallar en la validación que a mitad del arranque.
 Y las etapas importan:
 
 ```
-1. Generar .env a partir del secreto
-2. Reaplicar las reglas de red del host
-3. docker compose pull
-4. mongodb, con --wait --wait-timeout 600     ← espera de verdad
-5. El plano de control
-6. ci/wait-ready.sh
-7. ci/provision-subscriber.sh
-8. El perfil 'ran'
-9. (opcional) 'obs' y 'probes', solo si se pidió
+1. Detener 'obs'+'probes' si estaban corriendo
+2. Generar .env a partir del secreto
+3. Reaplicar las reglas de red del host
+4. docker compose pull
+5. mongodb, con --wait --wait-timeout 600     ← espera de verdad
+6. El plano de control
+7. ci/wait-ready.sh
+8. ci/provision-subscriber.sh
+9. El perfil 'ran'
 ```
 
-El paso 4 es el que se añadió después de un fallo real: arrancar los 16
+El paso 5 es el que se añadió después de un fallo real: arrancar los 16
 servicios de golpe hacía que MongoDB compitiera por disco justo con los
 servicios que esperaban su chequeo de salud. Ahora cada etapa imprime un `ps`,
 así que un fallo dice qué quedó arriba y qué no.
 
-**La observabilidad no se levanta por defecto.** Está detrás de un input
-explícito, porque son 8 contenedores más y en un host ajustado esa es la
-diferencia entre arrancar y no arrancar.
+**El paso 1 se añadió después de otro fallo real** (ejecución `34793481927`):
+quedaron 9 contenedores de `obs`+`probes` corriendo de una sesión manual
+anterior, el load average del host (4 núcleos / 3.8 GB) llegó a 11.99, y el
+smoke test falló por pura inanición de CPU/IO en Docker — no por ningún fallo
+real del core ni de la RAN. Ahora `deploy` los detiene incondicionalmente
+antes de tocar nada, sin importar de dónde vinieran.
+
+**La observabilidad no se levanta aquí.** Vive en su propio workflow,
+[`deploy-observability.yml`](../.github/workflows/deploy-observability.yml) —
+ver la sección 2.
 
 ### `smoke` — la validación end-to-end
 
@@ -175,38 +195,56 @@ ese secreto.
 
 ### Automático
 
-Un push a `master` que toque alguno de estos caminos:
+**`deploy.yml`** (núcleo + RAN) — un push a `master` que toque:
 
 ```
-config/**  ueransim/**  observability/**  docker-compose.yaml  .github/workflows/deploy.yml
+config/**  ueransim/**  docker-compose.yaml  .github/workflows/deploy.yml
 ```
+
+**`deploy-observability.yml`** — un push a `master` que toque:
+
+```
+observability/**  docker-compose.yaml  .github/workflows/deploy-observability.yml
+```
+
+`docker-compose.yaml` dispara los dos porque ahí viven definidos tanto el
+core como los servicios de `obs`/`probes` en un mismo archivo — no hay forma
+de filtrar por rutas dentro del mismo fichero, así que a veces se disparará
+un workflow que en realidad no necesitaba correr. Es un falso positivo
+barato (unos segundos de `validate`/checkout), no un problema real.
 
 ### A mano
 
-Desde la pestaña Actions, con dos opciones:
+`deploy.yml`, desde la pestaña Actions o por línea de comandos:
 
 | Input | Por defecto | Qué hace |
 |---|---|---|
 | `skip_smoke` | `false` | Despliega sin ejecutar la prueba end-to-end |
-| `con_observabilidad` | `false` | Levanta también Grafana, Prometheus y las sondas |
-
-O por línea de comandos:
 
 ```bash
-gh workflow run deploy.yml --repo J4F3ET/lab-free5gc -f con_observabilidad=true
+gh workflow run deploy.yml --repo J4F3ET/lab-free5gc -f skip_smoke=true
+```
+
+`deploy-observability.yml` no tiene inputs — solo levanta `obs`+`probes`:
+
+```bash
+gh workflow run deploy-observability.yml --repo J4F3ET/lab-free5gc
 ```
 
 ### Pararlo del todo
 
-Si el servidor está caído o en mantenimiento, conviene desactivar el workflow
-para que un merge no dispare un despliegue contra una máquina que no está:
+Si el servidor está caído o en mantenimiento, conviene desactivar los
+workflows para que un merge no dispare un despliegue contra una máquina que
+no está:
 
 ```bash
 gh workflow disable deploy.yml --repo J4F3ET/lab-free5gc
+gh workflow disable deploy-observability.yml --repo J4F3ET/lab-free5gc
 ```
 
 ```bash
 gh workflow enable deploy.yml --repo J4F3ET/lab-free5gc
+gh workflow enable deploy-observability.yml --repo J4F3ET/lab-free5gc
 ```
 
 ### Concurrencia
@@ -220,6 +258,16 @@ concurrency:
 Nunca dos despliegues a la vez sobre el mismo LXC, y **sin cancelar el que ya
 está corriendo**: interrumpir un despliegue a mitad deja el laboratorio en un
 estado peor que dejarlo terminar.
+
+**Los dos workflows usan el mismo `group: lab5g-deploy`** — el grupo de
+concurrencia de GitHub Actions es global al repositorio, no por archivo de
+workflow. Si `deploy.yml` está corriendo `deploy`+`smoke` y en ese momento se
+dispara `deploy-observability.yml` (por un push a `observability/**` o a
+mano), GitHub Actions lo deja en cola en vez de dejarlo arrancar Grafana y
+compañía en paralelo sobre el mismo host de 4 núcleos. Es la pieza que hace
+segura la separación en dos workflows: sin este grupo compartido, sería
+posible que ambos corrieran a la vez y se repitiera el fallo por inanición
+de CPU/IO de la ejecución `34793481927`.
 
 ---
 

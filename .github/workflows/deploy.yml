@@ -6,17 +6,12 @@ on:
     paths:
       - 'config/**'
       - 'ueransim/**'
-      - 'observability/**'
       - 'docker-compose.yaml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
       skip_smoke:
         description: 'Saltar el smoke test del UE'
-        type: boolean
-        default: false
-      con_observabilidad:
-        description: 'Levantar tambien Prometheus, Grafana, cAdvisor y sondas (6+2 contenedores mas)'
         type: boolean
         default: false
 
@@ -72,6 +67,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # El host es de 4 nucleos / 3.8 GB: no aguanta el nucleo+RAN a la vez
+      # que obs+probes (Grafana, Prometheus, cAdvisor, phy-sim, blackbox...).
+      # La corrida 34793481927 lo demostro: quedaron 9 contenedores de
+      # obs/probes corriendo de una sesion manual anterior, el load average
+      # llego a 11.99, y el smoke test fallo en el paso 1/6 (NG Setup) por
+      # pura inanicion de CPU/IO en docker, no por un fallo real del core ni
+      # de la RAN (los pasos 2 a 5 del mismo smoke, incluida la conectividad
+      # real por el tunel, pasaron bien). Por eso se detienen aqui, ANTES de
+      # tocar el nucleo, sin importar si quedaron de una corrida manual o de
+      # una ejecucion del workflow 'deploy-observability.yml'. Ese workflow
+      # comparte el mismo concurrency.group ('lab5g-deploy'), asi que si
+      # este despliegue esta corriendo, GitHub Actions lo deja en cola en
+      # vez de dejarlo competir por el host - y 'rollback' nunca los toca.
+      # OJO: '--profile' por CLI NO se une con COMPOSE_PROFILES del entorno
+      # en esta version de docker compose (v5.5.1) - lo reemplaza. 'ran' se
+      # repite aqui explicitamente porque 'probes' (blackbox/iperf-probe)
+      # usa 'network_mode: service:ue', y sin 'ran' en la lista de perfiles
+      # activos la propia carga del proyecto falla con "undefined service
+      # ue" (verificado en vivo contra el runner).
+      #
+      # OJO 2: los servicios se nombran uno por uno a proposito. 'stop' sin
+      # argumentos detiene TODOS los servicios del proyecto resuelto -
+      # incluido el nucleo, que no tiene 'profiles:' y por eso siempre
+      # cuenta como activo-, y eso se probo en vivo por error: tumbo
+      # mongodb+las 9 NF del core sin querer. Nunca usar 'stop' a secas
+      # aqui.
+      - name: Detener observabilidad si estaba corriendo (libera el host)
+        run: |
+          docker compose --profile ran --profile obs --profile probes stop \
+            grafana prometheus cadvisor node-exporter pushgateway dozzle \
+            phy-sim blackbox iperf-probe || true
+
       - name: Generar .env con secretos
         run: |
           cp .env.example .env
@@ -91,7 +118,8 @@ jobs:
       # el host dejaba de atender hasta SSH. No convergia.
       #
       # Por eso el perfil por defecto es SOLO el nucleo (10 contenedores) y
-      # la observabilidad queda detras de un flag explicito.
+      # la observabilidad vive en su propio workflow
+      # ('deploy-observability.yml'), fuera de este pipeline.
       - name: Levantar la base de datos y esperar a que este sana
         run: |
           docker compose up -d --remove-orphans --wait --wait-timeout 600 mongodb
@@ -149,47 +177,7 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
-  #  4. Observabilidad — solo si se pide, y SIEMPRE despues del smoke test
-  # ------------------------------------------------------------------
-  # Antes esto vivia al final del job 'deploy', justo antes del smoke test:
-  # los 8 contenedores de 'obs'+'probes' (Grafana con su migracion de SQLite
-  # en frio, Prometheus, cAdvisor, blackbox, iperf-probe...) competian por
-  # I/O con el propio smoke test (registro NAS + sesion PDU) en un host de 4
-  # nucleos / 3.8 GB que ya va justo con solo el core+RAN (ver el comentario
-  # sobre load average 105 mas arriba). Se movio a un job aparte que corre
-  # DESPUES de 'smoke', para que la validacion critica del 5G core tenga el
-  # host para ella sola. 'always() && !cancelled()' para que corra tanto si
-  # el smoke test paso como si fallo (asi se puede inspeccionar via Grafana
-  # un fallo, igual que 'rollback' deja el nucleo en pie a proposito), pero
-  # no si se cancelo el workflow a mano.
-  #
-  # 'rollback' entra en 'needs' aunque solo corra cuando el smoke test falla:
-  # si no se encadenara, un smoke fallido dispararia 'rollback' (detiene ue/
-  # gnb/blackbox/iperf-probe) y 'observability' (levanta obs+probes, que
-  # necesitan 'ue' arriba) EN PARALELO sobre el mismo runner -> carrera. Con
-  # 'rollback' en needs, GitHub Actions espera a que termine (o se salte,
-  # cuando el smoke test paso) antes de arrancar 'observability'.
-  observability:
-    needs: [ deploy, smoke, rollback ]
-    if: ${{ inputs.con_observabilidad && always() && !cancelled() }}
-    runs-on: [ self-hosted, lxc, free5gc ]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Regenerar .env
-        run: |
-          cp .env.example .env
-          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
-
-      # 'probes' necesita 'ran': blackbox e iperf-probe viven en el netns
-      # del UE (network_mode: service:ue), asi que se declara junto con 'obs'.
-      - name: Levantar observabilidad
-        run: |
-          docker compose --profile obs --profile probes up -d
-          docker compose ps
-
-  # ------------------------------------------------------------------
-  #  5. Rollback si el smoke test fallo
+  #  4. Rollback si el smoke test fallo
   # ------------------------------------------------------------------
   rollback:
     needs: [ deploy, smoke ]
@@ -199,6 +187,12 @@ jobs:
       # Se detiene la RAN y las sondas, dejando el nucleo en pie para poder
       # inspeccionarlo. 'probes' se nombra explicitamente porque no esta en
       # COMPOSE_PROFILES y de otro modo compose no lo veria.
+      #
+      # A proposito NO toca 'obs' (Grafana/Prometheus/phy-sim/...): ese
+      # perfil ya quedo detenido por el paso de 'deploy' que libera el host
+      # antes de desplegar, y solo lo vuelve a levantar el workflow separado
+      # 'deploy-observability.yml' cuando corresponda. 'rollback' nunca los
+      # redespliega.
       - name: Detener RAN y sondas para no dejar el lab inconsistente
         run: |
           docker compose --profile ran --profile probes stop \

@@ -1,0 +1,67 @@
+name: deploy-observability
+
+# Separado de 'deploy.yml' (nucleo + RAN) a proposito: antes, cualquier
+# cambio en 'observability/**' (un panel de Grafana, el exportador phy-sim)
+# disparaba el pipeline completo del core -validate+deploy+smoke, ~15 min-
+# sin necesidad real de tocar el 5G core para nada. Ahora este workflow solo
+# se encarga de 'obs'+'probes', y usa el MISMO concurrency.group que
+# 'deploy.yml' para que nunca compitan por el host (ver la seccion de
+# concurrencia mas abajo).
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'observability/**'
+      - 'docker-compose.yaml'
+      - '.github/workflows/deploy-observability.yml'
+  workflow_dispatch: {}
+
+# Mismo grupo que 'deploy.yml': si un despliegue del core (deploy+smoke) esta
+# corriendo, GitHub Actions deja este workflow en cola en vez de dejarlo
+# competir por CPU/IO en el mismo host de 4 nucleos / 3.8 GB.
+concurrency:
+  group: lab5g-deploy
+  cancel-in-progress: false
+
+env:
+  COMPOSE_PROJECT_NAME: lab5g
+  DOCKER_BUILDKIT: '1'
+  # 'probes' (blackbox/iperf-probe) usa 'network_mode: service:ue', asi que
+  # 'ran' tiene que estar en el set de perfiles activos para que la propia
+  # carga del proyecto no falle con "undefined service ue" - aunque el 'up'
+  # de este job no toque ningun servicio del perfil 'ran' directamente.
+  COMPOSE_PROFILES: ran
+
+jobs:
+  observability:
+    runs-on: [ self-hosted, lxc, free5gc ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar .env con secretos
+        run: |
+          cp .env.example .env
+          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
+
+      # OJO: '--profile' por CLI NO se une con COMPOSE_PROFILES del entorno
+      # en esta version de docker compose (v5.5.1) - lo reemplaza. 'ran' se
+      # repite aqui explicitamente por lo mismo que en el comentario de
+      # arriba (verificado en vivo contra el runner).
+      #
+      # OJO 2: los servicios van nombrados uno por uno. 'up -d' sin
+      # argumentos resuelve TODO el proyecto activo -incluido el nucleo, que
+      # no tiene 'profiles:' y por eso cuenta siempre como activo- y eso es
+      # justo lo que hay que evitar en un host que no aguanta arrancar todo
+      # de golpe (ver el comentario sobre load average 105 en 'deploy.yml').
+      #
+      # Si el nucleo/RAN no estan corriendo (nadie ha desplegado 'deploy.yml'
+      # todavia), 'blackbox'/'iperf-probe' simplemente no llegan a levantar
+      # (dependen de 'ue' via network_mode) y quedan en 'Exited'; el resto de
+      # obs (Grafana, Prometheus, cAdvisor, node-exporter, pushgateway,
+      # dozzle, phy-sim) no depende de eso y arranca igual.
+      - name: Levantar observabilidad
+        run: |
+          docker compose --profile ran --profile obs --profile probes up -d \
+            grafana prometheus cadvisor node-exporter pushgateway dozzle \
+            phy-sim blackbox iperf-probe
+          docker compose ps

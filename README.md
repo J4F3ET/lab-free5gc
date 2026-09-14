@@ -733,7 +733,8 @@ observability/
   grafana/provisioning/  Panel y fuente de datos, montados automáticamente
 
 .github/workflows/
-  deploy.yml             Despliegue automático. Ver docs/07-cicd.md
+  deploy.yml               Despliegue del núcleo + RAN. Ver docs/07-cicd.md
+  deploy-observability.yml Despliegue de Grafana/Prometheus/sondas, aparte
 ```
 
 ---
