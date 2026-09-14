@@ -49,9 +49,17 @@ wait_for "AMF NGAP (SCTP 38412)" \
 # el log del NRF una sola vez por NF, con presupuesto corto: si el NRF ya
 # esta arriba, o el registro aparecio o no, y no vale la pena esperar 180 s
 # por cada uno de los ocho.
+#
+# Mismo riesgo de SIGPIPE que el chequeo del AMF (ver comentario en "AMF
+# NGAP" mas arriba): con pipe en vez de sustitucion de proceso, este check
+# reportaba TIMEOUT para las ocho NF en CADA corrida, aunque todas
+# estuvieran registradas desde el principio - un '|| true' lo hacia no
+# fatal, pero el log quedaba mintiendo en cada ejecucion. Encontrado al
+# revisar el resto del repo por el mismo patron tras dar con el bug gemelo
+# en ci/smoke-ue.sh (ver docs/07-cicd.md, seccion 7).
 for nf in AMF SMF AUSF UDM UDR PCF NSSF UPF; do
   wait_for "registro de ${nf} en NRF" \
-    "docker compose logs nrf 2>&1 | grep -qi '${nf}.*register'" \
+    "grep -qi '${nf}.*register' < <(docker compose logs nrf 2>&1)" \
     60 || true
 done
 

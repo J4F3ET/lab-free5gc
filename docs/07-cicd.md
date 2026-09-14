@@ -15,7 +15,7 @@ Todo esto es **opcional**: el laboratorio funciona igual desplegándolo a mano.
 - [4. Preparar los permisos](#4-preparar-los-permisos)
 - [5. El secreto](#5-el-secreto)
 - [6. Lanzarlo](#6-lanzarlo)
-- [7. Los cuatro fallos que ya nos pasaron](#7-los-cuatro-fallos-que-ya-nos-pasaron)
+- [7. Los cinco fallos que ya nos pasaron](#7-los-cinco-fallos-que-ya-nos-pasaron)
 
 ---
 
@@ -89,12 +89,16 @@ servicios de golpe hacía que MongoDB compitiera por disco justo con los
 servicios que esperaban su chequeo de salud. Ahora cada etapa imprime un `ps`,
 así que un fallo dice qué quedó arriba y qué no.
 
-**El paso 1 se añadió después de otro fallo real** (ejecución `34793481927`):
-quedaron 9 contenedores de `obs`+`probes` corriendo de una sesión manual
-anterior, el load average del host (4 núcleos / 3.8 GB) llegó a 11.99, y el
-smoke test falló por pura inanición de CPU/IO en Docker — no por ningún fallo
-real del core ni de la RAN. Ahora `deploy` los detiene incondicionalmente
-antes de tocar nada, sin importar de dónde vinieran.
+**El paso 1 se añadió tras la ejecución `34793481927`**: quedaron 9
+contenedores de `obs`+`probes` corriendo de una sesión manual anterior y el
+load average del host (4 núcleos / 3.8 GB) llegó a 11.99 durante el smoke
+test. Esa carga tan alta *no* resultó ser la causa del fallo de esa corrida
+en concreto — el verdadero motivo era un bug de `pipefail` en
+`ci/smoke-ue.sh` (ver la sección 7, "el mismo bug de `pipefail`, dos veces")
+— pero sigue siendo un riesgo real para los pasos funcionales del smoke
+(registro NAS, sesión PDU, throughput), así que el paso se queda: `deploy`
+detiene `obs`+`probes` incondicionalmente antes de tocar nada, sin importar
+de dónde vinieran.
 
 **La observabilidad no se levanta aquí.** Vive en su propio workflow,
 [`deploy-observability.yml`](../.github/workflows/deploy-observability.yml) —
@@ -271,9 +275,50 @@ de CPU/IO de la ejecución `34793481927`.
 
 ---
 
-## 7. Los cuatro fallos que ya nos pasaron
+## 7. Los cinco fallos que ya nos pasaron
 
 Están documentados porque son los que te encontrarás tú también.
+
+### El mismo bug de `pipefail`, dos veces
+
+`ci/wait-ready.sh` tenía un patrón como este para esperar a que algo
+apareciera en un log:
+
+```bash
+docker compose logs "$svc" 2>&1 | grep -qiE "$pat"
+```
+
+Con `set -o pipefail`, esto falla aunque `grep` SÍ encuentre el patrón: en
+cuanto `grep -q` encuentra la primera coincidencia, cierra su entrada, y
+`docker compose logs` —que todavía está escribiendo el resto del
+historial— recibe SIGPIPE y sale con código distinto de cero. `pipefail`
+toma ese código, no el de `grep`, así que la tubería entera se reporta como
+fallida. Ese bug ya se había encontrado y arreglado en `wait-ready.sh`
+(commit `e88e32a`) cambiando a sustitución de proceso:
+
+```bash
+grep -qiE "$pat" < <(docker compose logs "$svc" 2>&1)
+```
+
+Lo que no se hizo fue revisar si el mismo patrón existía en otro sitio. Sí
+existía: la función `wait_log` de `ci/smoke-ue.sh` tenía exactamente el
+mismo pipe, y por eso el paso 1/6 del smoke test ("NG Setup (N2)") fallaba
+con "sin NG Setup Response" en dos ejecuciones reales (`34793481927` y
+`34796529773`) **aunque el log de `gnb` tuviera la línea `NG Setup procedure
+is successful` desde el primer segundo**. La primera vez se le atribuyó al
+load average del host (que sí estaba alto, 11.99, por una casualidad real de
+contenedores de observabilidad sin detener) — una hipótesis razonable pero
+equivocada, descartada al reproducirse el fallo idéntico en una segunda
+corrida con el host descansado (load average 1.83). Se confirmó reproduciendo
+las dos variantes en vivo contra el runner: la versión con pipe salía con
+código 255 pese a que el patrón estaba ahí; la de sustitución de proceso,
+con 0.
+
+La lección: **un bug de `pipefail` en un patrón reutilizable no se arregla
+una vez — se busca en todo el repositorio.** `grep -rn 'logs.*|.*grep' ci/`
+antes de dar por cerrado un hallazgo así.
+
+### El workflow no se disparaba nunca
 
 ### El workflow no se disparaba nunca
 
