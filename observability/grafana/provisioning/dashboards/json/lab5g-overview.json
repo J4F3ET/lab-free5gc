@@ -246,6 +246,158 @@
         "defaults": { "unit": "bytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
         "overrides": []
       }
+    },
+    {
+      "type": "row",
+      "title": "Capa fisica y teoria de la informacion (simulado — notebook UD.Lab2.TeoriaInformacion)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Potencia de Tx elegida por el agente Q-Learning",
+      "description": "lab5g_phy_tx_power_dbm. Accion discreta del agente (5, 15, 25, 35, 43 dBm) por slice. Lo empuja phy-sim, adaptado de NetworkConfig.POWER_LEVELS_DBM del notebook.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_phy_tx_power_dbm", "legendFormat": "{{slice}}" } ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Perdidas de trayectoria (FSPL)",
+      "description": "lab5g_phy_path_loss_db. PL_dB = 20*log10(d_km) + 20*log10(f_MHz) + 32.44, funcion free_space_path_loss_db() del notebook.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_phy_path_loss_db", "legendFormat": "{{slice}}" } ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Distancia UE-estacion base simulada",
+      "description": "lab5g_phy_distance_m. Distancia base por estado de canal (CHANNEL_STATE_DISTANCES_M, 50-2000 m) mas fading Rayleigh.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_phy_distance_m", "legendFormat": "{{slice}}" } ],
+      "fieldConfig": { "defaults": { "unit": "lengthm", "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Calidad de senal: SNR / SIR / SINR",
+      "description": "compute_snr_sir_sinr_db() del notebook. SNR = Prx/N, SIR = Prx/I, SINR = Prx/(N+I), en dB.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 43 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "lab5g_phy_snr_db", "legendFormat": "{{slice}} SNR" },
+        { "refId": "B", "expr": "lab5g_phy_sir_db", "legendFormat": "{{slice}} SIR" },
+        { "refId": "C", "expr": "lab5g_phy_sinr_db", "legendFormat": "{{slice}} SINR" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Velocidad: throughput (SINR) vs capacidad teorica (SNR)",
+      "description": "lab5g_phy_throughput_mbps (Shannon-Hartley con SINR, trafico real esperado) vs lab5g_phy_capacity_theoretical_mbps (Shannon-Hartley con SNR puro, cota superior sin interferencia).",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 43 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "lab5g_phy_throughput_mbps", "legendFormat": "{{slice}} throughput" },
+        { "refId": "B", "expr": "lab5g_phy_capacity_theoretical_mbps", "legendFormat": "{{slice}} capacidad teorica" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Mbits", "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latencia total vs SLA objetivo por slice",
+      "description": "lab5g_phy_latency_ms = propagacion (distancia/c) + transmision, comparada contra lab5g_phy_latency_sla_target_ms (10 ms eMBB, 1 ms URLLC, 20 ms mMTC).",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "lab5g_phy_latency_ms", "legendFormat": "{{slice}} latencia" },
+        { "refId": "B", "expr": "lab5g_phy_latency_sla_target_ms", "legendFormat": "{{slice}} SLA objetivo" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 1, "fillOpacity": 8 } }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Entropia de la fuente H(f) por slice",
+      "description": "lab5g_info_entropy_bits_per_symbol. H(f) = sum(P_k * -log2(P_k)), segun la distribucion Zipf de cada slice (K simbolos, sesgo). Bonus de Teoria de la Informacion sobre el enunciado de parametros de red.",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_info_entropy_bits_per_symbol", "legendFormat": "{{slice}}", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": { "defaults": { "decimals": 3 }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Tasa de informacion requerida R = H(f) * Rs",
+      "description": "lab5g_info_required_rate_mbps. Tasa de informacion de la fuente de cada slice, en las mismas unidades que la capacidad de canal C para poder comparar R <= C.",
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_info_required_rate_mbps", "legendFormat": "{{slice}}", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": { "defaults": { "unit": "Mbits", "decimals": 2 }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Ganancia de antena (dBi)",
+      "description": "lab5g_phy_antenna_gain_tx_dbi / lab5g_phy_antenna_gain_rx_dbi. Constantes de NetworkConfig: estacion base sectorial (Tx) vs equipo de usuario (Rx). Filtradas a un slice para no repetir valores.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 57 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "lab5g_phy_antenna_gain_tx_dbi{slice=\"eMBB\"}", "legendFormat": "Tx (estacion base)", "instant": true },
+        { "refId": "B", "expr": "lab5g_phy_antenna_gain_rx_dbi{slice=\"eMBB\"}", "legendFormat": "Rx (UE)", "instant": true }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Ancho de banda del canal",
+      "description": "lab5g_phy_bandwidth_mhz, segun el escenario activo en ESCENARIOS_CANAL (nominal=20 MHz, banda_estrecha=5 MHz, mmwave_n258=100 MHz).",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 57 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_phy_bandwidth_mhz{slice=\"eMBB\"}", "legendFormat": "{{escenario}}", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": { "defaults": { "unit": "MHz" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Frecuencia de portadora / banda 3GPP",
+      "description": "lab5g_phy_frequency_mhz. Banda 3GPP TS 38.101-1 asociada al escenario activo (n1=2100 MHz, n78=3500 MHz, n258=26000 MHz mmWave).",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 57 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_phy_frequency_mhz{slice=\"eMBB\"}", "legendFormat": "{{band}}", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": { "defaults": { "unit": "MHz" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Cumple criterio de Shannon (R <= C)",
+      "description": "lab5g_info_meets_shannon_criterion, por slice. 1 = la tasa de informacion requerida por la fuente cabe en la capacidad teorica del canal (comunicacion sin perdida).",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 57 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "lab5g_info_meets_shannon_criterion", "legendFormat": "{{slice}}", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "background", "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "NO CUMPLE", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "OK", "color": "green", "index": 1 } } }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "text",
+      "title": "Estandares tecnicos y formulas de referencia",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 63 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Fuente:** `Actividad_2.ipynb` (UD.Lab2.TeoriaInformacion) — simulado por `phy-sim`, no medido de la red real (free5GC/UERANSIM no tienen RF).\n\n| Banda 3GPP (TS 38.101-1) | Frecuencia | Uso tipico |\n|---|---|---|\n| n1 | 2100 MHz | FDD, banda baja, buena cobertura |\n| n78 | 3500 MHz | TDD, banda media, 5G NR mas usada (escenario `nominal`) |\n| n258 | 26000 MHz | mmWave, alta capacidad / corto alcance (escenario `mmwave_n258`) |\n\n- **FSPL:** `PL_dB = 20*log10(d_km) + 20*log10(f_MHz) + 32.44`\n- **Balance de enlace:** `Prx = Ptx + Gt + Gr - PL` (dBm)\n- **Shannon-Hartley:** `C = B * log2(1 + S/N)` — throughput con SINR, capacidad teorica con SNR puro\n- **Criterio de comunicacion sin perdida:** `R = H(f) * Rs <= C`\n- **Entropia de la fuente:** `H(f) = sum(P_k * -log2(P_k))` bits/simbolo; extension de bloque `H(f^N) = N * H(f)`"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
     }
   ]
 }

@@ -236,6 +236,13 @@ services:
     networks:
       radio_net: { ipv4_address: 10.100.203.31 }
       obs_net:   { ipv4_address: 10.100.205.31 }   # solo para exponer sondas
+      # 'blackbox' vive en este netns (network_mode: service:ue) y necesita
+      # alcanzar sbi_net para el job 'blackbox-sbi-tcp' (Prometheus). Sin
+      # esto, el probe TCP a NRF/AMF/SMF/Mongo siempre da timeout y el panel
+      # "Alcanzabilidad de los NF (TCP)" queda en CAIDO aunque el core este
+      # sano: no hay bug en los NF, es que el probe no tenia ruta.  El UE de
+      # verdad (UERANSIM) nunca usa esta interfaz, solo su tunel PDU/NAS.
+      sbi_net:   { ipv4_address: 10.100.200.31 }   # solo para que blackbox alcance el SBI
     depends_on: [ gnb, smf ]
 
   webui:
@@ -357,6 +364,25 @@ services:
     profiles: [ obs ]
     restart: unless-stopped
     networks: { obs_net: { ipv4_address: 10.100.205.14 } }
+
+  # Metricas de capa fisica y teoria de la informacion, adaptadas del notebook
+  # D:\Proyectos\UD.Lab2.TeoriaInformacion\Actividad_2.ipynb: agente Q-Learning
+  # que elige potencia de Tx por slice (eMBB/URLLC/mMTC) y simula el resto de
+  # la cadena PHY (FSPL, SNR/SIR/SINR, Shannon-Hartley, entropia de la fuente).
+  # free5GC/UERANSIM no tienen RF real, asi que esto no mide la red del lab:
+  # es la capa teorica de la materia, empujada al mismo pushgateway.
+  phy-sim:
+    image: python:3.12-alpine
+    container_name: phy-sim
+    profiles: [ obs ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "/probe/phy_sim_exporter.py" ]
+    volumes: [ ./observability/probe/phy_sim_exporter.py:/probe/phy_sim_exporter.py:ro ]
+    environment:
+      PUSHGATEWAY: http://10.100.205.14:9091
+      INTERVAL: "15"
+      ESCENARIO: nominal
+    networks: { obs_net: { ipv4_address: 10.100.205.16 } }
 
   # Throughput periodico a traves del tunel
   iperf-probe:
