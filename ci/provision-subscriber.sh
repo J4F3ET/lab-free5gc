@@ -93,6 +93,18 @@ db.policyData.ues.smData.replaceOne(
   { upsert: true }
 );
 
+// Sin este documento, UDR responde 404 en policy-data/ues/{ueId}/am-data,
+// el PCF falla "AM Policy Control Create" (Cause:USER_UNKNOWN) y el AMF
+// se queda con ue.AmPolicyAssociation == nil. Al llegar Registration
+// Complete, el AMF intenta construir el Configuration Update Command y
+// hace panic (nil pointer dereference) en BuildIEMobilityRestrictionList,
+// tumbando el proceso NGAP justo despues de que el UE se registra.
+db.policyData.ues.amData.replaceOne(
+  { ueId: ueId },
+  { ueId: ueId, subscCats: [ "free5gc" ] },
+  { upsert: true }
+);
+
 print("subscriptionData.authenticationSubscription: " +
       db.subscriptionData.authenticationData.authenticationSubscription
         .countDocuments({ueId: ueId}));
@@ -103,6 +115,8 @@ print("provisionedData.smfSelectionSubscriptionData: " +
         .countDocuments({ueId: ueId}));
 print("provisionedData.smData: " +
       db.subscriptionData.provisionedData.smData.countDocuments({ueId: ueId}));
+print("policyData.ues.amData: " +
+      db.policyData.ues.amData.countDocuments({ueId: ueId}));
 EOF
 
 echo "[provision] listo"
