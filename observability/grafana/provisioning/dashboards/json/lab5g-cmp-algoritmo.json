@@ -1,0 +1,1104 @@
+{
+ "uid": "lab5g-cmp-algoritmo",
+ "title": "lab5g · Compresión — por algoritmo",
+ "description": "Original, comprimido, recuperado e información mutua de un algoritmo.",
+ "tags": [
+  "lab5g",
+  "compresion"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 1,
+ "editable": true,
+ "refresh": "1m",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "algoritmo",
+    "label": "Algoritmo",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(lab5g_cmp_eval_ahorro_pct, algoritmo)",
+     "refId": "v"
+    },
+    "definition": "label_values(lab5g_cmp_eval_ahorro_pct, algoritmo)",
+    "refresh": 2,
+    "sort": 1,
+    "multi": false,
+    "includeAll": false,
+    "current": {
+     "selected": true,
+     "text": "bandido_ucb",
+     "value": "bandido_ucb"
+    }
+   },
+   {
+    "name": "clase",
+    "label": "Clase de tráfico",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(lab5g_cmp_eval_ahorro_pct, clase)",
+     "refId": "v"
+    },
+    "definition": "label_values(lab5g_cmp_eval_ahorro_pct, clase)",
+    "refresh": 2,
+    "sort": 1,
+    "multi": false,
+    "includeAll": false,
+    "current": {
+     "selected": true,
+     "text": "todas",
+     "value": "todas"
+    }
+   }
+  ]
+ },
+ "annotations": {
+  "list": []
+ },
+ "links": [
+  {
+   "type": "dashboards",
+   "tags": [
+    "compresion"
+   ],
+   "asDropdown": true,
+   "title": "Compresión",
+   "includeVars": false
+  }
+ ],
+ "panels": [
+  {
+   "type": "text",
+   "title": "Cómo leer este tablero",
+   "options": {
+    "mode": "markdown",
+    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte.\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan estado por flujo arrastran la pérdida a los paquetes siguientes).\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo."
+   },
+   "id": 1,
+   "gridPos": {
+    "h": 6,
+    "w": 16,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Última evaluación",
+   "description": "Cuándo se publicaron estos datos.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_ultima_corrida_segundos * 1000",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "dateTimeFromNow",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 2,
+   "gridPos": {
+    "h": 6,
+    "w": 8,
+    "x": 16,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Original",
+   "id": 3,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 6
+   }
+  },
+  {
+   "type": "stat",
+   "title": "H(O) — entropía del original",
+   "description": "Bits de información por byte del paquete original.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 4,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 0,
+    "y": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Bytes originales",
+   "description": "Total de bytes de los paquetes originales.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "decbytes",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 5,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Comprimido",
+   "id": 6,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 12
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Bytes comprimidos",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "decbytes",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 7,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Razón de compresión",
+   "description": "Bytes originales / bytes comprimidos.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_razon{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 8,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Ahorro",
+   "description": "Porcentaje de bytes ahorrados.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 1
+       },
+       {
+        "color": "green",
+        "value": 15
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 9,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 12,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "H(C) — entropía del comprimido",
+   "description": "Cerca de 8 = bytes casi aleatorios: el compresor ya sacó la redundancia.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 10,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 18,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Recuperado e información mutua",
+   "id": 11,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 18
+   }
+  },
+  {
+   "type": "stat",
+   "title": "I(O;R) — canal perfecto",
+   "description": "Información mutua original–recuperado, bits por byte.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perfecto\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 12,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 19
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "I(O;R) — 1 % de pérdida",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 13,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 19
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Información entregada — 1 % de pérdida",
+   "description": "I(O;R) / H(O). Con canal perfecto es 100 %.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_info_entregada_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 97
+       },
+       {
+        "color": "green",
+        "value": 99
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 14,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 12,
+    "y": 19
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Paquetes que llegan mal — 1 % de pérdida",
+   "description": "Confiabilidad: % de los que llegan pero salen distintos del original.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 0.5
+       },
+       {
+        "color": "red",
+        "value": 2
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 15,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 18,
+    "y": 19
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Velocidad",
+   "id": 16,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 24
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Comprimir",
+   "description": "Microsegundos por paquete (Python puro).",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_comprimir_us{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "µs",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 17,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 0,
+    "y": 25
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Descomprimir",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_descomprimir_us{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "orientation": "auto"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "µs",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "id": 18,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 25
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Este algoritmo en cada clase de tráfico",
+   "id": 19,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 30
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Entropía por etapa",
+   "description": "H del original, del comprimido y del recuperado con pérdida.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"original\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"comprimido\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "C",
+     "expr": "sum by (clase) (lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "H(O) original",
+       "Value #B": "H(C) comprimido",
+       "Value #C": "I(O;R) con 1 % de pérdida"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "clase",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 2,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 20,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 31
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Ahorro y daño por clase",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (clase) (lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (clase) (lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "ahorro %",
+       "Value #B": "llegan mal % (1 % pérdida)"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "clase",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 21,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 31
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  }
+ ]
+}

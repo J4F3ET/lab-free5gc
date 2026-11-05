@@ -6,6 +6,7 @@ evaluar.py — Compara las opciones de compresión sobre tráfico 5G de prueba, 
   python evaluar.py ajustar             # elige γ, c y brazos del bandido, también con ENTRENAMIENTO
   python evaluar.py comparar            # mide todo sobre el conjunto de PRUEBA -> resultados/
   python evaluar.py balance             # latencia neta de cada algoritmo según el enlace (balance.py)
+  python evaluar.py informacion [--publicar URL]  # original/comprimido/recuperado e I(O;R) (informacion.py)
 
 Entrenamiento (semilla 1, textos TEXTOS_ENTRENO) y prueba (semilla 2, TEXTOS_PRUEBA) no
 comparten paquetes: lo que se mide es sobre tráfico que el modelo nunca vio. Es justo lo
@@ -261,10 +262,32 @@ def balance():
     print(md)
 
 
+def informacion(publicar_en: str | None = None, archivos: bool = True):
+    """Original, comprimido, recuperado e I(O;R) por algoritmo (ver informacion.py)."""
+    import informacion as I
+    m = C.Modelo.cargar(MODELO) if MODELO.exists() else entrenar()
+    mezcla = T.intercalar(T.conjunto(2, P_FLUJO, F_CLASE, prueba=True), 3)
+    r = I.evaluar(m, mezcla)
+    md = I.markdown(r)
+    if archivos:
+        SALIDA.mkdir(exist_ok=True)
+        (SALIDA / "informacion.json").write_text(json.dumps(r, indent=1, ensure_ascii=False), encoding="utf-8")
+        (SALIDA / "informacion.md").write_text(md, encoding="utf-8")
+    print(md)
+    if publicar_en:
+        I.publicar(publicar_en, I.texto_prometheus(r))
+        print(f"publicado en {publicar_en} (job cmp_eval)")
+
+
 if __name__ == "__main__":
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance"])
+    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion"])
+    ap.add_argument("--publicar", metavar="URL", help="informacion: subir al pushgateway (p. ej. http://10.100.205.14:9091)")
+    ap.add_argument("--sin-archivos", action="store_true", help="informacion: no escribir resultados/ (contenedor de solo lectura)")
     a = ap.parse_args()
-    {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance}[a.accion]()
+    if a.accion == "informacion":
+        informacion(a.publicar, not a.sin_archivos)
+    else:
+        {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance}[a.accion]()

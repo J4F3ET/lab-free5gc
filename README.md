@@ -459,7 +459,7 @@ todos los fallos.
 | Servicio | Qué hace, de verdad |
 |---|---|
 | `prometheus` | Pregunta cada pocos segundos "¿cómo estás?" a todos los demás y guarda las respuestas con su hora. Guarda **números**, no texto. 15 días de historia. |
-| `grafana` | Dibuja esos números. Trae un panel ya montado (`lab5g-overview`) que no hay que configurar: aparece solo al arrancar. Usuario `admin`, contraseña la de tu `.env`. |
+| `grafana` | Dibuja esos números. Trae tres paneles ya montados que no hay que configurar: `lab5g-overview` y los dos de compresión (ver docs/08). Aparecen solos al arrancar. Usuario `admin`, contraseña la de tu `.env`. |
 | `cadvisor` | Mide CPU, memoria y red **de cada contenedor por separado**. Responde a "¿quién se está comiendo la máquina?". |
 | `node-exporter` | Mide el contenedor LXC **completo**: CPU, RAM, disco, swap. Responde a "¿es la máquina la que va mal, y no un servicio?". |
 | `pushgateway` | Un buzón. Las pruebas que se ejecutan de vez en cuando —no de forma continua— dejan aquí su resultado para que Prometheus lo recoja después. |
@@ -765,6 +765,7 @@ compresion/              Compresor de paquetes UE <-> DN (perfil 'compresion')
   shim.py                El túnel TUN que corre en cmp-ue y cmp-dn
   evaluar.py, medir.sh   Comparación offline y medición en la red
   balance.py             Latencia neta de cada algoritmo según el enlace
+  informacion.py         Original, comprimido, recuperado e información mutua
   textos/                Copia congelada de docs/01-07: el texto del tráfico de prueba
 
 .github/workflows/

@@ -191,6 +191,71 @@ de 5G. Este último premia todavía más a los paquetes chicos, así que el mode
 favor de no comprimir. El lab no puede mostrar la ganancia tal cual, porque sus enlaces son
 puentes de Docker de varios Gbps. Para verla habría que limitar `uesimtun0` con `tc`.
 
+### 4.6 Original, comprimido y recuperado: la información mutua
+
+Es el punto (c) del Lab 3 aplicado a 5G: por cada algoritmo, el paquete **original**, el
+**comprimido** y el **recuperado**, y la información mutua **I(O;R)** entre el original y lo que
+reconstruye el receptor. Lo calcula `python evaluar.py informacion`
+([`informacion.py`](../compresion/informacion.py)). El detalle completo está en
+[`resultados/informacion.md`](../compresion/resultados/informacion.md).
+
+Cómo se estima I(O;R): byte a byte, alineando cada byte del original con el de la misma posición
+del recuperado. Si el paquete no llegó, no se pudo descomprimir o salió más corto, esa posición
+cuenta como un símbolo "borrado". Con la tabla conjunta de conteos se calcula
+I = H(O) + H(R) − H(O,R). **H** es entropía de orden 0 en bits por byte.
+
+Flujo mezclado (3600 paquetes, H(O) = 7,57 bits por byte):
+
+| Algoritmo | Ahorro | H(C) | I(O;R) canal perfecto | I(O;R) con 1 % de pérdida | Información entregada | Llegan mal |
+|---|---|---|---|---|---|---|
+| sin compresión | 0 % | 7,57 | 7,57 | 7,50 | 99,15 % | 0 % |
+| solo ROHC | 2,4 % | 7,57 | 7,57 | 7,50 | 99,15 % | 0,14 % |
+| DEFLATE dicc. | 18,1 % | 7,99 | 7,57 | 7,50 | 99,15 % | 0,14 % |
+| DEFLATE flujo | 22,5 % | 7,99 | 7,57 | 7,34 | **97,0 %** | 3,1 % |
+| bandido UCB | 22,4 % | 7,99 | 7,57 | 7,30 | **96,5 %** | 3,5 % |
+
+Lo que dice:
+
+- **Con canal perfecto, todos dan I(O;R) = H(O).** Ningún algoritmo pierde información: es la
+  prueba de que todos son sin pérdida.
+- **Con 1 % de pérdida, los algoritmos se separan.** El 0,85 % que falta en los que no guardan
+  estado es lo que se lleva el propio canal. DEFLATE por flujo y el bandido pierden 2–3 puntos
+  más, porque un paquete perdido desincroniza a los siguientes del mismo flujo. En texto
+  (`http_texto`) entregan solo 89,8 % y 87,5 %.
+- **H(C) sube hacia 8 bits por byte.** El comprimido queda casi sin redundancia: la misma
+  información cabe en menos bytes.
+- **No se reporta I(O;C).** El comprimido es una función invertible del original (si no, el
+  receptor no podría reconstruirlo), así que por paquete I(O;C) = H(O) en cualquier algoritmo
+  sin pérdida. Lo que los distingue es en cuántos bytes meten esa información: la razón de
+  compresión y H(C).
+
+Es el mismo balance de §4.4, medido ahora en bits de información: el bandido gana en tasa y en
+velocidad, y paga en confiabilidad cuando el canal pierde paquetes. En PDCP, RLC AM retransmite
+y ese costo desaparece.
+
+### 4.7 En Grafana
+
+Dos dashboards en la carpeta `lab-free5gc`, los dos con un selector de clase de tráfico:
+
+- **lab5g · Compresión — por algoritmo**: se elige el algoritmo arriba y se ven su original,
+  su comprimido, su recuperado y su información mutua, más la velocidad y la confiabilidad.
+- **lab5g · Compresión — comparación de algoritmos**: todos lado a lado (tasa, H, I(O;R) con y sin
+  pérdida, velocidad y una tabla resumen). Abajo, el bandido en vivo en la red 5G.
+
+Los algoritmos salen de la etiqueta `algoritmo` de las métricas, así que uno nuevo aparece solo.
+Para llenarlos, con el perfil `compresion` y el pushgateway arriba:
+
+```bash
+docker exec -w /cmp cmp-dn python3 -I evaluar.py informacion --sin-archivos --publicar http://10.100.205.14:9091
+```
+
+Tarda unos 2,5 minutos en el LXC. Los valores son los de la última corrida, no series en el
+tiempo. Los dashboards se generan con
+[`dashboards_compresion.py`](../observability/grafana/dashboards_compresion.py).
+
+> ⚠️ Grafana (`grafana:latest`, la 13.2) ocupa ~440 MB, y en este host de 3,8 GB eso basta para
+> llevar el disco al 98 % por swap. Levántalo solo para mirar, y bájalo después.
+
 ## 5. Implementación en el lab
 
 ```
