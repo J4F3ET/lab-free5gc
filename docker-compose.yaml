@@ -19,6 +19,8 @@
 #                   (network_mode: service:ue).
 #    tools          webui, la consola de suscriptores. No hace falta para
 #                   aprovisionar: ci/provision-subscriber.sh usa mongosh.
+#    compresion     cmp-ue, cmp-dn: tunel compresor UE <-> DN.  +2
+#                   REQUIERE 'ran' (cmp-ue vive en el netns del UE).
 #
 #  Uso:
 #    docker compose up -d                                  # solo nucleo
@@ -270,6 +272,47 @@ services:
     restart: unless-stopped
     command: -s
     networks: { dn_net: { ipv4_address: 10.100.204.10 } }
+
+  # ==================================================================
+  #  COMPRESION DE PAQUETES  (perfil 'compresion', REQUIERE 'ran')
+  # ==================================================================
+  #  Un tunel que comprime cada paquete IP entre el UE y la DN: ROHC-lite
+  #  para las cabeceras + el codec de carga que elige un bandido UCB.
+  #  Ver compresion/ y docs/08-compresion-paquetes.md.  Dos contenedores
+  #  python:alpine sin dependencias (~15 MB de RAM cada uno).
+  #    COMPOSE_PROFILES=ran,compresion docker compose up -d
+  #    bash compresion/medir.sh
+  cmp-dn:
+    image: python:3.12-alpine
+    container_name: cmp-dn
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/shim.py", "dn" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PUSHGATEWAY: http://10.100.205.14:9091
+    volumes: [ ./compresion:/cmp:ro ]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    networks:
+      dn_net:  { ipv4_address: 10.100.204.30 }
+      obs_net: { ipv4_address: 10.100.205.32 }   # solo para el pushgateway
+
+  cmp-ue:
+    image: python:3.12-alpine
+    container_name: cmp-ue
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/shim.py", "ue" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PAR: 10.100.204.30
+      PUSHGATEWAY: http://10.100.205.14:9091
+    volumes: [ ./compresion:/cmp:ro ]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    network_mode: "service:ue"      # <-- en el netns del UE, como blackbox
+    depends_on: [ ue, cmp-dn ]
 
   # ==================================================================
   #  OBSERVABILIDAD

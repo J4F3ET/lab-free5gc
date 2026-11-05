@@ -1,0 +1,683 @@
+{
+ "paquetes": 3600,
+ "resumen": [
+  {
+   "politica": "sin compresión",
+   "ahorro_pct": 0.0,
+   "comprimir_us": 0.0,
+   "descomprimir_us": 0.0,
+   "pct_mal_1pct_perdida": 0.0
+  },
+  {
+   "politica": "ROHC + ninguno",
+   "ahorro_pct": 2.42,
+   "comprimir_us": 9.6,
+   "descomprimir_us": 9.6,
+   "pct_mal_1pct_perdida": 0.14
+  },
+  {
+   "politica": "ROHC + huffman_estatico",
+   "ahorro_pct": 13.26,
+   "comprimir_us": 568.1,
+   "descomprimir_us": 1000.4,
+   "pct_mal_1pct_perdida": 0.14
+  },
+  {
+   "politica": "ROHC + deflate",
+   "ahorro_pct": 15.95,
+   "comprimir_us": 58.2,
+   "descomprimir_us": 18.1,
+   "pct_mal_1pct_perdida": 0.14
+  },
+  {
+   "politica": "ROHC + deflate_dict",
+   "ahorro_pct": 18.08,
+   "comprimir_us": 90.4,
+   "descomprimir_us": 19.4,
+   "pct_mal_1pct_perdida": 0.14
+  },
+  {
+   "politica": "ROHC + deflate_flujo",
+   "ahorro_pct": 22.47,
+   "comprimir_us": 114.2,
+   "descomprimir_us": 17.7,
+   "pct_mal_1pct_perdida": 3.06
+  },
+  {
+   "politica": "ROHC + tic_por_paquete",
+   "ahorro_pct": 9.18,
+   "comprimir_us": 2125.1,
+   "descomprimir_us": 873.0,
+   "pct_mal_1pct_perdida": 0.14
+  },
+  {
+   "politica": "ROHC + bandido UCB",
+   "ahorro_pct": 22.41,
+   "comprimir_us": 78.9,
+   "descomprimir_us": 17.6,
+   "pct_mal_1pct_perdida": 3.54
+  }
+ ],
+ "vistas": {
+  "python": {
+   "factor_cpu": 1.0,
+   "rejilla": [
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 110.3477,
+      "ROHC + ninguno": 107.0006,
+      "ROHC + huffman_estatico": 88.4934,
+      "ROHC + deflate": 82.8294,
+      "ROHC + deflate_dict": 80.3146,
+      "ROHC + deflate_flujo": 74.792,
+      "ROHC + tic_por_paquete": 96.6108,
+      "ROHC + bandido UCB": 74.8398
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 267.0303,
+      "ROHC + ninguno": 244.495,
+      "ROHC + huffman_estatico": 160.027,
+      "ROHC + deflate": 144.9238,
+      "ROHC + deflate_dict": 137.0578,
+      "ROHC + deflate_flujo": 121.5572,
+      "ROHC + tic_por_paquete": 186.1,
+      "ROHC + bandido UCB": 121.7407
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 1050.4431,
+      "ROHC + ninguno": 726.8385,
+      "ROHC + huffman_estatico": 275.1036,
+      "ROHC + deflate": 234.2468,
+      "ROHC + deflate_dict": 212.6021,
+      "ROHC + deflate_flujo": 175.897,
+      "ROHC + tic_por_paquete": 364.022,
+      "ROHC + bandido UCB": 176.3293
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 11.0348,
+      "ROHC + ninguno": 10.7173,
+      "ROHC + huffman_estatico": 10.5592,
+      "ROHC + deflate": 8.3518,
+      "ROHC + deflate_dict": 8.1308,
+      "ROHC + deflate_flujo": 7.5987,
+      "ROHC + tic_por_paquete": 13.0316,
+      "ROHC + bandido UCB": 7.5713
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 26.703,
+      "ROHC + ninguno": 24.4668,
+      "ROHC + huffman_estatico": 17.9187,
+      "ROHC + deflate": 14.5614,
+      "ROHC + deflate_dict": 13.8054,
+      "ROHC + deflate_flujo": 12.2756,
+      "ROHC + tic_por_paquete": 22.5167,
+      "ROHC + bandido UCB": 12.2617
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 105.0443,
+      "ROHC + ninguno": 72.7011,
+      "ROHC + huffman_estatico": 29.5386,
+      "ROHC + deflate": 23.4937,
+      "ROHC + deflate_dict": 21.3599,
+      "ROHC + deflate_flujo": 17.7098,
+      "ROHC + tic_por_paquete": 40.6325,
+      "ROHC + bandido UCB": 17.7208
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 1.1035,
+      "ROHC + ninguno": 1.0891,
+      "ROHC + huffman_estatico": 20.6088,
+      "ROHC + deflate": 0.906,
+      "ROHC + deflate_dict": 0.9169,
+      "ROHC + deflate_flujo": 0.8865,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.8494
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 2.6703,
+      "ROHC + ninguno": 2.4642,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 1.5284,
+      "ROHC + deflate_dict": 1.4877,
+      "ROHC + deflate_flujo": 1.3598,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 1.3221
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 10.5044,
+      "ROHC + ninguno": 7.2876,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 2.4224,
+      "ROHC + deflate_dict": 2.245,
+      "ROHC + deflate_flujo": 1.9063,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 1.87
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 0.1103,
+      "ROHC + ninguno": 0.1277,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.1998,
+      "ROHC + deflate_dict": 0.3902,
+      "ROHC + deflate_flujo": 4.1932,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.3272
+     },
+     "ganador": "sin compresión",
+     "ganador_robusto": "sin compresión"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 0.267,
+      "ROHC + ninguno": 0.2663,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.379,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "ROHC + ninguno",
+     "ganador_robusto": "ROHC + ninguno"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 1.0504,
+      "ROHC + ninguno": 0.7493,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 1.0604,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "ROHC + ninguno",
+     "ganador_robusto": "ROHC + ninguno"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 0.011,
+      "ROHC + ninguno": 0.1131,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": null,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "sin compresión",
+     "ganador_robusto": "sin compresión"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 0.0267,
+      "ROHC + ninguno": null,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": null,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "sin compresión",
+     "ganador_robusto": "sin compresión"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 0.105,
+      "ROHC + ninguno": null,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": null,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "sin compresión",
+     "ganador_robusto": "sin compresión"
+    }
+   ],
+   "equilibrio_por_clase": {
+    "voip_rtp": {
+     "ROHC + ninguno": 14936674.86635704,
+     "ROHC + huffman_estatico": 6253080.6281342385,
+     "ROHC + deflate": 8134618.384034359,
+     "ROHC + deflate_dict": 5051224.284403815,
+     "ROHC + deflate_flujo": 3709561.1358888512,
+     "ROHC + tic_por_paquete": 1691040.2847496897,
+     "ROHC + bandido UCB": 5832336.351173109
+    },
+    "http_texto": {
+     "ROHC + ninguno": null,
+     "ROHC + huffman_estatico": 993516.9446208496,
+     "ROHC + deflate": 70991443.66680351,
+     "ROHC + deflate_dict": 51092045.44661516,
+     "ROHC + deflate_flujo": 50355876.86785092,
+     "ROHC + tic_por_paquete": 577759.7816062495,
+     "ROHC + bandido UCB": 43598621.52515642
+    },
+    "urllc_ctrl": {
+     "ROHC + ninguno": 13441071.148506457,
+     "ROHC + huffman_estatico": 4707017.438031255,
+     "ROHC + deflate": 6482064.14830193,
+     "ROHC + deflate_dict": 3598298.2596910438,
+     "ROHC + deflate_flujo": 2729894.2066772385,
+     "ROHC + tic_por_paquete": 1855308.693815323,
+     "ROHC + bandido UCB": 4676759.109242232
+    },
+    "video_rtp": {
+     "ROHC + ninguno": 17796386.445393786,
+     "ROHC + huffman_estatico": 537915.7509888007,
+     "ROHC + deflate": 5440416.210969484,
+     "ROHC + deflate_dict": 4310273.83021433,
+     "ROHC + deflate_flujo": 3525422.750139237,
+     "ROHC + tic_por_paquete": 146663.181524767,
+     "ROHC + bandido UCB": 6584587.346350438
+    },
+    "iot_json": {
+     "ROHC + ninguno": 16810886.944130354,
+     "ROHC + huffman_estatico": 1271369.3927096152,
+     "ROHC + deflate": 7740863.996340034,
+     "ROHC + deflate_dict": 9509534.05236539,
+     "ROHC + deflate_flujo": 11125686.673109772,
+     "ROHC + tic_por_paquete": 1045559.905352228,
+     "ROHC + bandido UCB": 8734826.81326535
+    },
+    "web_tls": {
+     "ROHC + ninguno": null,
+     "ROHC + huffman_estatico": null,
+     "ROHC + deflate": null,
+     "ROHC + deflate_dict": null,
+     "ROHC + deflate_flujo": null,
+     "ROHC + tic_por_paquete": null,
+     "ROHC + bandido UCB": null
+    }
+   }
+  },
+  "cpu_10x": {
+   "factor_cpu": 0.1,
+   "rejilla": [
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 110.3477,
+      "ROHC + ninguno": 106.9833,
+      "ROHC + huffman_estatico": 87.0541,
+      "ROHC + deflate": 82.7607,
+      "ROHC + deflate_dict": 80.2157,
+      "ROHC + deflate_flujo": 74.6732,
+      "ROHC + tic_por_paquete": 93.8545,
+      "ROHC + bandido UCB": 74.7529
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 267.0303,
+      "ROHC + ninguno": 244.4778,
+      "ROHC + huffman_estatico": 158.5709,
+      "ROHC + deflate": 144.8551,
+      "ROHC + deflate_dict": 136.9589,
+      "ROHC + deflate_flujo": 121.4383,
+      "ROHC + tic_por_paquete": 183.3081,
+      "ROHC + bandido UCB": 121.6538
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 1050.4431,
+      "ROHC + ninguno": 726.8212,
+      "ROHC + huffman_estatico": 273.6391,
+      "ROHC + deflate": 234.1781,
+      "ROHC + deflate_dict": 212.5032,
+      "ROHC + deflate_flujo": 175.7781,
+      "ROHC + tic_por_paquete": 361.212,
+      "ROHC + bandido UCB": 176.2424
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 11.0348,
+      "ROHC + ninguno": 10.7001,
+      "ROHC + huffman_estatico": 8.8493,
+      "ROHC + deflate": 8.2829,
+      "ROHC + deflate_dict": 8.0315,
+      "ROHC + deflate_flujo": 7.4792,
+      "ROHC + tic_por_paquete": 9.6611,
+      "ROHC + bandido UCB": 7.484
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 26.703,
+      "ROHC + ninguno": 24.4495,
+      "ROHC + huffman_estatico": 16.0027,
+      "ROHC + deflate": 14.4924,
+      "ROHC + deflate_dict": 13.7058,
+      "ROHC + deflate_flujo": 12.1557,
+      "ROHC + tic_por_paquete": 18.61,
+      "ROHC + bandido UCB": 12.1741
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 105.0443,
+      "ROHC + ninguno": 72.6838,
+      "ROHC + huffman_estatico": 27.5104,
+      "ROHC + deflate": 23.4247,
+      "ROHC + deflate_dict": 21.2602,
+      "ROHC + deflate_flujo": 17.5897,
+      "ROHC + tic_por_paquete": 36.4022,
+      "ROHC + bandido UCB": 17.6329
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 1.1035,
+      "ROHC + ninguno": 1.0717,
+      "ROHC + huffman_estatico": 1.0559,
+      "ROHC + deflate": 0.8352,
+      "ROHC + deflate_dict": 0.8131,
+      "ROHC + deflate_flujo": 0.7599,
+      "ROHC + tic_por_paquete": 1.3032,
+      "ROHC + bandido UCB": 0.7571
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 2.6703,
+      "ROHC + ninguno": 2.4467,
+      "ROHC + huffman_estatico": 1.7919,
+      "ROHC + deflate": 1.4561,
+      "ROHC + deflate_dict": 1.3805,
+      "ROHC + deflate_flujo": 1.2276,
+      "ROHC + tic_por_paquete": 2.2517,
+      "ROHC + bandido UCB": 1.2262
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 10000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 10.5044,
+      "ROHC + ninguno": 7.2701,
+      "ROHC + huffman_estatico": 2.9539,
+      "ROHC + deflate": 2.3494,
+      "ROHC + deflate_dict": 2.136,
+      "ROHC + deflate_flujo": 1.771,
+      "ROHC + tic_por_paquete": 4.0632,
+      "ROHC + bandido UCB": 1.7721
+     },
+     "ganador": "ROHC + deflate_flujo",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 0.1103,
+      "ROHC + ninguno": 0.1089,
+      "ROHC + huffman_estatico": 2.0609,
+      "ROHC + deflate": 0.0906,
+      "ROHC + deflate_dict": 0.0917,
+      "ROHC + deflate_flujo": 0.0886,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.0849
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 0.267,
+      "ROHC + ninguno": 0.2464,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.1528,
+      "ROHC + deflate_dict": 0.1488,
+      "ROHC + deflate_flujo": 0.136,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.1322
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 100000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 1.0504,
+      "ROHC + ninguno": 0.7288,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.2422,
+      "ROHC + deflate_dict": 0.2245,
+      "ROHC + deflate_flujo": 0.1906,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.187
+     },
+     "ganador": "ROHC + bandido UCB",
+     "ganador_robusto": "ROHC + deflate_dict"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.5,
+     "latencia_ms": {
+      "sin compresión": 0.011,
+      "ROHC + ninguno": 0.0128,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.02,
+      "ROHC + deflate_dict": 0.039,
+      "ROHC + deflate_flujo": 0.4193,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": 0.0327
+     },
+     "ganador": "sin compresión",
+     "ganador_robusto": "sin compresión"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.8,
+     "latencia_ms": {
+      "sin compresión": 0.0267,
+      "ROHC + ninguno": 0.0266,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.0379,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "ROHC + ninguno",
+     "ganador_robusto": "ROHC + ninguno"
+    },
+    {
+     "velocidad_bps": 1000000000.0,
+     "carga": 0.95,
+     "latencia_ms": {
+      "sin compresión": 0.105,
+      "ROHC + ninguno": 0.0749,
+      "ROHC + huffman_estatico": null,
+      "ROHC + deflate": 0.106,
+      "ROHC + deflate_dict": null,
+      "ROHC + deflate_flujo": null,
+      "ROHC + tic_por_paquete": null,
+      "ROHC + bandido UCB": null
+     },
+     "ganador": "ROHC + ninguno",
+     "ganador_robusto": "ROHC + ninguno"
+    }
+   ],
+   "equilibrio_por_clase": {
+    "voip_rtp": {
+     "ROHC + ninguno": 149366748.6635704,
+     "ROHC + huffman_estatico": 62530806.28134238,
+     "ROHC + deflate": 81346183.8403436,
+     "ROHC + deflate_dict": 50512242.84403815,
+     "ROHC + deflate_flujo": 37095611.358888514,
+     "ROHC + tic_por_paquete": 16910402.847496897,
+     "ROHC + bandido UCB": 58323363.51173109
+    },
+    "http_texto": {
+     "ROHC + ninguno": null,
+     "ROHC + huffman_estatico": 9935169.446208496,
+     "ROHC + deflate": 709914436.6680322,
+     "ROHC + deflate_dict": 510920454.4661506,
+     "ROHC + deflate_flujo": 503558768.67850816,
+     "ROHC + tic_por_paquete": 5777597.816062495,
+     "ROHC + bandido UCB": 435986215.2515633
+    },
+    "urllc_ctrl": {
+     "ROHC + ninguno": 134410711.48506457,
+     "ROHC + huffman_estatico": 47070174.380312555,
+     "ROHC + deflate": 64820641.48301917,
+     "ROHC + deflate_dict": 35982982.59691044,
+     "ROHC + deflate_flujo": 27298942.066772383,
+     "ROHC + tic_por_paquete": 18553086.938153233,
+     "ROHC + bandido UCB": 46767591.09242241
+    },
+    "video_rtp": {
+     "ROHC + ninguno": 177963864.45393786,
+     "ROHC + huffman_estatico": 5379157.509888018,
+     "ROHC + deflate": 54404162.109694734,
+     "ROHC + deflate_dict": 43102738.3021433,
+     "ROHC + deflate_flujo": 35254227.50139222,
+     "ROHC + tic_por_paquete": 1466631.8152476638,
+     "ROHC + bandido UCB": 65845873.46350438
+    },
+    "iot_json": {
+     "ROHC + ninguno": 168108869.4413032,
+     "ROHC + huffman_estatico": 12713693.927096153,
+     "ROHC + deflate": 77408639.96340033,
+     "ROHC + deflate_dict": 95095340.52365391,
+     "ROHC + deflate_flujo": 111256866.73109749,
+     "ROHC + tic_por_paquete": 10455599.05352228,
+     "ROHC + bandido UCB": 87348268.1326535
+    },
+    "web_tls": {
+     "ROHC + ninguno": null,
+     "ROHC + huffman_estatico": null,
+     "ROHC + deflate": null,
+     "ROHC + deflate_dict": null,
+     "ROHC + deflate_flujo": null,
+     "ROHC + tic_por_paquete": null,
+     "ROHC + bandido UCB": null
+    }
+   }
+  }
+ },
+ "parametros": {
+  "velocidades_bps": [
+   100000.0,
+   1000000.0,
+   10000000.0,
+   100000000.0,
+   1000000000.0
+  ],
+  "cargas": [
+   0.5,
+   0.8,
+   0.95
+  ],
+  "carga_equilibrio": 0.5,
+  "reinicio_flujo": 16,
+  "p_perdida": 0.01,
+  "max_mal_pct": 1.0
+ }
+}

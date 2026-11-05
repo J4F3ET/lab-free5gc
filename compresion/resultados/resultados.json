@@ -1,0 +1,847 @@
+{
+ "por_clase": [
+  {
+   "clase": "iot_json",
+   "slice": "mMTC",
+   "paquetes": 600,
+   "bytes_crudos": 73112,
+   "largo_medio": 121.9,
+   "ninguno": -0.82,
+   "huffman_estatico": 7.5,
+   "deflate": 0.19,
+   "deflate_dict": 46.58,
+   "deflate_flujo": 78.01,
+   "tic_por_paquete": -0.82,
+   "rohc+ninguno": 17.64,
+   "rohc+huffman_estatico": 29.72,
+   "rohc+deflate": 26.33,
+   "rohc+deflate_dict": 60.82,
+   "rohc+deflate_flujo": 81.81,
+   "rohc+tic_por_paquete": 17.64
+  },
+  {
+   "clase": "urllc_ctrl",
+   "slice": "URLLC",
+   "paquetes": 600,
+   "bytes_crudos": 30000,
+   "largo_medio": 50.0,
+   "ninguno": -2.0,
+   "huffman_estatico": -2.0,
+   "deflate": -2.0,
+   "deflate_dict": 6.4,
+   "deflate_flujo": 46.21,
+   "tic_por_paquete": -2.0,
+   "rohc+ninguno": 43.0,
+   "rohc+huffman_estatico": 43.0,
+   "rohc+deflate": 43.03,
+   "rohc+deflate_dict": 43.03,
+   "rohc+deflate_flujo": 43.0,
+   "rohc+tic_por_paquete": 43.0
+  },
+  {
+   "clase": "voip_rtp",
+   "slice": "eMBB",
+   "paquetes": 600,
+   "bytes_crudos": 43800,
+   "largo_medio": 73.0,
+   "ninguno": -1.37,
+   "huffman_estatico": -1.37,
+   "deflate": -1.37,
+   "deflate_dict": 0.24,
+   "deflate_flujo": 17.14,
+   "tic_por_paquete": -1.37,
+   "rohc+ninguno": 45.45,
+   "rohc+huffman_estatico": 45.45,
+   "rohc+deflate": 45.45,
+   "rohc+deflate_dict": 45.45,
+   "rohc+deflate_flujo": 45.45,
+   "rohc+tic_por_paquete": 45.45
+  },
+  {
+   "clase": "video_rtp",
+   "slice": "eMBB",
+   "paquetes": 600,
+   "bytes_crudos": 744000,
+   "largo_medio": 1240.0,
+   "ninguno": -0.08,
+   "huffman_estatico": -0.08,
+   "deflate": -0.08,
+   "deflate_dict": -0.08,
+   "deflate_flujo": -0.08,
+   "tic_por_paquete": -0.08,
+   "rohc+ninguno": 2.52,
+   "rohc+huffman_estatico": 2.52,
+   "rohc+deflate": 2.52,
+   "rohc+deflate_dict": 2.52,
+   "rohc+deflate_flujo": 2.52,
+   "rohc+tic_por_paquete": 2.52
+  },
+  {
+   "clase": "web_tls",
+   "slice": "eMBB",
+   "paquetes": 600,
+   "bytes_crudos": 864000,
+   "largo_medio": 1440.0,
+   "ninguno": -0.07,
+   "huffman_estatico": -0.07,
+   "deflate": -0.07,
+   "deflate_dict": -0.07,
+   "deflate_flujo": -0.07,
+   "tic_por_paquete": -0.07,
+   "rohc+ninguno": -0.07,
+   "rohc+huffman_estatico": -0.07,
+   "rohc+deflate": -0.07,
+   "rohc+deflate_dict": -0.07,
+   "rohc+deflate_flujo": -0.07,
+   "rohc+tic_por_paquete": -0.07
+  },
+  {
+   "clase": "http_texto",
+   "slice": "eMBB",
+   "paquetes": 600,
+   "bytes_crudos": 860496,
+   "largo_medio": 1434.2,
+   "ninguno": -0.07,
+   "huffman_estatico": 31.86,
+   "deflate": 40.31,
+   "deflate_dict": 43.85,
+   "deflate_flujo": 60.56,
+   "tic_por_paquete": 20.49,
+   "rohc+ninguno": -0.07,
+   "rohc+huffman_estatico": 31.86,
+   "rohc+deflate": 40.31,
+   "rohc+deflate_dict": 43.85,
+   "rohc+deflate_flujo": 60.56,
+   "rohc+tic_por_paquete": 20.49
+  }
+ ],
+ "flujo_mezclado": {
+  "paquetes": 3600,
+  "bytes_crudos": 2615408,
+  "politicas": [
+   {
+    "politica": "sin compresión (crudo)",
+    "bytes": 2615408,
+    "razon": 1.0,
+    "ahorro_pct": 0.0,
+    "cpu_emisor_ms": 0.8,
+    "bytes_comprimidos_por_byte": 0.0,
+    "cpu_us_por_paquete": 0.2,
+    "usos": {
+     "crudo": 3600
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "crudo": 600
+     },
+     "http_texto": {
+      "crudo": 600
+     },
+     "urllc_ctrl": {
+      "crudo": 600
+     },
+     "video_rtp": {
+      "crudo": 600
+     },
+     "iot_json": {
+      "crudo": 600
+     },
+     "web_tls": {
+      "crudo": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + ninguno",
+    "bytes": 2552120,
+    "razon": 1.0248,
+    "ahorro_pct": 2.42,
+    "cpu_emisor_ms": 35.0,
+    "bytes_comprimidos_por_byte": 0.0,
+    "cpu_us_por_paquete": 9.7,
+    "usos": {
+     "ninguno": 3600
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "ninguno": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 600
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "ninguno": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + huffman_estatico",
+    "bytes": 2268565,
+    "razon": 1.1529,
+    "ahorro_pct": 13.26,
+    "cpu_emisor_ms": 1709.1,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 474.8,
+    "usos": {
+     "ninguno": 2400,
+     "huffman_estatico": 1200
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "huffman_estatico": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 600
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "huffman_estatico": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + deflate",
+    "bytes": 2198296,
+    "razon": 1.1897,
+    "ahorro_pct": 15.95,
+    "cpu_emisor_ms": 197.3,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 54.8,
+    "usos": {
+     "ninguno": 2391,
+     "deflate": 1209
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "deflate": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 591,
+      "deflate": 9
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "deflate": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + deflate_dict",
+    "bytes": 2142638,
+    "razon": 1.2206,
+    "ahorro_pct": 18.08,
+    "cpu_emisor_ms": 293.6,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 81.6,
+    "usos": {
+     "ninguno": 2391,
+     "deflate_dict": 1209
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "deflate_dict": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 591,
+      "deflate_dict": 9
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "deflate_dict": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + deflate_flujo",
+    "bytes": 1983491,
+    "razon": 1.3186,
+    "ahorro_pct": 24.16,
+    "cpu_emisor_ms": 413.7,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 114.9,
+    "usos": {
+     "ninguno": 2400,
+     "deflate_flujo": 1200
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "deflate_flujo": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 600
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "deflate_flujo": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + tic_por_paquete",
+    "bytes": 2375205,
+    "razon": 1.1011,
+    "ahorro_pct": 9.18,
+    "cpu_emisor_ms": 7491.0,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 2080.8,
+    "usos": {
+     "ninguno": 3000,
+     "tic_por_paquete": 600
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "tic_por_paquete": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 600
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "ninguno": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + deflate_flujo, reinicio cada 16",
+    "bytes": 2027615,
+    "razon": 1.2899,
+    "ahorro_pct": 22.47,
+    "cpu_emisor_ms": 412.7,
+    "bytes_comprimidos_por_byte": 1.0,
+    "cpu_us_por_paquete": 114.6,
+    "usos": {
+     "ninguno": 2400,
+     "deflate_flujo": 1200
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "deflate_flujo": 600
+     },
+     "urllc_ctrl": {
+      "ninguno": 600
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "deflate_flujo": 600
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {}
+   },
+   {
+    "politica": "ROHC + bandido UCB, 6 brazos, γ=0,99 (como el Lab 3)",
+    "bytes": 2037326,
+    "razon": 1.2837,
+    "ahorro_pct": 22.1,
+    "cpu_emisor_ms": 1355.1,
+    "bytes_comprimidos_por_byte": 0.803,
+    "cpu_us_por_paquete": 376.4,
+    "usos": {
+     "ninguno": 2404,
+     "huffman_estatico": 6,
+     "deflate": 10,
+     "deflate_dict": 16,
+     "deflate_flujo": 1161,
+     "tic_por_paquete": 3
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "ninguno": 2,
+      "huffman_estatico": 4,
+      "deflate": 6,
+      "deflate_dict": 8,
+      "deflate_flujo": 577,
+      "tic_por_paquete": 3
+     },
+     "urllc_ctrl": {
+      "ninguno": 598,
+      "deflate": 2
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "ninguno": 4,
+      "huffman_estatico": 2,
+      "deflate": 2,
+      "deflate_dict": 8,
+      "deflate_flujo": 584
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 182,
+      "huffman_estatico": 84,
+      "deflate": 84,
+      "deflate_dict": 84,
+      "deflate_flujo": 83,
+      "tic_por_paquete": 83
+     },
+     "http_texto": {
+      "ninguno": 2,
+      "huffman_estatico": 4,
+      "deflate": 6,
+      "deflate_dict": 8,
+      "deflate_flujo": 577,
+      "tic_por_paquete": 3
+     },
+     "urllc_ctrl": {
+      "ninguno": 180,
+      "huffman_estatico": 83,
+      "deflate": 88,
+      "deflate_dict": 83,
+      "deflate_flujo": 83,
+      "tic_por_paquete": 83
+     },
+     "video_rtp": {
+      "ninguno": 184,
+      "deflate": 82,
+      "huffman_estatico": 82,
+      "deflate_dict": 85,
+      "deflate_flujo": 80,
+      "tic_por_paquete": 87
+     },
+     "iot_json": {
+      "ninguno": 2,
+      "huffman_estatico": 2,
+      "deflate": 2,
+      "deflate_dict": 8,
+      "deflate_flujo": 584,
+      "tic_por_paquete": 2
+     },
+     "web_tls": {
+      "ninguno": 181,
+      "huffman_estatico": 86,
+      "deflate_dict": 82,
+      "deflate_flujo": 87,
+      "tic_por_paquete": 79,
+      "deflate": 85
+     }
+    }
+   },
+   {
+    "politica": "ROHC + bandido UCB, configuración de red, sin reinicio",
+    "bytes": 1985347,
+    "razon": 1.3174,
+    "ahorro_pct": 24.09,
+    "cpu_emisor_ms": 296.9,
+    "bytes_comprimidos_por_byte": 0.513,
+    "cpu_us_por_paquete": 82.5,
+    "usos": {
+     "ninguno": 2400,
+     "deflate_dict": 8,
+     "deflate_flujo": 1192
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "urllc_ctrl": {
+      "ninguno": 598,
+      "deflate_dict": 2
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 446,
+      "deflate_dict": 77,
+      "deflate_flujo": 77
+     },
+     "http_texto": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "urllc_ctrl": {
+      "ninguno": 438,
+      "deflate_dict": 86,
+      "deflate_flujo": 76
+     },
+     "video_rtp": {
+      "ninguno": 437,
+      "deflate_flujo": 81,
+      "deflate_dict": 82
+     },
+     "iot_json": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "web_tls": {
+      "ninguno": 469,
+      "deflate_dict": 65,
+      "deflate_flujo": 66
+     }
+    }
+   },
+   {
+    "politica": "ROHC + bandido UCB, configuración de red",
+    "bytes": 2029179,
+    "razon": 1.2889,
+    "ahorro_pct": 22.41,
+    "cpu_emisor_ms": 261.1,
+    "bytes_comprimidos_por_byte": 0.513,
+    "cpu_us_por_paquete": 72.5,
+    "usos": {
+     "ninguno": 2400,
+     "deflate_dict": 8,
+     "deflate_flujo": 1192
+    },
+    "usos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 600
+     },
+     "http_texto": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "urllc_ctrl": {
+      "ninguno": 598,
+      "deflate_dict": 2
+     },
+     "video_rtp": {
+      "ninguno": 600
+     },
+     "iot_json": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "web_tls": {
+      "ninguno": 600
+     }
+    },
+    "elegidos_por_clase": {
+     "voip_rtp": {
+      "ninguno": 446,
+      "deflate_dict": 77,
+      "deflate_flujo": 77
+     },
+     "http_texto": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "urllc_ctrl": {
+      "ninguno": 438,
+      "deflate_dict": 86,
+      "deflate_flujo": 76
+     },
+     "video_rtp": {
+      "ninguno": 437,
+      "deflate_flujo": 81,
+      "deflate_dict": 82
+     },
+     "iot_json": {
+      "ninguno": 1,
+      "deflate_dict": 3,
+      "deflate_flujo": 596
+     },
+     "web_tls": {
+      "ninguno": 469,
+      "deflate_dict": 65,
+      "deflate_flujo": 66
+     }
+    }
+   }
+  ]
+ },
+ "latencias": [
+  {
+   "codec": "ninguno",
+   "iot_json": {
+    "comprimir_us": 12.0,
+    "descomprimir_us": 13.3
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 9.7,
+    "descomprimir_us": 11.0
+   },
+   "voip_rtp": {
+    "comprimir_us": 10.8,
+    "descomprimir_us": 12.6
+   },
+   "video_rtp": {
+    "comprimir_us": 11.8,
+    "descomprimir_us": 12.8
+   },
+   "web_tls": {
+    "comprimir_us": 3.4,
+    "descomprimir_us": 1.3
+   },
+   "http_texto": {
+    "comprimir_us": 3.4,
+    "descomprimir_us": 1.3
+   }
+  },
+  {
+   "codec": "huffman_estatico",
+   "iot_json": {
+    "comprimir_us": 31.9,
+    "descomprimir_us": 252.5
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 14.4,
+    "descomprimir_us": 8.9
+   },
+   "voip_rtp": {
+    "comprimir_us": 19.9,
+    "descomprimir_us": 12.2
+   },
+   "video_rtp": {
+    "comprimir_us": 1131.6,
+    "descomprimir_us": 24.9
+   },
+   "web_tls": {
+    "comprimir_us": 1326.6,
+    "descomprimir_us": 4.0
+   },
+   "http_texto": {
+    "comprimir_us": 699.2,
+    "descomprimir_us": 4731.1
+   }
+  },
+  {
+   "codec": "deflate",
+   "iot_json": {
+    "comprimir_us": 27.9,
+    "descomprimir_us": 17.8
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 21.7,
+    "descomprimir_us": 10.6
+   },
+   "voip_rtp": {
+    "comprimir_us": 26.8,
+    "descomprimir_us": 14.0
+   },
+   "video_rtp": {
+    "comprimir_us": 80.8,
+    "descomprimir_us": 15.6
+   },
+   "web_tls": {
+    "comprimir_us": 81.1,
+    "descomprimir_us": 1.5
+   },
+   "http_texto": {
+    "comprimir_us": 66.9,
+    "descomprimir_us": 16.7
+   }
+  },
+  {
+   "codec": "deflate_dict",
+   "iot_json": {
+    "comprimir_us": 43.8,
+    "descomprimir_us": 13.9
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 40.1,
+    "descomprimir_us": 9.8
+   },
+   "voip_rtp": {
+    "comprimir_us": 45.1,
+    "descomprimir_us": 13.2
+   },
+   "video_rtp": {
+    "comprimir_us": 126.9,
+    "descomprimir_us": 25.5
+   },
+   "web_tls": {
+    "comprimir_us": 85.4,
+    "descomprimir_us": 1.1
+   },
+   "http_texto": {
+    "comprimir_us": 148.2,
+    "descomprimir_us": 26.7
+   }
+  },
+  {
+   "codec": "deflate_flujo",
+   "iot_json": {
+    "comprimir_us": 31.8,
+    "descomprimir_us": 12.1
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 56.3,
+    "descomprimir_us": 10.1
+   },
+   "voip_rtp": {
+    "comprimir_us": 61.8,
+    "descomprimir_us": 13.6
+   },
+   "video_rtp": {
+    "comprimir_us": 121.7,
+    "descomprimir_us": 16.0
+   },
+   "web_tls": {
+    "comprimir_us": 104.9,
+    "descomprimir_us": 1.1
+   },
+   "http_texto": {
+    "comprimir_us": 145.3,
+    "descomprimir_us": 15.9
+   }
+  },
+  {
+   "codec": "tic_por_paquete",
+   "iot_json": {
+    "comprimir_us": 354.8,
+    "descomprimir_us": 17.4
+   },
+   "urllc_ctrl": {
+    "comprimir_us": 112.8,
+    "descomprimir_us": 13.9
+   },
+   "voip_rtp": {
+    "comprimir_us": 147.0,
+    "descomprimir_us": 14.7
+   },
+   "video_rtp": {
+    "comprimir_us": 3643.5,
+    "descomprimir_us": 36.0
+   },
+   "web_tls": {
+    "comprimir_us": 4289.3,
+    "descomprimir_us": 4.0
+   },
+   "http_texto": {
+    "comprimir_us": 2853.9,
+    "descomprimir_us": 4950.5
+   }
+  }
+ ],
+ "perdidas": {
+  "p_perdida": 0.01,
+  "perdidos": 38,
+  "casos": [
+   {
+    "caso": "ROHC + deflate_dict (sin estado)",
+    "recibidos": 3562,
+    "mal_reconstruidos": 5,
+    "pct_mal": 0.14,
+    "ahorro_pct": 18.08
+   },
+   {
+    "caso": "ROHC + deflate_flujo (con estado, sin reinicio)",
+    "recibidos": 3562,
+    "mal_reconstruidos": 942,
+    "pct_mal": 26.45,
+    "ahorro_pct": 24.16
+   },
+   {
+    "caso": "ROHC + deflate_flujo (reinicio cada 16 paq.)",
+    "recibidos": 3562,
+    "mal_reconstruidos": 109,
+    "pct_mal": 3.06,
+    "ahorro_pct": 22.47
+   },
+   {
+    "caso": "ROHC + ninguno",
+    "recibidos": 3562,
+    "mal_reconstruidos": 5,
+    "pct_mal": 0.14,
+    "ahorro_pct": 2.42
+   },
+   {
+    "caso": "ROHC + bandido, config. de red sin reinicio",
+    "recibidos": 3562,
+    "mal_reconstruidos": 942,
+    "pct_mal": 26.45,
+    "ahorro_pct": 24.09
+   },
+   {
+    "caso": "ROHC + bandido, config. de red (reinicio cada 16 paq.)",
+    "recibidos": 3562,
+    "mal_reconstruidos": 126,
+    "pct_mal": 3.54,
+    "ahorro_pct": 22.41
+   }
+  ]
+ }
+}

@@ -418,7 +418,7 @@ hace falta: `--wait` y `ci/wait-ready.sh` esperan a condiciones reales en vez de
 a un número de segundos inventado.
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools down
+docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down
 ```
 
 ```bash
