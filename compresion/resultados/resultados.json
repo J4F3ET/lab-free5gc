@@ -124,9 +124,9 @@
     "bytes": 2615408,
     "razon": 1.0,
     "ahorro_pct": 0.0,
-    "cpu_emisor_ms": 0.8,
+    "cpu_emisor_ms": 2.3,
     "bytes_comprimidos_por_byte": 0.0,
-    "cpu_us_por_paquete": 0.2,
+    "cpu_us_por_paquete": 0.6,
     "usos": {
      "crudo": 3600
     },
@@ -157,9 +157,9 @@
     "bytes": 2552120,
     "razon": 1.0248,
     "ahorro_pct": 2.42,
-    "cpu_emisor_ms": 35.0,
+    "cpu_emisor_ms": 55.9,
     "bytes_comprimidos_por_byte": 0.0,
-    "cpu_us_por_paquete": 9.7,
+    "cpu_us_por_paquete": 15.5,
     "usos": {
      "ninguno": 3600
     },
@@ -190,9 +190,9 @@
     "bytes": 2268565,
     "razon": 1.1529,
     "ahorro_pct": 13.26,
-    "cpu_emisor_ms": 1709.1,
+    "cpu_emisor_ms": 2045.8,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 474.8,
+    "cpu_us_por_paquete": 568.3,
     "usos": {
      "ninguno": 2400,
      "huffman_estatico": 1200
@@ -224,9 +224,9 @@
     "bytes": 2198296,
     "razon": 1.1897,
     "ahorro_pct": 15.95,
-    "cpu_emisor_ms": 197.3,
+    "cpu_emisor_ms": 198.6,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 54.8,
+    "cpu_us_por_paquete": 55.2,
     "usos": {
      "ninguno": 2391,
      "deflate": 1209
@@ -259,9 +259,9 @@
     "bytes": 2142638,
     "razon": 1.2206,
     "ahorro_pct": 18.08,
-    "cpu_emisor_ms": 293.6,
+    "cpu_emisor_ms": 306.6,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 81.6,
+    "cpu_us_por_paquete": 85.2,
     "usos": {
      "ninguno": 2391,
      "deflate_dict": 1209
@@ -294,9 +294,9 @@
     "bytes": 1983491,
     "razon": 1.3186,
     "ahorro_pct": 24.16,
-    "cpu_emisor_ms": 413.7,
+    "cpu_emisor_ms": 426.0,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 114.9,
+    "cpu_us_por_paquete": 118.3,
     "usos": {
      "ninguno": 2400,
      "deflate_flujo": 1200
@@ -328,9 +328,9 @@
     "bytes": 2375205,
     "razon": 1.1011,
     "ahorro_pct": 9.18,
-    "cpu_emisor_ms": 7491.0,
+    "cpu_emisor_ms": 7595.9,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 2080.8,
+    "cpu_us_por_paquete": 2110.0,
     "usos": {
      "ninguno": 3000,
      "tic_por_paquete": 600
@@ -362,9 +362,9 @@
     "bytes": 2027615,
     "razon": 1.2899,
     "ahorro_pct": 22.47,
-    "cpu_emisor_ms": 412.7,
+    "cpu_emisor_ms": 411.9,
     "bytes_comprimidos_por_byte": 1.0,
-    "cpu_us_por_paquete": 114.6,
+    "cpu_us_por_paquete": 114.4,
     "usos": {
      "ninguno": 2400,
      "deflate_flujo": 1200
@@ -396,9 +396,9 @@
     "bytes": 2037326,
     "razon": 1.2837,
     "ahorro_pct": 22.1,
-    "cpu_emisor_ms": 1355.1,
+    "cpu_emisor_ms": 1303.2,
     "bytes_comprimidos_por_byte": 0.803,
-    "cpu_us_por_paquete": 376.4,
+    "cpu_us_por_paquete": 362.0,
     "usos": {
      "ninguno": 2404,
      "huffman_estatico": 6,
@@ -493,9 +493,9 @@
     "bytes": 1985347,
     "razon": 1.3174,
     "ahorro_pct": 24.09,
-    "cpu_emisor_ms": 296.9,
+    "cpu_emisor_ms": 300.0,
     "bytes_comprimidos_por_byte": 0.513,
-    "cpu_us_por_paquete": 82.5,
+    "cpu_us_por_paquete": 83.3,
     "usos": {
      "ninguno": 2400,
      "deflate_dict": 8,
@@ -564,9 +564,9 @@
     "bytes": 2029179,
     "razon": 1.2889,
     "ahorro_pct": 22.41,
-    "cpu_emisor_ms": 261.1,
+    "cpu_emisor_ms": 271.9,
     "bytes_comprimidos_por_byte": 0.513,
-    "cpu_us_por_paquete": 72.5,
+    "cpu_us_por_paquete": 75.5,
     "usos": {
      "ninguno": 2400,
      "deflate_dict": 8,
@@ -636,163 +636,163 @@
   {
    "codec": "ninguno",
    "iot_json": {
-    "comprimir_us": 12.0,
-    "descomprimir_us": 13.3
+    "comprimir_us": 12.3,
+    "descomprimir_us": 14.1
    },
    "urllc_ctrl": {
-    "comprimir_us": 9.7,
-    "descomprimir_us": 11.0
+    "comprimir_us": 13.3,
+    "descomprimir_us": 15.0
    },
    "voip_rtp": {
-    "comprimir_us": 10.8,
-    "descomprimir_us": 12.6
+    "comprimir_us": 18.0,
+    "descomprimir_us": 20.9
    },
    "video_rtp": {
-    "comprimir_us": 11.8,
-    "descomprimir_us": 12.8
+    "comprimir_us": 17.5,
+    "descomprimir_us": 19.4
    },
    "web_tls": {
-    "comprimir_us": 3.4,
+    "comprimir_us": 3.3,
     "descomprimir_us": 1.3
    },
    "http_texto": {
-    "comprimir_us": 3.4,
-    "descomprimir_us": 1.3
+    "comprimir_us": 2.8,
+    "descomprimir_us": 1.0
    }
   },
   {
    "codec": "huffman_estatico",
    "iot_json": {
-    "comprimir_us": 31.9,
-    "descomprimir_us": 252.5
+    "comprimir_us": 31.7,
+    "descomprimir_us": 251.9
    },
    "urllc_ctrl": {
-    "comprimir_us": 14.4,
-    "descomprimir_us": 8.9
+    "comprimir_us": 14.3,
+    "descomprimir_us": 9.0
    },
    "voip_rtp": {
-    "comprimir_us": 19.9,
-    "descomprimir_us": 12.2
+    "comprimir_us": 31.6,
+    "descomprimir_us": 20.6
    },
    "video_rtp": {
-    "comprimir_us": 1131.6,
-    "descomprimir_us": 24.9
+    "comprimir_us": 778.1,
+    "descomprimir_us": 18.9
    },
    "web_tls": {
-    "comprimir_us": 1326.6,
-    "descomprimir_us": 4.0
+    "comprimir_us": 959.0,
+    "descomprimir_us": 1.6
    },
    "http_texto": {
-    "comprimir_us": 699.2,
-    "descomprimir_us": 4731.1
+    "comprimir_us": 730.9,
+    "descomprimir_us": 4749.3
    }
   },
   {
    "codec": "deflate",
    "iot_json": {
-    "comprimir_us": 27.9,
-    "descomprimir_us": 17.8
+    "comprimir_us": 27.8,
+    "descomprimir_us": 17.5
    },
    "urllc_ctrl": {
-    "comprimir_us": 21.7,
-    "descomprimir_us": 10.6
+    "comprimir_us": 21.4,
+    "descomprimir_us": 10.5
    },
    "voip_rtp": {
-    "comprimir_us": 26.8,
-    "descomprimir_us": 14.0
+    "comprimir_us": 26.3,
+    "descomprimir_us": 13.8
    },
    "video_rtp": {
-    "comprimir_us": 80.8,
-    "descomprimir_us": 15.6
+    "comprimir_us": 78.8,
+    "descomprimir_us": 15.4
    },
    "web_tls": {
-    "comprimir_us": 81.1,
-    "descomprimir_us": 1.5
+    "comprimir_us": 71.8,
+    "descomprimir_us": 1.2
    },
    "http_texto": {
-    "comprimir_us": 66.9,
-    "descomprimir_us": 16.7
+    "comprimir_us": 71.8,
+    "descomprimir_us": 17.5
    }
   },
   {
    "codec": "deflate_dict",
    "iot_json": {
-    "comprimir_us": 43.8,
-    "descomprimir_us": 13.9
+    "comprimir_us": 44.5,
+    "descomprimir_us": 15.1
    },
    "urllc_ctrl": {
-    "comprimir_us": 40.1,
-    "descomprimir_us": 9.8
+    "comprimir_us": 40.8,
+    "descomprimir_us": 9.9
    },
    "voip_rtp": {
-    "comprimir_us": 45.1,
-    "descomprimir_us": 13.2
+    "comprimir_us": 79.1,
+    "descomprimir_us": 22.9
    },
    "video_rtp": {
-    "comprimir_us": 126.9,
-    "descomprimir_us": 25.5
+    "comprimir_us": 120.8,
+    "descomprimir_us": 18.7
    },
    "web_tls": {
-    "comprimir_us": 85.4,
+    "comprimir_us": 92.9,
     "descomprimir_us": 1.1
    },
    "http_texto": {
-    "comprimir_us": 148.2,
-    "descomprimir_us": 26.7
+    "comprimir_us": 124.4,
+    "descomprimir_us": 27.1
    }
   },
   {
    "codec": "deflate_flujo",
    "iot_json": {
-    "comprimir_us": 31.8,
-    "descomprimir_us": 12.1
+    "comprimir_us": 31.7,
+    "descomprimir_us": 12.2
    },
    "urllc_ctrl": {
-    "comprimir_us": 56.3,
-    "descomprimir_us": 10.1
+    "comprimir_us": 56.2,
+    "descomprimir_us": 10.2
    },
    "voip_rtp": {
-    "comprimir_us": 61.8,
-    "descomprimir_us": 13.6
+    "comprimir_us": 61.6,
+    "descomprimir_us": 14.0
    },
    "video_rtp": {
-    "comprimir_us": 121.7,
-    "descomprimir_us": 16.0
+    "comprimir_us": 164.6,
+    "descomprimir_us": 22.6
    },
    "web_tls": {
-    "comprimir_us": 104.9,
-    "descomprimir_us": 1.1
+    "comprimir_us": 155.2,
+    "descomprimir_us": 1.6
    },
    "http_texto": {
-    "comprimir_us": 145.3,
-    "descomprimir_us": 15.9
+    "comprimir_us": 203.1,
+    "descomprimir_us": 25.0
    }
   },
   {
    "codec": "tic_por_paquete",
    "iot_json": {
-    "comprimir_us": 354.8,
-    "descomprimir_us": 17.4
+    "comprimir_us": 246.8,
+    "descomprimir_us": 12.4
    },
    "urllc_ctrl": {
-    "comprimir_us": 112.8,
-    "descomprimir_us": 13.9
+    "comprimir_us": 110.2,
+    "descomprimir_us": 13.5
    },
    "voip_rtp": {
-    "comprimir_us": 147.0,
-    "descomprimir_us": 14.7
+    "comprimir_us": 150.3,
+    "descomprimir_us": 15.2
    },
    "video_rtp": {
-    "comprimir_us": 3643.5,
-    "descomprimir_us": 36.0
+    "comprimir_us": 3865.1,
+    "descomprimir_us": 34.9
    },
    "web_tls": {
-    "comprimir_us": 4289.3,
-    "descomprimir_us": 4.0
+    "comprimir_us": 4714.3,
+    "descomprimir_us": 4.7
    },
    "http_texto": {
-    "comprimir_us": 2853.9,
-    "descomprimir_us": 4950.5
+    "comprimir_us": 2725.6,
+    "descomprimir_us": 4586.4
    }
   }
  ],

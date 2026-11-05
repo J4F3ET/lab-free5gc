@@ -64,7 +64,7 @@ un bit cambiado en una cabecera o en un registro TLS invalida el paquete entero.
 | Entropía H | Se conserva como **entropía relativa** H / log2(min(256, n)): es rasgo de contexto del bandido y filtro de entrenamiento. | En 33 B de bytes aleatorios H nunca pasa de 5,04 bits; comparar contra 8 los haría parecer compresibles. |
 | Bandido UCB con descuento | Se conserva la regla. Los **brazos** pasan a ser códecs y el **contexto**, tamaño y entropía del paquete. | k ya no significa nada (ver §2), y "ninguno" tiene que poder ganar. |
 | Barrido (de k en el Lab 3; de códecs, probando todos en cada paquete, en la red) | **Se quita.** El bandido es la única política que elige. | En el Lab 3 servía para *leer* el comportamiento en muchos k; aquí lo que se mide es el costo en la red, y el barrido cuesta 5 veces la CPU y ahorra menos (§2). |
-| Ajustar y evaluar sobre el mismo flujo (límite 5 del Lab 3) | **Se corrige**: se entrena y ajusta con la semilla 1 y los docs 01, 03, 05 y 07; se evalúa con la semilla 2 y los docs 02, 04 y 06. | Resultado no optimista. |
+| Ajustar y evaluar sobre el mismo flujo (límite 5 del Lab 3) | **Se corrige**: se entrena y ajusta con la semilla 1 y los docs 01, 03, 05 y 07; se evalúa con la semilla 2 y los docs 02, 04 y 06. Son copias congeladas en `compresion/textos/`, así que editar la documentación no cambia los resultados. | Resultado no optimista. |
 | NumPy, gráficas, bitstrip, `.tic`, `--perdida` | **Se quitan.** | Nada de eso hace falta, o puede ir, en el camino de cada paquete. |
 | — | **Nuevo: ROHC-lite** (cabeceras IP/UDP/RTP, RFC 5795 simplificado, modo U). | En voz y URLLC las cabeceras son más de la mitad del paquete. |
 | — | **Nuevo: DEFLATE con diccionario entrenado** (como UDC de LTE) y **DEFLATE por flujo** (con memoria entre paquetes). | Son los que ganan en todo lo compresible. |
@@ -273,11 +273,45 @@ UDP real del kernel:
 
 Hubo 0 errores de descompresión. La bajada son solo ACK de TCP: el ROHC-lite no tiene perfil
 TCP, así que salen +1,9 %.
-**Pendiente:** correr `medir.sh` sobre la red 5G real del LXC 110. El 2026-11-05 el stack y
-`cmp-ue`/`cmp-dn` quedaron arriba y el ping por `uesimtun0` hasta `10.100.204.30` respondía,
-pero la medición no se completó. Antes de medir, `generar.py` también tiene que salir con la
-IP de la sesión cuando manda tráfico directo (sin compresor); si no, la comparación no pasa
-por el 5G.
+**Medición en la red 5G real (2026-11-05, LXC 110).** Con el núcleo, la RAN y el perfil
+`compresion` arriba, sin `obs`. El tráfico atraviesa la sesión PDU completa: `uesimtun0` →
+gNB → GTP-U → UPF → `dn_net`. Las dos corridas salen con la IP de la sesión (`10.60.0.1`).
+
+| | Bytes por `uesimtun0` (subida) | Bajada |
+|---|---|---|
+| Sin compresor | 867 985 | 21 492 |
+| Con compresor | 719 553 (**−17,1 %**) | 33 573 |
+| Dentro del túnel (lo que ahorraría PDCP) | 868 163 → 680 422 (**−21,6 %**) | 21 684 → 22 057 (+1,7 %) |
+
+Hubo 0 errores de descompresión en los dos lados. El ahorro coincide con la evaluación offline
+(22,4 %) y con la prueba en WSL. La bajada crece en `uesimtun0` porque cada ACK de TCP paga los
+28 B del túnel UDP; dentro del túnel es +1,7 %, igual que en WSL. Los 11 tests también pasan con
+el Python 3.12 del contenedor.
+
+Latencia de ida y vuelta (`ping` desde el UE, 400 paquetes a 50 por segundo):
+
+| | Mediana | p90 | p99 | Máximo |
+|---|---|---|---|---|
+| Directo por `uesimtun0` | 0,81 ms | 0,93 ms | 1,09 ms | 3,4 ms |
+| Por el túnel compresor | 2,1 ms | 2,5–12 ms | 22–120 ms | 28–146 ms |
+
+Ese es el costo real del lado de la latencia, y tiene dos partes distintas:
+
+- **+1,3 ms en la mediana: el túnel en espacio de usuario.** Cada paquete sale del kernel hacia
+  Python por `cmp0` y vuelve a entrar por un socket UDP, en los dos extremos y en las dos
+  direcciones. Los códecs cuestan del orden de 0,1 ms por ida y vuelta (§4.3); el resto es el
+  túnel. En PDCP ese salto no existe, porque la compresión está dentro de la pila de radio.
+  Por eso el modelo de §4.5, que solo cuenta la CPU de los códecs, subestima el costo de **este**
+  prototipo, pero no el de un compresor en PDCP.
+- **La cola larga (p99 de 22 a 120 ms): swap del host.** Los procesos del compresor tienen 2–6 MB
+  de su memoria en el swap del disco de 5400 rpm. En cada ráfaga suman 20–30 fallos de página
+  mayores, y cada uno es una lectura de disco. En la primera prueba, con el host todavía cargado,
+  la mediana llegó a 470 ms y el máximo a 3,8 s. Es un problema de este servidor, no del
+  algoritmo: con los contenedores del compresor sin swap, debería desaparecer.
+
+En este lab, con enlaces de varios Gbps, el resultado es el esperado según §4.5: se ahorran
+bytes, pero la latencia sube. Para ver la ganancia en latencia hay que limitar la velocidad de
+`uesimtun0` con `tc`.
 
 ## 6. Límites declarados
 

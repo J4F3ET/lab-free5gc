@@ -108,7 +108,6 @@ def esperar_interfaz(nombre: str, segundos: int = 300) -> None:
 def ip_de(nombre: str, segundos: int = 300) -> str:
     """IPv4 de una interfaz (espera a que la tenga). En el UE hace falta: UERANSIM solo
     enruta por uesimtun0 lo que sale CON la IP de la sesión PDU (ip rule from 10.60.x)."""
-    import fcntl
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     for _ in range(segundos):
         try:

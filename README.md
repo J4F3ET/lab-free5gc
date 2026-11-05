@@ -765,6 +765,7 @@ compresion/              Compresor de paquetes UE <-> DN (perfil 'compresion')
   shim.py                El túnel TUN que corre en cmp-ue y cmp-dn
   evaluar.py, medir.sh   Comparación offline y medición en la red
   balance.py             Latencia neta de cada algoritmo según el enlace
+  textos/                Copia congelada de docs/01-07: el texto del tráfico de prueba
 
 .github/workflows/
   deploy.yml               Despliegue del núcleo + RAN. Ver docs/07-cicd.md

@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import trafico as T
+from shim import ip_de
 
 
 def main() -> None:
@@ -25,14 +26,19 @@ def main() -> None:
     a = ap.parse_args()
     rng = random.Random(2)
     n, pausa = a.paquetes, a.pausa_ms / 1000
+    # Directo a la DN hay que salir con la IP de la sesión PDU: UERANSIM solo enruta por
+    # uesimtun0 lo que sale con ella (ip rule from 10.60.x). Al túnel cmp0 (10.99.x) el
+    # kernel ya lo manda por cmp0, y desde ahí shim.py lo saca con esa misma IP.
+    origen = "" if a.destino.startswith("10.99.") else ip_de("uesimtun0", 5)
     u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    u.bind((origen, 0))
 
     def udp(cargas, puerto):
         for c in cargas:
             u.sendto(c, (a.destino, puerto)); time.sleep(pausa)
 
     def tcp(cargas, puerto):
-        s = socket.create_connection((a.destino, puerto), timeout=10)
+        s = socket.create_connection((a.destino, puerto), timeout=10, source_address=(origen, 0))
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         for c in cargas:
             s.sendall(c); time.sleep(pausa)

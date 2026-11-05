@@ -24,7 +24,7 @@ from __future__ import annotations
 import json, random, struct
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent.parent
+TEXTOS = Path(__file__).resolve().parent / "textos"
 UE_IP = bytes([10, 60, 0, 1])
 DN_IP = bytes([10, 100, 204, 10])
 
@@ -33,9 +33,11 @@ SLICE = {"iot_json": "mMTC", "urllc_ctrl": "URLLC", "voip_rtp": "eMBB", "video_r
          "web_tls": "eMBB", "http_texto": "eMBB"}
 
 # Textos reales para http_texto. Se separan por archivo: unos para entrenar, otros para probar.
-TEXTOS_ENTRENO = ["docs/01-conceptos-5g.md", "docs/03-servicios.md", "docs/05-diagnostico.md",
-                  "docs/07-cicd.md"]
-TEXTOS_PRUEBA = ["docs/02-instalacion.md", "docs/04-operacion.md", "docs/06-plmn-e-identidades.md"]
+# Son copias CONGELADAS de docs/01-07 (versión del commit de86f04, con CRLF), no los docs vivos:
+# así editar la documentación no cambia el tráfico de prueba ni los resultados, y los textos
+# viajan con compresion/ dentro de los contenedores (que no montan docs/).
+TEXTOS_ENTRENO = ["01-conceptos-5g.md", "03-servicios.md", "05-diagnostico.md", "07-cicd.md"]
+TEXTOS_PRUEBA = ["02-instalacion.md", "04-operacion.md", "06-plmn-e-identidades.md"]
 
 
 # ═══════════════════════════ cabeceras ═══════════════════════════
@@ -102,7 +104,7 @@ def _cargas_urllc(rng: random.Random, n: int) -> list[bytes]:
 
 
 def _cargas_texto(rng: random.Random, n: int, archivos: list[str]) -> list[bytes]:
-    texto = b"".join((RAIZ / a).read_bytes() for a in archivos)
+    texto = b"".join((TEXTOS / a).read_bytes() for a in archivos)
     cab = (b"HTTP/1.1 200 OK\r\nContent-Type: text/markdown; charset=utf-8\r\n"
            b"Content-Length: %d\r\nConnection: keep-alive\r\n\r\n" % len(texto))
     flujo = cab + texto
