@@ -66,7 +66,7 @@ docker compose --profile obs --profile probes up -d
 ### Parar sin perder nada
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools down
+docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down
 ```
 
 Hay que nombrar **todos** los perfiles: `down` a secas deja corriendo lo que
@@ -75,7 +75,7 @@ pertenece a perfiles no declarados.
 ### Parar y borrarlo todo
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools down -v
+docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down -v
 ```
 
 ⚠️ El `-v` borra el volumen de MongoDB **y con él el abonado**. Después de esto,
@@ -411,6 +411,7 @@ docker stats --no-stream
 | + `obs` | 19 | ~2.8 GB |
 | + `probes` | 21 | ~2.9 GB |
 | + `tools` | 22 | ~3.0 GB |
+| núcleo + `ran` + `compresion` | 15 | ~1.85 GB |
 
 Son cifras de referencia en reposo. Bajo tráfico el UPF sube bastante.
 
@@ -430,6 +431,12 @@ crece sola.
 ```bash
 docker compose --profile obs --profile probes stop
 ```
+
+Ojo al apagar el LXC: al prenderlo vuelve **todo lo que estaba corriendo**,
+porque los servicios tienen `restart: unless-stopped`. Para antes lo que no
+quieras de vuelta (un contenedor parado a mano no revive). Al prenderlo,
+además, el runner de CI se autoactualiza si estuvo semanas apagado, y copia
+cientos de MB al disco durante unos minutos.
 
 No esperes a que "se estabilice". No lo hace: cuando la carga llega a 100 en 4
 núcleos, ni siquiera SSH responde, y la única salida es la consola física.

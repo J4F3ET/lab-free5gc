@@ -11,7 +11,7 @@ documento.
 
 ## Índice
 
-- [1. Los 22 servicios de un vistazo](#1-los-22-servicios-de-un-vistazo)
+- [1. Los 24 servicios de un vistazo](#1-los-24-servicios-de-un-vistazo)
 - [2. Direccionamiento completo](#2-direccionamiento-completo)
 - [3. Puertos](#3-puertos)
 - [4. Quién depende de quién](#4-quién-depende-de-quién)
@@ -22,7 +22,7 @@ documento.
 
 ---
 
-## 1. Los 22 servicios de un vistazo
+## 1. Los 24 servicios de un vistazo
 
 | Servicio | Imagen | Perfil | Redes | Publica | Configuración que monta |
 |---|---|---|---|---|---|
@@ -48,6 +48,10 @@ documento.
 | `dozzle` | `amir20/dozzle` | `obs` | obs | `8888` | el socket de Docker |
 | `blackbox` | `prom/blackbox-exporter` | `probes` | *netns del `ue`* | — | `observability/blackbox/` |
 | `iperf-probe` | `alpine:3.20` | `probes` | *netns del `ue`* | — | `observability/probe/` |
+| `cmp-ue` | `python:3.14-alpine` | `compresion` | *netns del `ue`* | — | `compresion/` (solo lectura) + `/dev/net/tun` |
+| `cmp-dn` | `python:3.14-alpine` | `compresion` | dn, obs | `8088` (página de `envio`) | `compresion/` (solo lectura) + `/dev/net/tun` |
+| `envio` | `python:3.14-alpine` | `compresion` | *netns de `cmp-dn`* | — (lo publica `cmp-dn`) | `compresion/` (solo lectura) |
+| `envio-eco` | `python:3.14-alpine` | `compresion` | *netns del `ue`* | — | `compresion/` (solo lectura) |
 
 Las etiquetas de imagen salen de [`.env`](../.env.example): `FREE5GC_TAG`,
 `UERANSIM_TAG`, `MONGO_TAG`.
@@ -104,6 +108,7 @@ El destino del tráfico. Hace de "internet".
 |---|---|
 | `.10` | `dn-iperf` — el objetivo de los pings y las medidas |
 | `.20` | `upf` — por aquí saca el tráfico, con NAT |
+| `.30` | `cmp-dn` — el descompresor; recibe el túnel en UDP 7700 |
 
 ### obs_net — `10.100.205.0/24`
 
@@ -116,11 +121,24 @@ El destino del tráfico. Hace de "internet".
 | `.14` | `pushgateway` |
 | `.15` | `dozzle` |
 | `.31` | `ue` — está aquí **solo** para que las sondas sean alcanzables |
+| `.32` | `cmp-dn` — solo para publicar `lab5g_cmp_*` en el pushgateway |
 
 ### El pool de los teléfonos — `10.60.0.0/16`
 
 No es una red de Docker y no aparece en el compose. La reparte el UPF cuando el
 SMF se lo indica. El primer teléfono recibe `10.60.0.1`.
+
+### El túnel del compresor — `10.99.0.0/30`
+
+Tampoco es de Docker. Lo crean `cmp-ue` (`cmp0` = `10.99.0.1`, dentro del `ue`) y
+`cmp-dn` (`cmp0` = `10.99.0.2`). Lo que entra por `cmp0` sale comprimido como UDP
+7700 entre `10.60.0.1` y `10.100.204.30`, así que cruza la sesión PDU entera.
+
+`cmp-ue` tiene que mandar **desde la IP de la sesión** (`10.60.0.1`), no desde
+`0.0.0.0`: UERANSIM solo enruta por `uesimtun0` lo que sale con esa IP
+(`ip rule from 10.60.0.1 lookup rt_uesimtun0`). Lo demás se va por `eth0` y no
+pasa por el 5G. Lo mismo vale para cualquier prueba "directa" hecha desde el
+`ue`, y por eso los `ping` de este manual llevan `-I uesimtun0`.
 
 ---
 
@@ -205,6 +223,7 @@ Por eso el despliegue va **por etapas** y no de una vez:
 4. ci/provision-subscriber.sh — crea la SIM
 5. el perfil 'ran'
 6. (opcional) los perfiles 'obs' y 'probes'
+7. (opcional) el perfil 'compresion' — necesita 'ran'
 ```
 
 Saltarse la espera del paso 1 fue exactamente lo que dejaba los 9 servicios del
@@ -273,7 +292,7 @@ volumes: [ /:/rootfs:ro, /var/run:/var/run:rw, /sys:/sys:ro, ... ]
 Para medir a los demás contenedores necesita ver el sistema de ficheros y los
 cgroups del anfitrión. Los montajes son de solo lectura salvo `/var/run`.
 
-### `blackbox` y `iperf-probe`
+### `blackbox`, `iperf-probe`, `cmp-ue` y `envio-eco`
 
 ```yaml
 network_mode: "service:ue"
@@ -286,8 +305,11 @@ Docker.
 Tiene tres consecuencias prácticas:
 
 1. No tienen IP propia — usan las del `ue`
-2. No pueden arrancar si el `ue` no existe (`probes` necesita `ran`)
+2. No pueden arrancar si el `ue` no existe (`probes` y `compresion` necesitan `ran`)
 3. Prometheus los alcanza en `10.100.205.31`, que es la IP del `ue` en `obs_net`
+
+`cmp-ue` y `cmp-dn` necesitan además `cap_add: NET_ADMIN` y `/dev/net/tun`
+para crear la interfaz `cmp0`. No son `privileged`.
 
 ---
 

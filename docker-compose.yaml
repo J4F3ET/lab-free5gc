@@ -19,6 +19,10 @@
 #                   (network_mode: service:ue).
 #    tools          webui, la consola de suscriptores. No hace falta para
 #                   aprovisionar: ci/provision-subscriber.sh usa mongosh.
+#    compresion     cmp-ue, cmp-dn: tunel compresor UE <-> DN; envio,
+#                   envio-eco: pagina para mandar archivos por el tunel
+#                   (http://<host>:8088, solo LAN/tailnet).  +4
+#                   REQUIERE 'ran' (cmp-ue vive en el netns del UE).
 #
 #  Uso:
 #    docker compose up -d                                  # solo nucleo
@@ -270,6 +274,80 @@ services:
     restart: unless-stopped
     command: -s
     networks: { dn_net: { ipv4_address: 10.100.204.10 } }
+
+  # ==================================================================
+  #  COMPRESION DE PAQUETES  (perfil 'compresion', REQUIERE 'ran')
+  # ==================================================================
+  #  Un tunel que comprime cada paquete IP entre el UE y la DN: ROHC-lite
+  #  para las cabeceras + el codec de carga que elige un bandido UCB.
+  #  Ver compresion/ y docs/08-compresion-paquetes.md.  Dos contenedores
+  #  python:alpine sin dependencias (~15 MB de RAM cada uno).
+  #    COMPOSE_PROFILES=ran,compresion docker compose up -d
+  #    bash compresion/medir.sh
+  cmp-dn:
+    image: python:3.14-alpine         # 3.14: zstd en la biblioteca estandar
+    container_name: cmp-dn
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/shim.py", "dn" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PUSHGATEWAY: http://10.100.205.14:9091
+      VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # vacio = bandido premiado por ahorro
+      PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
+    volumes: [ ./compresion:/cmp:ro ]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    networks:
+      dn_net:  { ipv4_address: 10.100.204.30 }
+      obs_net: { ipv4_address: 10.100.205.32 }   # solo para el pushgateway
+    # La pagina de envio (servicio envio) vive en este netns: su puerto se publica aqui.
+    # Sin login: solo LAN y tailnet. NO agregarlo a 'tailscale funnel'.
+    ports: [ "8088:8088" ]
+
+  cmp-ue:
+    image: python:3.14-alpine         # misma version en los dos extremos (mismos codecs)
+    container_name: cmp-ue
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/shim.py", "ue" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PAR: 10.100.204.30
+      PUSHGATEWAY: http://10.100.205.14:9091
+      VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # p. ej. 1000000 con tc a 1 Mbps
+      PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
+    volumes: [ ./compresion:/cmp:ro ]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    network_mode: "service:ue"      # <-- en el netns del UE, como blackbox
+    depends_on: [ ue, cmp-dn ]
+
+  # Pagina para mandar un archivo real por la red 5G, ida y vuelta, a traves del compresor
+  # (compresion/envio.py, docs/08 seccion 4.9). La pagina vive del lado DN; el eco, en el UE.
+  envio:
+    image: python:3.14-alpine
+    container_name: envio
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/envio.py", "pagina" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes: [ ./compresion:/cmp:ro ]
+    network_mode: "service:cmp-dn"  # ve el cmp0 10.99.0.2 y los contadores de cmp-dn
+    depends_on: [ cmp-dn ]
+
+  envio-eco:
+    image: python:3.14-alpine
+    container_name: envio-eco
+    profiles: [ compresion ]
+    restart: unless-stopped
+    entrypoint: [ "python3", "-u", "/cmp/envio.py", "eco" ]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes: [ ./compresion:/cmp:ro ]
+    network_mode: "service:ue"      # junto a cmp-ue: escucha en 10.99.0.1
+    depends_on: [ cmp-ue ]
 
   # ==================================================================
   #  OBSERVABILIDAD

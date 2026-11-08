@@ -381,7 +381,7 @@ cosa vive en un nivel y solo en uno.
 │  │  ┌───────────────────────────────────────────────────┐  │  │
 │  │  │  NIVEL 3 — CONTENEDORES DOCKER                    │  │  │
 │  │  │                                                   │  │  │
-│  │  │   los 22 servicios del docker-compose.yaml        │  │  │
+│  │  │   los 24 servicios del docker-compose.yaml        │  │  │
 │  │  │   repartidos en 5 redes internas                  │  │  │
 │  │  └───────────────────────────────────────────────────┘  │  │
 │  └─────────────────────────────────────────────────────────┘  │
@@ -411,7 +411,7 @@ deliberadamente inalcanzable desde fuera:
 
 ## 6. Qué hace cada servicio del docker-compose
 
-Los 22 servicios de [`docker-compose.yaml`](docker-compose.yaml), en lenguaje
+Los 24 servicios de [`docker-compose.yaml`](docker-compose.yaml), en lenguaje
 llano. La columna **⚠️** marca los tres servicios donde se concentran casi
 todos los fallos.
 
@@ -459,7 +459,7 @@ todos los fallos.
 | Servicio | Qué hace, de verdad |
 |---|---|
 | `prometheus` | Pregunta cada pocos segundos "¿cómo estás?" a todos los demás y guarda las respuestas con su hora. Guarda **números**, no texto. 15 días de historia. |
-| `grafana` | Dibuja esos números. Trae un panel ya montado (`lab5g-overview`) que no hay que configurar: aparece solo al arrancar. Usuario `admin`, contraseña la de tu `.env`. |
+| `grafana` | Dibuja esos números. Trae tres paneles ya montados que no hay que configurar: `lab5g-overview` y los dos de compresión (ver docs/08). Aparecen solos al arrancar. Usuario `admin`, contraseña la de tu `.env`. |
 | `cadvisor` | Mide CPU, memoria y red **de cada contenedor por separado**. Responde a "¿quién se está comiendo la máquina?". |
 | `node-exporter` | Mide el contenedor LXC **completo**: CPU, RAM, disco, swap. Responde a "¿es la máquina la que va mal, y no un servicio?". |
 | `pushgateway` | Un buzón. Las pruebas que se ejecutan de vez en cuando —no de forma continua— dejan aquí su resultado para que Prometheus lo recoja después. |
@@ -487,6 +487,25 @@ estaría midiendo la red de Docker y no la red 5G, y el número no valdría nada
 > ⚠️ `probes` **necesita** `ran` activo. Si el `ue` no existe, estos dos
 > contenedores no tienen dónde vivir y fallan al arrancar.
 
+### Compresión de paquetes — perfil `compresion`
+
+Un túnel que **comprime cada paquete IP entre el teléfono y el destino**:
+ROHC-lite para las cabeceras y, para la carga, el códec que elige un bandido
+UCB (la "IA" del Lab 3 de Teoría de la Información) entre "ninguno", zstd con
+diccionario y DEFLATE por flujo. Si se le da la velocidad del enlace
+(`VELOCIDAD_ENLACE_BPS`), el bandido se premia por latencia en vez de por bytes. Usa el mismo truco que las
+sondas: `cmp-ue` vive dentro del teléfono, así que lo comprimido viaja de verdad
+por `uesimtun0`, el gNB, el túnel GTP-U y el UPF.
+
+| Servicio | Qué hace, de verdad |
+|---|---|
+| `cmp-ue` | El **compresor**. Crea la interfaz `cmp0` (`10.99.0.1`) dentro del `ue`: lo que una aplicación mande a `10.99.0.2` sale comprimido como UDP:7700 hacia `cmp-dn`. |
+| `cmp-dn` | El **descompresor**, en `dn_net` (`10.100.204.30`). Reconstruye cada paquete byte a byte, lo entrega a su `cmp0` (`10.99.0.2`) y tiene sumideros en los puertos del tráfico de prueba. |
+
+> ⚠️ `compresion` **necesita** `ran`, igual que `probes`. No arranca con el
+> despliegue normal y el CI no lo toca. Dónde iría en una red real (PDCP), qué
+> se probó y los resultados: [docs/08](docs/08-compresion-paquetes.md).
+
 ---
 
 ## 7. Las cinco redes internas y por qué son cinco
@@ -500,9 +519,10 @@ ilegible donde lo que buscas se esconde entre miles de mensajes de otras piezas.
 | `sbi_net` | `10.100.200.0/24` | Todo el plano de control, mongo, webui | Es la "oficina": las piezas del núcleo se hablan entre sí |
 | `n3_net` | `10.100.201.0/24` | `upf` `gnb` | Aísla el túnel de datos: `tcpdump -i any udp port 2152` sale limpio |
 | `radio_net` | `10.100.203.0/24` | `gnb` `ue` | Distingue "el teléfono no encuentra la antena" de "la antena no encuentra el núcleo" |
-| `dn_net` | `10.100.204.0/24` | `upf` `dn-iperf` | El NAT se aplica a una interfaz concreta y estable, no a "la que Docker haya llamado eth0 hoy" |
+| `dn_net` | `10.100.204.0/24` | `upf` `dn-iperf` `cmp-dn` | El NAT se aplica a una interfaz concreta y estable, no a "la que Docker haya llamado eth0 hoy" |
 | `obs_net` | `10.100.205.0/24` | Toda la observabilidad | Prometheus pregunta cada 15 s; sin aislarlo, contamina todas las capturas |
 | — | `10.60.0.0/16` | Las IP que reciben los teléfonos | No es una red de Docker: la reparte el UPF |
+| — | `10.99.0.0/30` | `cmp0` en `cmp-ue` y `cmp-dn` | Tampoco es de Docker: es el túnel del compresor, que viaja **dentro** de la sesión PDU |
 
 Cada servicio tiene además una **IP fija**, no una que cambie en cada arranque.
 Es imprescindible: varias configuraciones se refieren a otra pieza por su IP, y
@@ -541,9 +561,18 @@ arregla nada: hay que arrancar **menos cosas**. De ahí los perfiles.
 | `… --profile obs up -d` | **19** | + Grafana, Prometheus y los logs en web |
 | `… --profile obs --profile probes up -d` | **21** | + las mediciones desde dentro del teléfono |
 | `… --profile tools up -d` | **22** | + la consola web de abonados |
+| `docker compose --profile ran --profile compresion up -d` | **15** | Núcleo + RAN + el compresor de paquetes. Cabe sin `obs`. |
 
 **Recomendación:** quédate en 13 mientras montas el laboratorio. Añade `obs`
 solo cuando `smoke-ue.sh` pase en verde, y solo si te sobran 2 GB de RAM.
+
+> ⚠️ **Al prender el LXC vuelve todo lo que estaba corriendo al apagarlo**, con
+> todos los perfiles, porque los servicios tienen `restart: unless-stopped`. Si
+> lo apagaste con `obs` arriba, al prenderlo arrancan los 21 a la vez y el host
+> entra en la espiral de arriba (pasó el 2026-11-05: disco al 95 % durante más
+> de 10 minutos). Antes de apagar, para lo que no quieras de vuelta:
+> `docker compose --profile obs --profile probes stop`. Un contenedor parado a
+> mano no revive al arrancar.
 
 ### El detalle que confunde a todo el mundo
 
@@ -676,7 +705,7 @@ corta de los tres planos. Es lo que hay que adjuntar al pedir ayuda.
 ### Empezar de cero
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools down
+docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down
 ```
 
 ```bash
@@ -691,7 +720,7 @@ el abonado: si lo usas, ejecuta después `bash ci/provision-subscriber.sh`.
 ## 11. Mapa del repositorio
 
 ```
-docker-compose.yaml      Los 22 servicios y las 5 redes. El fichero central.
+docker-compose.yaml      Los 24 servicios y las 5 redes. El fichero central.
 .env.example             Versiones, PLMN, direcciones, MTU. Cópialo a .env.
 
 config/                  Configuración del núcleo free5GC — un YAML por pieza
@@ -732,6 +761,15 @@ observability/
   probe/iperf-probe.sh   Cómo medir velocidad
   grafana/provisioning/  Panel y fuente de datos, montados automáticamente
 
+compresion/              Compresor de paquetes UE <-> DN (perfil 'compresion')
+  compresores.py         ROHC-lite + códecs de carga, uno por estrategia (Strategy)
+  bandido.py             La IA: bandido UCB que elige el códec por paquete
+  shim.py                El túnel TUN que corre en cmp-ue y cmp-dn
+  evaluar.py, medir.sh   Comparación offline y medición en la red
+  balance.py             Latencia neta de cada algoritmo según el enlace
+  informacion.py         Original, comprimido, recuperado e información mutua
+  textos/                Copia congelada de docs/01-07: el texto del tráfico de prueba
+
 .github/workflows/
   deploy.yml               Despliegue del núcleo + RAN. Ver docs/07-cicd.md
   deploy-observability.yml Despliegue de Grafana/Prometheus/sondas, aparte
@@ -752,6 +790,7 @@ Este README cubre el camino normal. Cuando necesites el "por qué":
 | [05 — Diagnóstico](docs/05-diagnostico.md) | Algo se rompió y necesitas el árbol completo síntoma → comando |
 | [06 — PLMN e identidades](docs/06-plmn-e-identidades.md) | Vas a cambiar el operador, el IMSI o el slice |
 | [07 — CI/CD](docs/07-cicd.md) | Quieres que se despliegue solo al hacer push |
+| [08 — Compresión de paquetes](docs/08-compresion-paquetes.md) | Quieres comprimir el tráfico del UE: dónde va el compresor, qué sirve y qué no (con IA, del Lab 3 de Teoría de la Información) |
 
 ---
 

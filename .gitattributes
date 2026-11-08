@@ -1,0 +1,3 @@
+# Textos congelados del tráfico de prueba de compresion/: sus bytes (CRLF incluido) definen
+# los resultados, así que git no debe convertirlos.
+compresion/textos/** -text
