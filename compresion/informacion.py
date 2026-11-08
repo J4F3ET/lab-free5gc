@@ -37,10 +37,11 @@ en cuántos bytes meten esa información: eso es la razón de compresión y H(C)
 """
 from __future__ import annotations
 
-import math, random, time
+import json, math, random, time
 from collections import Counter
 
 import compresores as C
+import trafico as T
 from balance import politicas
 
 BORRADO = 256
@@ -49,6 +50,24 @@ CANALES = ("perfecto", "perdida_1pct")
 # Nombres de las políticas como etiqueta de Prometheus ("algoritmo"). Los códecs usan su nombre
 # del registro; un códec nuevo aparece solo con el suyo.
 NOMBRES = {"sin compresión": "sin_compresion", "ROHC + ninguno": "solo_rohc", "ROHC + bandido UCB": "bandido_ucb"}
+# Título y descripción de las políticas que no son un códec (los códecs traen los suyos).
+TEXTOS = {"sin_compresion": ("Sin compresión (referencia)",
+                             "El paquete viaja tal cual. Es el punto cero contra el que se mide todo."),
+          "solo_rohc": ("Solo ROHC (cabeceras)",
+                        "Comprime solo las cabeceras IP/UDP/RTP (como ROHC en PDCP); la carga viaja tal cual."),
+          "bandido_ucb": ("Bandido UCB (IA): elige por paquete",
+                          "La IA del lab: un bandido UCB con descuento que elige, paquete a paquete, entre "
+                          "ninguno y los mejores códecs, según el tamaño y la entropía del paquete.")}
+
+
+def textos_algoritmo(alg: str) -> tuple[str, str]:
+    """(título, descripción) de un algoritmo del reporte. Los códecs: "ROHC + <título>"."""
+    if alg in TEXTOS:
+        return TEXTOS[alg]
+    cls = next((k for k in C.REGISTRO.values() if k.nombre == alg), None)
+    if cls is None:
+        return alg, ""
+    return f"ROHC + {cls.titulo or alg}", cls.descripcion
 
 
 def _h(conteo: Counter) -> float:
@@ -125,7 +144,86 @@ def evaluar(m, mezcla) -> dict:
         alg = NOMBRES.get(nombre, nombre.replace("ROHC + ", ""))
         print(f"  {alg}...", flush=True)
         res[alg] = {canal: medir(m, mezcla, fab, canal) for canal in CANALES}
-    return {"paquetes": len(mezcla), "p_perdida": P_PERDIDA, "algoritmos": res}
+    print("  tasa-distorsión IoT...", flush=True)
+    return {"paquetes": len(mezcla), "p_perdida": P_PERDIDA, "algoritmos": res,
+            "tasa_distorsion_iot": tasa_distorsion_iot(m, mezcla)}
+
+
+# ═══════════════════════════ con pérdida: tasa-distorsión de la telemetría ═══════════════════════════
+# Escalas de los pasos de PredictivoIoT (× PASOS_IOT). 0 = pasos de 1e-6: en la práctica sin pérdida.
+ESCALAS_IOT = (0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0)
+CAMPOS_IOT = ("temp", "hum", "bat")
+
+
+def _pasos(escala: float) -> dict:
+    return {k: (1e-6 if escala == 0 else v * escala) for k, v in C.PASOS_IOT.items()}
+
+
+def tasa_distorsion_iot(m, mezcla) -> dict:
+    """Solo los paquetes iot_json del flujo, con PredictivoIoT a varias escalas de paso y, como
+    referencia, con los mejores códecs sin pérdida. Por cada punto: bytes, ahorro, error máximo
+    y medio por campo, % de paquetes dentro de la tolerancia (error ≤ paso/2 en todos los campos)
+    e I(X;Y)/H(X) de cada medida.
+
+    Aquí I(X;Y) se mide sobre los VALORES de cada campo (X = lectura original, Y = la que recibe el
+    receptor; un paquete perdido es Y = borrado), no byte a byte: con pérdida el JSON cambia de
+    largo (21.53 → 21.5) y alinear bytes por posición ya no compara lo mismo. Con ~600 lecturas
+    el estimador directo tiene sesgo (H no puede pasar de log2 600 ≈ 9,2 bits), así que sirve para
+    comparar puntos entre sí."""
+    iot = [p for clase, _, p in mezcla if clase == "iot_json"]
+    puntos = [("predictivo", e) for e in ESCALAS_IOT] + [("sin_perdida", c) for c in (C.ZSTD_DICT, C.DEFLATE_FLUJO)
+                                                           if c in C.CODECS]
+    filas = []
+    for metodo, param in puntos:
+        con_perdida = metodo == "predictivo"
+        pasos = _pasos(param) if con_perdida else None
+        etiqueta = f"predictivo ×{param:g}" if con_perdida else C.CODECS[param]
+        for canal in CANALES:
+            tx = C.Compresor(m, reinicio_flujo=16, perdida_iot=pasos)
+            rx = C.Descompresor(m)
+            caen = random.Random(SEMILLA)
+            bo = bc = llegaron = dentro = dañados = 0
+            err = {k: [] for k in CAMPOS_IOT}
+            xy = {k: (Counter(), Counter(), Counter()) for k in CAMPOS_IOT}
+            for p in iot:
+                marco, _ = tx.empaquetar(p, C.PREDICTIVO_IOT if con_perdida else param)
+                bo += len(p); bc += len(marco)
+                orig = json.loads(p[28:])
+                rec = None
+                if not (canal == "perdida_1pct" and caen.random() < P_PERDIDA):
+                    llegaron += 1
+                    try:
+                        r = rx.desempaquetar(marco)
+                        e = C.PredictivoIoT.error_campos(p[28:], r[28:])
+                        rec = json.loads(r[28:]) if e is not None else None
+                    except Exception:
+                        e = None
+                    if e is None:
+                        dañados += 1
+                    else:
+                        tol = pasos or {}
+                        if all(e[k] <= tol.get(k, 0) / 2 + 1e-9 for k in CAMPOS_IOT):
+                            dentro += 1
+                        for k in CAMPOS_IOT:
+                            err[k].append(e[k])
+                for k in CAMPOS_IOT:
+                    y = rec[k] if rec else "borrado"
+                    xy[k][0].update([orig[k]]); xy[k][1].update([y]); xy[k][2].update([(orig[k], y)])
+            info = {}
+            for k in CAMPOS_IOT:
+                hx, hy, hxy = (_h(c) for c in xy[k])
+                info[k] = round(100 * max(0.0, hx + hy - hxy) / hx, 2) if hx else 100.0
+            filas.append({
+                "metodo": etiqueta, "escala": param if con_perdida else None, "canal": canal,
+                "pasos": pasos, "paquetes": len(iot), "bytes_original": bo, "bytes_comprimido": bc,
+                "bytes_por_paquete": round(bc / len(iot), 2), "ahorro_pct": round(100 * (1 - bc / bo), 2),
+                "error_max": {k: round(max(v), 6) if v else None for k, v in err.items()},
+                "error_medio": {k: round(sum(v) / len(v), 6) if v else None for k, v in err.items()},
+                "dentro_tolerancia_pct": round(100 * dentro / llegaron, 2) if llegaron else 0.0,
+                "dañados_pct": round(100 * dañados / llegaron, 2) if llegaron else 0.0,
+                "info_entregada_pct": info,
+                "info_entregada_media_pct": round(sum(info.values()) / len(info), 2)})
+    return {"campos": list(CAMPOS_IOT), "pasos_base": C.PASOS_IOT, "filas": filas}
 
 
 # ═══════════════════════════ Prometheus / pushgateway ═══════════════════════════
@@ -136,9 +234,22 @@ def texto_prometheus(r: dict) -> str:
     def g(nombre, ayuda, etiquetas, valor):
         if nombre not in lineas:
             lineas[nombre] = [f"# HELP {nombre} {ayuda}", f"# TYPE {nombre} gauge"]
-        et = ",".join(f'{k}="{v}"' for k, v in etiquetas.items())
+        esc = lambda v: str(v).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        et = ",".join(f'{k}="{esc(v)}"' for k, v in etiquetas.items())
         lineas[nombre].append(f"{nombre}{{{et}}} {valor}")
 
+    # Para los menús de Grafana: el texto que se ve (numerado, para que salga en este orden) y la
+    # descripción de cada algoritmo y de cada clase. Valor siempre 1; lo útil son las etiquetas.
+    for i, alg in enumerate(r["algoritmos"], 1):
+        titulo, desc = textos_algoritmo(alg)
+        g("lab5g_cmp_eval_algoritmo_info", "Titulo y descripcion de cada algoritmo (para los menus)",
+          {"algoritmo": alg, "texto": f"{i:02d} · {titulo}", "descripcion": desc}, 1)
+    clases = next(iter(r["algoritmos"].values()))["perfecto"]
+    for clase in clases:
+        texto = "Todas las clases (flujo mezclado)" if clase == "todas" else \
+            f"{clase} — {T.DESCRIPCION_CLASE.get(clase, '')}"
+        g("lab5g_cmp_eval_clase_info", "Descripcion de cada clase de trafico (para los menus)",
+          {"clase": clase, "texto": texto}, 1)
     for alg, canales in r["algoritmos"].items():
         for clase, x in canales["perfecto"].items():
             e = {"algoritmo": alg, "clase": clase}
@@ -166,6 +277,17 @@ def texto_prometheus(r: dict) -> str:
                 g("lab5g_cmp_eval_info_entregada_pct", "I(O;R) / H(O): fraccion de la informacion que llega", e,
                   x["recuperado"]["info_entregada_pct"])
                 g("lab5g_cmp_eval_mal_reconstruidos_pct", "Paquetes que llegan pero salen mal", e, x["mal_pct"])
+    for f in r.get("tasa_distorsion_iot", {}).get("filas", []):
+        e = {"metodo": f["metodo"], "canal": f["canal"]}
+        g("lab5g_cmp_eval_td_ahorro_pct", "IoT: ahorro de bytes por metodo (tasa-distorsion)", e, f["ahorro_pct"])
+        g("lab5g_cmp_eval_td_bytes_por_paquete", "IoT: bytes por paquete transmitidos", e, f["bytes_por_paquete"])
+        g("lab5g_cmp_eval_td_dentro_tolerancia_pct", "IoT: paquetes recibidos con error <= paso/2 en todos los campos",
+          e, f["dentro_tolerancia_pct"])
+        g("lab5g_cmp_eval_td_info_entregada_pct", "IoT: I(X;Y)/H(X) medio de las medidas (valores, no bytes)", e,
+          f["info_entregada_media_pct"])
+        for campo, v in f["error_max"].items():
+            if v is not None:
+                g("lab5g_cmp_eval_td_error_max", "IoT: error absoluto maximo por campo", dict(e, campo=campo), v)
     g("lab5g_cmp_eval_ultima_corrida_segundos", "Hora (epoch) de la ultima evaluacion", {"job_eval": "informacion"},
       int(time.time()))
     return "\n".join(l for v in lineas.values() for l in v) + "\n"
@@ -207,4 +329,17 @@ def markdown(r: dict) -> str:
         md += f"| {alg} | " + " | ".join(
             f"{ca['perfecto'][c]['comprimido']['ahorro_pct']} (H {ca['perfecto'][c]['comprimido']['entropia']})"
             for c in clases) + " |\n"
+    td = r.get("tasa_distorsion_iot")
+    if td:
+        base = ", ".join(f"{k} {v:g}" for k, v in td["pasos_base"].items())
+        md += ("\n## 4. Con pérdida: tasa-distorsión de la telemetría IoT (`predictivo_iot`)\n\n"
+               f"Solo los paquetes iot_json. «×e» = pasos de cuantización × e (×1 = {base}); ×0 = pasos de "
+               "1e-6, en la práctica sin pérdida. «Dentro de tolerancia» = error ≤ paso/2 en temp, hum y bat. "
+               "«I/H» = información mutua entre la lectura original y la recibida, sobre los valores.\n\n"
+               "| método | canal | bytes/paquete | ahorro % | error máx temp / hum / bat | dentro de tolerancia % | "
+               "dañados % | I/H medio % |\n|---|---|---:|---:|---|---:|---:|---:|\n")
+        for f in td["filas"]:
+            em = " / ".join("—" if f["error_max"][k] is None else f"{f['error_max'][k]:g}" for k in td["campos"])
+            md += (f"| {f['metodo']} | {f['canal']} | {f['bytes_por_paquete']} | {f['ahorro_pct']} | {em} | "
+                   f"{f['dentro_tolerancia_pct']} | {f['dañados_pct']} | {f['info_entregada_media_pct']} |\n")
     return md

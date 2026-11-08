@@ -8,12 +8,12 @@ cual, qué hubo que cambiar y por qué.
 **Resumen:**
 
 1. El códec del Lab 3 tal cual **no es viable por paquete**: un paquete IoT de 92 B se vuelve un `.tic` de 300 B.
-2. Lo que sí sirve es **comprimir cabeceras (ROHC) más DEFLATE con diccionario y estado por flujo**, que es lo que 3GPP ya hace en PDCP (ROHC y UDC).
-3. La IA (el mismo bandido UCB) sigue siendo útil, pero ahora elige **qué códec usar en cada paquete, incluido "ninguno"**, no k.
-4. Resultado sobre tráfico de prueba que el modelo no vio: **22,4 %** menos bytes. Con eso, el bandido solo le pasa al compresor la mitad de los bytes; un códec fijo se los pasa todos.
+2. Lo que sí sirve es **comprimir cabeceras (ROHC) más un compresor con diccionario entrenado**: DEFLATE con estado por flujo (lo que 3GPP hace en PDCP con UDC) o **zstd con diccionario**, que no guarda estado y por eso aguanta pérdidas.
+3. La IA (el mismo bandido UCB) sigue siendo útil, pero ahora elige **qué códec usar en cada paquete, incluido "ninguno"**, no k. Puede premiarse por bytes ahorrados o **por latencia**, sabiendo la velocidad del enlace (§4.5.1).
+4. Resultado sobre tráfico de prueba que el modelo no vio: **21,0 %** menos bytes, y con 1 % de pérdida entrega **99,1 %** de la información (§4.6). El bandido solo le pasa al compresor el 40 % de los bytes; un códec fijo se los pasa todos.
 
 Todo está en [`compresion/`](../compresion). Solo usa la biblioteca estándar de Python, así
-que corre en `python:3.12-alpine` sin instalar nada.
+que corre en `python:3.14-alpine` sin instalar nada (3.14 trae zstd en `compression.zstd`).
 
 ---
 
@@ -68,6 +68,7 @@ un bit cambiado en una cabecera o en un registro TLS invalida el paquete entero.
 | NumPy, gráficas, bitstrip, `.tic`, `--perdida` | **Se quitan.** | Nada de eso hace falta, o puede ir, en el camino de cada paquete. |
 | — | **Nuevo: ROHC-lite** (cabeceras IP/UDP/RTP, RFC 5795 simplificado, modo U). | En voz y URLLC las cabeceras son más de la mitad del paquete. |
 | — | **Nuevo: DEFLATE con diccionario entrenado** (como UDC de LTE) y **DEFLATE por flujo** (con memoria entre paquetes). | Son los que ganan en todo lo compresible. |
+| — | **Nuevo: zstd con diccionario entrenado** (Zstandard, RFC 8878; diccionario de 4 KB que entrena el propio zstd). | Lo que se usa hoy para mensajes cortos. Ahorra más que DEFLATE con diccionario con la mitad de CPU, y sin estado. |
 
 ## 4. Comparación (tráfico de prueba, 3600 paquetes, todo verificado byte a byte)
 
@@ -77,20 +78,21 @@ el ajuste en [`ajuste.md`](../compresion/resultados/ajuste.md).
 
 ### 4.1 Por clase de tráfico (% de bytes ahorrados)
 
-| Clase (slice) | B/paq | Solo ROHC | +Huffman estático | +DEFLATE | +DEFLATE dicc. | **+DEFLATE flujo** | +TIC por paquete |
-|---|---|---|---|---|---|---|---|
-| iot_json (mMTC) | 122 | 17,6 | 29,7 | 26,3 | 60,8 | **81,8** | 17,6 |
-| urllc_ctrl (URLLC) | 50 | **43,0** | 43,0 | 43,0 | 43,0 | 43,0 | 43,0 |
-| voip_rtp (eMBB) | 73 | **45,5** | 45,5 | 45,5 | 45,5 | 45,5 | 45,5 |
-| video_rtp (eMBB) | 1240 | 2,5 | 2,5 | 2,5 | 2,5 | 2,5 | 2,5 |
-| web_tls (eMBB) | 1440 | −0,07 | −0,07 | −0,07 | −0,07 | −0,07 | −0,07 |
-| http_texto (eMBB) | 1434 | −0,07 | 31,9 | 40,3 | 43,9 | **60,6** | 20,5 |
+| Clase (slice) | B/paq | Solo ROHC | +Huffman estático | +DEFLATE | +DEFLATE dicc. | +zstd dicc. | **+DEFLATE flujo** | +TIC por paquete |
+|---|---|---|---|---|---|---|---|---|
+| iot_json (mMTC) | 122 | 17,6 | 29,7 | 26,3 | 60,8 | 54,8 | **81,8** | 17,6 |
+| urllc_ctrl (URLLC) | 50 | **43,0** | 43,0 | 43,0 | 43,0 | 43,0 | 43,0 | 43,0 |
+| voip_rtp (eMBB) | 73 | **45,5** | 45,5 | 45,5 | 45,5 | 45,5 | 45,5 | 45,5 |
+| video_rtp (eMBB) | 1240 | 2,5 | 2,5 | 2,5 | 2,5 | 2,5 | 2,5 | 2,5 |
+| web_tls (eMBB) | 1440 | −0,07 | −0,07 | −0,07 | −0,07 | −0,07 | −0,07 | −0,07 |
+| http_texto (eMBB) | 1434 | −0,07 | 31,9 | 40,3 | 43,9 | 51,3 | **60,6** | 20,5 |
 
 Lectura:
 
 - En **URLLC y voz** todo el ahorro viene de las **cabeceras**. ROHC baja IP+UDP+RTP de 40 B a 5 B. La carga de voz ya viene comprimida por el códec AMR.
 - En **IoT y texto** gana la **memoria entre paquetes**: los mensajes de un sensor se parecen mucho entre sí, aunque cada uno por separado casi no tenga redundancia. Por eso Huffman, que mira un paquete a la vez, se queda en 30 %.
 - **TLS y video no se pueden comprimir.** Lo único que se pierde es el byte de marco (−0,07 %), porque todo códec cae al respaldo "sin comprimir".
+- **zstd con diccionario es el mejor de los que no guardan estado.** En texto saca 51,3 % frente a 43,9 % de DEFLATE con diccionario; en IoT queda algo por debajo (54,8 % frente a 60,8 %). DEFLATE por flujo sigue ganando en las dos, pero a costa de la robustez (§4.4).
 
 ### 4.2 Flujo mezclado (las 6 clases intercaladas, como una celda)
 
@@ -99,20 +101,33 @@ Lectura:
 | Sin compresión | 0 % | 0 |
 | Solo ROHC | 2,4 % | 0 |
 | ROHC + DEFLATE dicc. (fijo) | 18,1 % | 1 |
+| ROHC + zstd dicc. (fijo) | 20,4 % | 1 |
 | ROHC + DEFLATE flujo (fijo, sin reinicio) | 24,2 % | 1 |
 | ROHC + DEFLATE flujo (fijo, reinicio cada 16) | 22,5 % | 1 |
-| ROHC + bandido, 6 brazos, γ = 0,99 (los parámetros del Lab 3) | 22,1 % | 0,80 |
-| **ROHC + bandido, configuración de red** (3 brazos, γ = 0,999, reinicio cada 16) | **22,4 %** | **0,51** |
+| ROHC + bandido, 7 brazos, γ = 0,99 (los parámetros del Lab 3) | 21,4 % | 0,67 |
+| ROHC + bandido, configuración anterior (ninguno, DEFLATE dicc., DEFLATE flujo; c = 0,05) | 22,4 % | 0,51 |
+| **ROHC + bandido, configuración de red** (ninguno, zstd dicc., DEFLATE flujo; γ = 0,999, c = 0,02, reinicio cada 16) | **21,0 %** | **0,41** |
 
-El bandido logra casi el mismo ahorro que el mejor códec fijo, pero **solo comprime la mitad
-de los bytes**: aprendió a no gastar CPU en TLS, video, voz ni URLLC. Ahí elige "ninguno" en
-unos 450 de cada 600 paquetes; el resto es exploración.
+El bandido logra casi el mismo ahorro que el mejor códec fijo, pero **solo comprime el 40 % de
+los bytes**: aprendió a no gastar CPU en TLS, video, voz ni URLLC. Ahí elige "ninguno" en unos
+550 de cada 600 paquetes; el resto es exploración. En lo compresible aprendió un códec por clase:
+**DEFLATE por flujo para IoT** (598 de 600) y **zstd para texto** (598 de 600).
 
 La configuración de red salió de una rejilla sobre el conjunto de **entrenamiento**
-([`ajuste.md`](../compresion/resultados/ajuste.md)): de γ ∈ {0,99; 0,995; 0,999}, c ∈ {0,02; 0,05}
-y 6 o 3 brazos, quedó la de mayor ahorro con menos CPU. Quitar Huffman estático, DEFLATE sin
-diccionario y TIC (nunca fueron los mejores en ninguna clase) bajó la CPU unas 4 veces sin
-perder ahorro.
+([`ajuste.md`](../compresion/resultados/ajuste.md)): γ ∈ {0,99; 0,995; 0,999}, c ∈ {0,02; 0,05} y
+cuatro juegos de brazos. El criterio, en este orden:
+
+1. ahorro a no más de 0,5 puntos del mejor;
+2. con 1 % de pérdida, a lo sumo 2 % de paquetes mal reconstruidos;
+3. de las que cumplen, la que menos intenta comprimir. Esa es la medida de CPU que no tiene ruido:
+   en esta máquina la misma configuración dio 59 µs por paquete en una corrida y 113 µs en la
+   siguiente.
+
+Con zstd en los brazos, el bandido ahorra **1,4 puntos menos** que la configuración anterior,
+pero reconstruye mal **la mitad de paquetes** con pérdida (1,8 % frente a 3,5 %) y explora
+menos. El criterio de antes, "mayor ahorro y luego menos CPU", no miraba la robustez y elegía
+DEFLATE con diccionario. Quitar Huffman estático, DEFLATE sin diccionario y TIC, que nunca
+fueron los mejores en ninguna clase, baja la CPU unas 4 veces sin perder ahorro.
 
 ### 4.3 Latencia por paquete (Python puro, µs, comprimir / descomprimir)
 
@@ -121,6 +136,7 @@ perder ahorro.
 | ninguno (solo ROHC) | 10 / 10 | 9 / 10 | 4 / 1 |
 | DEFLATE dicc. | 49 / 15 | 44 / 10 | 107 / 19 |
 | DEFLATE flujo | 35 / 13 | 62 / 11 | 201 / 21 |
+| zstd dicc. | 22 / 18 | 22 / 13 | 105 / 13 |
 | Huffman estático | 44 / 347 | 20 / 12 | 946 / 6321 |
 | TIC por paquete | 341 / 16 | 99 / 12 | 5179 / 7837 |
 
@@ -134,9 +150,11 @@ o en hardware.
 | Caso | Paquetes recibidos que salen mal |
 |---|---|
 | ROHC + DEFLATE dicc. (sin estado) | 0,14 % |
+| ROHC + zstd dicc. (sin estado) | 0,14 % |
 | ROHC + DEFLATE flujo, sin reinicio | **26,5 %** |
 | ROHC + DEFLATE flujo, reinicio cada 16 paquetes | 3,1 % |
-| ROHC + bandido, configuración de red | 3,5 % |
+| ROHC + bandido, configuración anterior (con DEFLATE dicc.) | 3,5 % |
+| ROHC + bandido, configuración de red (con zstd dicc.) | 1,8 % |
 
 Este es el límite más importante. Cuando se pierde un paquete, el descompresor por flujo queda
 desincronizado hasta el siguiente reinicio. Reiniciar cada 16 paquetes cuesta 1,7 puntos de
@@ -158,13 +176,14 @@ paquete y trata compresor → enlace → descompresor como tres colas M/G/1 en s
 
 Latencia media del flujo mezclado, en ms, con la CPU medida (Python):
 
-| Enlace | Carga | Sin compresión | Solo ROHC | DEFLATE dicc. | DEFLATE flujo | Bandido |
-|---|---|---|---|---|---|---|
-| 100 kbps | 80 % | 267 | 244 | 137 | **122** | 122 |
-| 1 Mbps | 80 % | 26,7 | 24,5 | 13,8 | 12,3 | **12,3** |
-| 10 Mbps | 80 % | 2,67 | 2,46 | 1,49 | 1,36 | **1,32** |
-| 100 Mbps | 80 % | 0,267 | **0,266** | ∞ | ∞ | ∞ |
-| 1 Gbps | 50 % | **0,011** | 0,113 | ∞ | ∞ | ∞ |
+| Enlace | Carga | Sin compresión | Solo ROHC | DEFLATE dicc. | zstd dicc. | DEFLATE flujo | Bandido (ahorro) | Bandido (latencia) |
+|---|---|---|---|---|---|---|---|---|
+| 100 kbps | 80 % | 267 | 244 | 137 | 128 | **122** | 126 | 126 |
+| 1 Mbps | 80 % | 26,7 | 24,5 | 13,8 | 12,8 | **12,3** | 12,7 | 12,7 |
+| 10 Mbps | 80 % | 2,67 | 2,46 | 1,49 | 1,34 | 1,39 | 1,35 | **1,33** |
+| 100 Mbps | 80 % | 0,267 | 0,267 | ∞ | **0,237** | ∞ | 0,791 | 0,282 |
+| 100 Mbps | 95 % | 1,05 | 0,75 | ∞ | **0,333** | ∞ | ∞ | 0,762 |
+| 1 Gbps | 50 % | **0,011** | 0,132 | ∞ | ∞ | ∞ | ∞ | ∞ |
 
 ∞ significa que el compresor en Python no alcanza a procesar todos los paquetes que llegan.
 
@@ -173,8 +192,10 @@ Lo que dice:
 - **Enlace lento o cargado (≤ 10 Mbps): comprimir baja la latencia a la mitad o menos.** Los
   bytes que se ahorran pesan más que la CPU que se gasta, y la cola se encoge mucho porque la
   espera crece como 1/(1 − ocupación).
-- **Enlace rápido (≥ 100 Mbps con Python): comprimir solo suma latencia, o el compresor no da
-  abasto.** Solo ROHC, que es muy barato, todavía empata o gana un poco con carga alta.
+- **Enlace rápido (≥ 100 Mbps con Python): casi todo compresor suma latencia, o no da
+  abasto.** La excepción es zstd con diccionario, que por ser el más barato todavía gana a
+  100 Mbps con carga alta (0,33 ms frente a 1,05 ms sin comprimir). A 1 Gbps no gana nadie: ni
+  siquiera ROHC en Python da abasto.
 - **Con la CPU 10× más rápida** (el caso de C o del hardware de la estación base), la frontera
   sube un orden de magnitud: el bandido gana hasta ~100 Mbps.
 - **Tráfico cifrado (TLS): ningún algoritmo gana a ninguna velocidad.** Por eso el bandido
@@ -182,14 +203,52 @@ Lo que dice:
 - **Velocidad de equilibrio por clase** (carga 50 %, Python): VoIP y URLLC ganan con ROHC por
   debajo de ~13–15 Mbps; IoT con DEFLATE flujo, por debajo de ~11 Mbps; texto, por debajo de
   ~50 Mbps.
-- **El ganador de menor latencia no siempre es el más robusto.** DEFLATE flujo y el bandido
-  reconstruyen mal ~3 % de los paquetes con 1 % de pérdida. Si se exige ≤ 1 %, el ganador en
-  enlaces lentos pasa a ser DEFLATE con diccionario, que no guarda estado.
+- **El ganador de menor latencia no siempre es el más robusto.** DEFLATE flujo reconstruye mal
+  ~3 % de los paquetes con 1 % de pérdida y el bandido 1,8 %. Si se exige ≤ 1 %, el ganador en
+  enlaces lentos pasa a ser zstd con diccionario, que no guarda estado.
 
 Lo que el modelo deja fuera: la propagación, que es igual para todos, y el planificador de radio
 de 5G. Este último premia todavía más a los paquetes chicos, así que el modelo es conservador a
 favor de no comprimir. El lab no puede mostrar la ganancia tal cual, porque sus enlaces son
 puentes de Docker de varios Gbps. Para verla habría que limitar `uesimtun0` con `tc`.
+
+#### 4.5.1 El bandido premiado por latencia
+
+El bandido normal se premia con `ahorro − 0,01`: no sabe nada del enlace, así que a 100 Mbps
+sigue comprimiendo y suma latencia. El **bandido por latencia** es el mismo modelo, con los
+mismos brazos, el mismo contexto y la misma regla UCB. Solo cambia el premio, que ahora usa un
+dato más, la velocidad del enlace *v*:
+
+```
+r = (tiempo ganado en el enlace − tiempo de CPU) / tiempo de la carga sin comprimir
+  = ahorro − t_cpu · v / (8 · bytes de la carga)
+```
+
+Es la fracción del tiempo de transmisión que se ahorra, ya descontado lo que se tardó en comprimir.
+`t_cpu` se mide con el reloj del emisor y solo incluye comprimir, porque el emisor no ve cuánto
+tarda el receptor. "Ninguno" vale 0. Cuando el enlace es lento, el término de CPU es despreciable
+y gana el que más ahorra; cuando es rápido, la CPU pesa más que los bytes y gana "ninguno". Es la
+cuenta de §4.5, pero aprendida en vivo, paquete a paquete.
+
+Lo que aprende a cada velocidad (`balance.py`, CPU de Python):
+
+| Enlace | Elige "ninguno" | Elige zstd | Elige DEFLATE flujo | Ahorro |
+|---|---|---|---|---|
+| 100 kbps | 47 % | 30 % | 23 % | 21,0 % |
+| 10 Mbps | 76 % | 8 % | 17 % | 21,2 % |
+| 100 Mbps | **99,7 %** | 0,2 % | 0,2 % | 2,5 % (solo ROHC) |
+
+- **A 10 Mbps es la política de menor latencia de todas** (1,33 ms con 80 % de carga), por encima de
+  cualquier códec fijo y del bandido normal.
+- **A 100 Mbps deja de comprimir**, y por eso no se satura como el bandido normal (0,28 ms frente a
+  0,79 ms con 80 % de carga; con 95 % el bandido normal ya no da abasto).
+- **Límite:** el premio mide el tiempo de *servicio*, no el de *cola*. Con el enlace casi lleno
+  (95 % a 100 Mbps), comprimir con zstd igual convendría porque achica la cola, y el bandido no
+  lo ve. Para eso habría que darle también la ocupación del enlace.
+
+En la red, el bandido por latencia se activa con la variable `VELOCIDAD_ENLACE_BPS` en `cmp-ue` y
+`cmp-dn` (por ejemplo, `1000000` si `uesimtun0` se limita a 1 Mbps con `tc`). Sin definirla, el
+bandido se premia por ahorro, como antes.
 
 ### 4.6 Original, comprimido y recuperado: la información mutua
 
@@ -211,17 +270,23 @@ Flujo mezclado (3600 paquetes, H(O) = 7,57 bits por byte):
 | sin compresión | 0 % | 7,57 | 7,57 | 7,50 | 99,15 % | 0 % |
 | solo ROHC | 2,4 % | 7,57 | 7,57 | 7,50 | 99,15 % | 0,14 % |
 | DEFLATE dicc. | 18,1 % | 7,99 | 7,57 | 7,50 | 99,15 % | 0,14 % |
+| zstd dicc. | 20,4 % | 7,99 | 7,57 | 7,50 | 99,15 % | 0,14 % |
 | DEFLATE flujo | 22,5 % | 7,99 | 7,57 | 7,34 | **97,0 %** | 3,1 % |
-| bandido UCB | 22,4 % | 7,99 | 7,57 | 7,30 | **96,5 %** | 3,5 % |
+| bandido UCB, configuración anterior (con DEFLATE dicc.) | 22,4 % | 7,99 | 7,57 | 7,30 | **96,5 %** | 3,5 % |
+| bandido UCB, configuración de red (con zstd dicc.) | 21,0 % | 7,99 | 7,57 | 7,50 | **99,1 %** | 1,8 % |
 
 Lo que dice:
 
 - **Con canal perfecto, todos dan I(O;R) = H(O).** Ningún algoritmo pierde información: es la
   prueba de que todos son sin pérdida.
 - **Con 1 % de pérdida, los algoritmos se separan.** El 0,85 % que falta en los que no guardan
-  estado es lo que se lleva el propio canal. DEFLATE por flujo y el bandido pierden 2–3 puntos
-  más, porque un paquete perdido desincroniza a los siguientes del mismo flujo. En texto
-  (`http_texto`) entregan solo 89,8 % y 87,5 %.
+  estado es lo que se lleva el propio canal. DEFLATE por flujo pierde 2 puntos más, porque un
+  paquete perdido desincroniza a los siguientes del mismo flujo; en texto (`http_texto`) entrega
+  solo 89,8 %.
+- **El bandido con zstd recupera casi toda esa información.** Antes entregaba 96,5 % (87,5 % en
+  texto). Ahora elige zstd, que no guarda estado, para el texto, y su texto llega igual que sin
+  comprimir (98,5 %). Solo usa DEFLATE por flujo para IoT, donde es mucho mejor (81,8 % frente a
+  54,8 %), y ahí paga 2 puntos (96,7 %). Cuesta 1,4 puntos de ahorro.
 - **H(C) sube hacia 8 bits por byte.** El comprimido queda casi sin redundancia: la misma
   información cabe en menos bytes.
 - **No se reporta I(O;C).** El comprimido es una función invertible del original (si no, el
@@ -229,9 +294,9 @@ Lo que dice:
   sin pérdida. Lo que los distingue es en cuántos bytes meten esa información: la razón de
   compresión y H(C).
 
-Es el mismo balance de §4.4, medido ahora en bits de información: el bandido gana en tasa y en
-velocidad, y paga en confiabilidad cuando el canal pierde paquetes. En PDCP, RLC AM retransmite
-y ese costo desaparece.
+Es el mismo balance de §4.4, medido ahora en bits de información: guardar estado gana en tasa y
+paga en confiabilidad cuando el canal pierde paquetes. En PDCP, RLC AM retransmite y ese costo
+desaparece.
 
 ### 4.7 En Grafana
 
@@ -243,6 +308,12 @@ Dos dashboards en la carpeta `lab-free5gc`, los dos con un selector de clase de 
   pérdida, velocidad y una tabla resumen). Abajo, el bandido en vivo en la red 5G.
 
 Los algoritmos salen de la etiqueta `algoritmo` de las métricas, así que uno nuevo aparece solo.
+Los menús muestran un texto legible y numerado ("09 · Bandido UCB (IA): elige por paquete"), no el
+id. En el tablero por algoritmo, un panel dice qué hace el algoritmo elegido, y en el de
+comparación una tabla explica cada uno. Esos textos vienen de las métricas
+`lab5g_cmp_eval_algoritmo_info` y `lab5g_cmp_eval_clase_info`, que publica `informacion.py` con el
+`titulo` y la `descripcion` de cada clase `Codec`. Un códec nuevo trae los suyos.
+
 Para llenarlos, con el perfil `compresion` y el pushgateway arriba:
 
 ```bash
@@ -256,6 +327,95 @@ tiempo. Los dashboards se generan con
 > ⚠️ Grafana (`grafana:latest`, la 13.2) ocupa ~440 MB, y en este host de 3,8 GB eso basta para
 > llevar el disco al 98 % por swap. Levántalo solo para mirar, y bájalo después.
 
+### 4.8 Con pérdida acotada: `predictivo_iot` y la curva tasa–distorsión
+
+Todo lo anterior es sin pérdida. Para la telemetría IoT (mMTC) hay un códec más,
+[`PredictivoIoT`](../compresion/compresores.py) (id 7), que cambia precisión por bytes a propósito:
+
+- **Cómo funciona.** Lee el JSON del sensor. Cada campo numérico se predice con el último valor
+  **reconstruido** del mismo flujo (DPCM de lazo cerrado: el emisor predice con lo mismo que verá
+  el receptor, así el error no se acumula). Solo se manda el error de predicción cuantizado con un
+  paso por campo, en varint. Los enteros (`ts`, `rssi`) y el texto viajan exactos.
+- **Pasos por defecto** (`PASOS_IOT`): temp 0,05 °C, hum 0,5 %, bat 0,005 V. El error queda
+  siempre ≤ paso/2.
+- **Marco completo cada 16 paquetes**, como `deflate_flujo`: el JSON exacto con DEFLATE y
+  diccionario, más los pasos. Si se pierde un delta, el receptor se resincroniza ahí.
+- **El receptor recibe un paquete UDP válido.** Como la carga cambia (21,53 → 21,5), el emisor
+  rehace la carga del paquete *antes* de comprimir la cabecera, con los largos y las sumas IP y UDP
+  recalculadas (`Compresor.preparar`). Si no, ROHC llevaría la suma del original y el sistema
+  operativo del receptor descartaría el paquete.
+- **No es un brazo del bandido.** Está en `CODECS_CON_PERDIDA`, aparte de `CODECS`: perder
+  precisión es una decisión de la aplicación, no algo que la IA deba aprender a premiar por bytes.
+  Se activa en el túnel con `PERDIDA_IOT` (vacío = todo sin pérdida; `1` = pasos por defecto;
+  `0.5` = la mitad; `temp=0.1,hum=1` = por campo). El resto del tráfico sigue con el bandido.
+
+Resultados (`python evaluar.py informacion`, sección 4 de
+[`resultados/informacion.md`](../compresion/resultados/informacion.md)), 600 paquetes iot_json de
+~122 B:
+
+| Método | Bytes por paquete | Ahorro | Error máx. temp / hum / bat | I(X;Y)/H(X) medio, canal perfecto | Dentro de tolerancia con 1 % de pérdida | Dañados con 1 % de pérdida |
+|---|---:|---:|---|---:|---:|---:|
+| zstd con diccionario (sin pérdida) | 55,1 | 54,8 % | 0 / 0 / 0 | 100 % | 100 % | 0 % |
+| DEFLATE por flujo (sin pérdida) | 25,4 | 79,1 % | 0 / 0 / 0 | 100 % | 90,7 % | 8,3 % |
+| predictivo ×0 (pasos 1e-6) | 20,6 | 83,1 % | 0 / 0 / 0 | 100 % | 94,1 % | 0,7 % |
+| predictivo ×1 (por defecto) | 17,4 | **85,7 %** | 0,02 / 0,2 / 0,001 | 75,9 % | 96,6 % | 0,7 % |
+| predictivo ×10 | 17,4 | 85,7 % | 0,25 / 1,9 / 0,001 | 62,0 % | 98,1 % | 0,7 % |
+
+Lo que dice:
+
+- **Es el primer algoritmo con I(X;Y) < H(X) con canal perfecto.** La información que falta es la
+  que se decidió no mandar: las décimas de grado que están por debajo del paso. Aquí I(X;Y) se mide
+  sobre los **valores** de cada campo, no byte a byte: con pérdida el JSON cambia de largo y alinear
+  bytes por posición ya no compara lo mismo. Con ~600 lecturas el estimador tiene sesgo, así que
+  sirve para comparar puntos entre sí.
+- **Aun con pasos de 1e-6 (×0, sin pérdida en la práctica) ya ahorra más que DEFLATE por flujo**
+  (83,1 % frente a 79,1 %): conocer la estructura del mensaje vale más que un compresor genérico.
+- **Más allá de ×0,1 el ahorro no sigue subiendo.** Cada error cuantizado ya cabe en 1 byte de
+  varint; lo que queda son el id, el mapa de textos, los enteros y los marcos completos. Para bajar
+  de ahí habría que codificar a nivel de bit (Golomb o aritmético), no cuantizar más grueso.
+- **Con pérdida es más robusto que DEFLATE por flujo** (0,7 % dañados frente a 8,3 %): un delta
+  perdido no rompe la descompresión, solo deja la predicción corrida hasta el siguiente marco
+  completo. Por eso "dentro de tolerancia" baja a 94–98 %, con errores de pocas décimas, no
+  basura. Los dañados son los paquetes donde el texto (`st`: "ok" → "alarma") cambió en el delta
+  perdido.
+- **bat casi no cambia** (baja 0,0001 V por lectura y se redondea a 3 decimales), así que su error
+  y su I/H casi no se mueven con la escala.
+
+En Grafana es la fila **"Tasa–distorsión (IoT, compresión con pérdida)"** del tablero de
+comparación (métricas `lab5g_cmp_eval_td_*`, etiquetas `metodo`, `canal` y `campo`).
+
+### 4.9 Mandar un archivo real por la red: la página de envío
+
+Todo lo anterior usa tráfico de prueba. Con el perfil `compresion` arriba hay además una página,
+**http://192.168.1.50:8088** (LAN o tailnet), para subir un archivo cualquiera (audio, video,
+imagen o texto, hasta 20 MB) y mandarlo por la red 5G a través del compresor, ida y vuelta:
+
+```
+navegador ─HTTP─► envio (netns de cmp-dn) ─TCP─► cmp0 ─[comprimir]─► UPF ══ 5G ══► UE ─► envio-eco
+navegador ◄─────── resultados ◄── envio ◄── cmp0 ◄─[descomprimir]══ 5G ◄─[comprimir]── envio-eco
+```
+
+- **`envio`** ([`envio.py pagina`](../compresion/envio.py)) vive en el netns de `cmp-dn` y manda el
+  archivo por TCP a 10.99.0.1, el `cmp0` del UE: la bajada la comprime `cmp-dn`.
+- **`envio-eco`** (`envio.py eco`) vive en el netns del UE, junto a `cmp-ue`, y lo devuelve por la
+  subida, que comprime `cmp-ue`.
+- La página compara lo que volvió con el original y muestra: SHA-256 de los dos, tiempo de ida y
+  vuelta, H(O), H(R), I(O;R), y por cada sentido los bytes IP que entraron al compresor, los que
+  viajaron por el túnel (marco + 28 B de IP/UDP del túnel por paquete), el ahorro y qué códec
+  eligió el bandido.
+- Esos contadores salen de `shim.py`, que ahora los sirve en JSON en `127.0.0.1:7701` de su netns.
+  Así son exactos antes y después del envío; el pushgateway solo se actualiza cada 10 s.
+
+Qué esperar: un TXT o un WAV vuelven idénticos con ahorro; un MP3, JPG o MP4 casi no ahorran
+(ya vienen comprimidos) y el bandido aprende a mandarlos con «ninguno». En todos, si el SHA-256
+coincide, I(O;R) = H(O): el compresor no perdió nada. La radio simulada de UERANSIM va a pocos
+Mbps, así que un archivo de varios MB tarda segundos o minutos.
+
+Límites: no tiene login, así que el puerto 8088 se publica en la LAN y el tailnet pero **no** va
+por `tailscale funnel`. Un envío a la vez. El archivo vive solo en memoria y se descarta al
+terminar. Los contadores son de todo el túnel: si a la vez corre el generador de tráfico, se
+mezcla con él.
+
 ## 5. Implementación en el lab
 
 ```
@@ -267,7 +427,7 @@ cmp-ue (netns del UE)                                                     cmp-dn
 - [`compresion/bandido.py`](../compresion/bandido.py): bandido UCB y `EmisorAdaptativo`, el emisor que usa la red.
 - [`compresion/shim.py`](../compresion/shim.py): el túnel TUN↔UDP, en los dos lados. Publica `lab5g_cmp_*` al pushgateway.
 - [`compresion/trafico.py`](../compresion/trafico.py), [`generar.py`](../compresion/generar.py), [`evaluar.py`](../compresion/evaluar.py), [`medir.sh`](../compresion/medir.sh), [`test_compresores.py`](../compresion/test_compresores.py).
-- [`compresion/modelo.json`](../compresion/modelo.json): tabla de Huffman y diccionario de 4 KB. Los dos extremos cargan el mismo archivo.
+- [`compresion/modelo.json`](../compresion/modelo.json): tabla de Huffman, diccionario de DEFLATE de 4 KB y diccionario de zstd de 4 KB (entrenado por zstd). Los dos extremos cargan el mismo archivo.
 
 ### 5.1 Agregar un algoritmo de compresión (patrón Strategy)
 
@@ -279,8 +439,10 @@ patrón: el bandido solo ve ids, y la cabecera se comprime antes, igual para tod
 
 ```python
 @registrar
-class Zstd(Codec):
-    id, nombre = 6, "zstd"                 # id libre de 0-15; un id usado no se reasigna
+class Brotli(Codec):
+    id, nombre = 7, "brotli"               # id libre de 0-15; un id usado no se reasigna
+    titulo = "Brotli"                      # lo que muestra el menú de Grafana
+    descripcion = "..."                    # lo que muestra el panel "Qué hace este algoritmo"
     def comprimir(self, carga, clave):     # -> (bytes, confirmar o None)
         return ..., None
     def descomprimir(self, datos):
@@ -288,9 +450,14 @@ class Zstd(Codec):
 ```
 
 Con eso el algoritmo ya se puede usar en `Compresor`/`Descompresor` y aparece solo en todas las
-mediciones de `evaluar.py comparar`: ahorro por clase, flujo mezclado, latencia y pérdidas. Para
-que el bandido lo pueda elegir en la red hay que agregarlo a `BRAZOS_RED` en
-[`bandido.py`](../compresion/bandido.py).
+mediciones: `evaluar.py comparar` (ahorro por clase, flujo mezclado, latencia y pérdidas),
+`balance` e `informacion`, y en Grafana. Para que el bandido lo pueda elegir en la red hay que
+agregarlo a `BRAZOS_RED` en [`bandido.py`](../compresion/bandido.py).
+
+`ZstdDiccionario` (id 6) se agregó así, sin tocar `Compresor`, `Descompresor` ni las
+mediciones. Como zstd solo está en la biblioteca estándar desde Python 3.14, se registra solo
+si hay zstd disponible: con un Python más viejo, el resto funciona igual. En un PC se puede
+usar el paquete `zstandard`.
 
 Reglas del contrato, para que emisor y receptor no se desincronicen:
 
@@ -301,7 +468,9 @@ Reglas del contrato, para que emisor y receptor no se desincronicen:
   se manda con `ninguno` y el receptor nunca lo ve por ese códec.
 - Lo que deban compartir los dos extremos (tablas, diccionarios) sale del `Modelo`
   (`modelo.json`).
-- Solo biblioteca estándar: los contenedores son `python:3.12-alpine` sin `pip install`.
+- Solo biblioteca estándar: los contenedores son `python:3.14-alpine` sin `pip install`. Los dos
+  extremos tienen que tener la misma versión, porque los códecs registrados tienen que ser los
+  mismos.
 
 Costo del patrón: buscar la estrategia cuesta 0,04 µs, y comprimir un paquete cuesta 35–200 µs.
 El cambio no movió ni un byte: con el mismo tráfico, `evaluar.py comparar` da exactamente los
@@ -317,7 +486,7 @@ manda por `uesimtun0` lo que sale **con la IP de la sesión PDU**
 Por eso `shim.py` amarra su socket a la IP de `uesimtun0` en vez de a `0.0.0.0`. Sin eso, el
 túnel saldría por la red de Docker y se saltaría el 5G.
 
-Perfil opcional `compresion` en `docker-compose.yaml`: dos contenedores `python:3.12-alpine` de
+Perfil opcional `compresion` en `docker-compose.yaml`: dos contenedores `python:3.14-alpine` de
 unos 15 MB de RAM cada uno. No arranca con el despliegue normal y el CI no lo toca.
 
 ```bash
@@ -325,6 +494,15 @@ export COMPOSE_PROJECT_NAME=lab5g COMPOSE_PROFILES=ran,compresion
 docker compose up -d
 bash compresion/medir.sh
 ```
+
+Para usar el bandido por latencia (§4.5.1), se define la velocidad del enlace antes de levantar
+el perfil. Por ejemplo, con `uesimtun0` limitado a 1 Mbps:
+
+```bash
+VELOCIDAD_ENLACE_BPS=1000000 docker compose up -d cmp-dn cmp-ue
+```
+
+`docker logs cmp-ue` muestra al arrancar qué códecs hay y qué premio usa el bandido.
 
 **Prueba funcional (2026-11-04, sin núcleo 5G).** Se hizo en WSL con dos network namespaces
 unidos por un veth llamado `uesimtun0`, con el mismo `shim.py` y `generar.py` y tráfico TCP y
@@ -350,8 +528,9 @@ gNB → GTP-U → UPF → `dn_net`. Las dos corridas salen con la IP de la sesi�
 
 Hubo 0 errores de descompresión en los dos lados. El ahorro coincide con la evaluación offline
 (22,4 %) y con la prueba en WSL. La bajada crece en `uesimtun0` porque cada ACK de TCP paga los
-28 B del túnel UDP; dentro del túnel es +1,7 %, igual que en WSL. Los 11 tests también pasan con
-el Python 3.12 del contenedor.
+28 B del túnel UDP; dentro del túnel es +1,7 %, igual que en WSL. Los 11 tests de entonces también
+pasaron con el Python 3.12 del contenedor. Esta medición es de la configuración anterior (antes
+de zstd); hoy los 16 tests pasan con el Python 3.14 del contenedor y su `compression.zstd`.
 
 Latencia de ida y vuelta (`ping` desde el UE, 400 paquetes a 50 por segundo):
 
@@ -384,10 +563,12 @@ bytes, pero la latencia sube. Para ver la ganancia en latencia hay que limitar l
 2. **El ROHC-lite es una versión reducida** de RFC 5795. No tiene perfil TCP, ni canal de vuelta (modo O/R), ni CRC de cabecera. Si se pierde un IR, el flujo queda sin contexto hasta el siguiente IR (cada 64 paquetes).
 3. **La latencia es de Python.** Sirve para comparar los códecs entre sí, no como cifra absoluta de un equipo real.
 4. **En el lab el compresor no está en PDCP** (§1), así que lo medido en `uesimtun0` es menor que lo que ahorraría PDCP.
-5. **La parte de IA vale por la CPU que ahorra, no por bytes extra.** Un DEFLATE por flujo fijo ahorra lo mismo o un poco más; lo que aporta el bandido es saltarse el tráfico que no se puede comprimir.
+5. **La parte de IA vale por la CPU, la robustez y la latencia, no por bytes extra.** Un DEFLATE por flujo fijo ahorra un poco más. Lo que aporta el bandido es saltarse lo que no se puede comprimir, usar el códec sin estado donde casi no se pierde ahorro (texto) y, premiado por latencia, dejar de comprimir cuando el enlace es rápido.
+6. **El bandido por latencia necesita que le digan la velocidad del enlace** (`VELOCIDAD_ENLACE_BPS`), y su premio no ve la cola (§4.5.1).
 
 ## 7. Siguientes alternativas, si se quiere ir más allá
 
-- **zstd con diccionario entrenado** (`zstd --train`) en vez de DEFLATE: suele comprimir mejor los mensajes chicos y es más rápido. Python 3.14 lo trae en la biblioteca estándar (`compression.zstd`).
+- **Codificar el error de predicción a nivel de bit** (Golomb-Rice o aritmético) en `predictivo_iot`, para que la tasa siga bajando al cuantizar más grueso (§4.8). Y un delta **sin** pérdida para URLLC (posición y secuencia), donde en control no se tolera error.
+- **Darle al bandido por latencia la ocupación del enlace**, no solo la velocidad, para que vea la cola.
 - **Formatos binarios en la aplicación** (CBOR o Protobuf en vez de JSON para IoT): ahorran antes de llegar a la red, sin estado que se pueda desincronizar.
 - **ROHC completo** (biblioteca `rohc` en C) con perfil TCP, y medir en PDCP con una pila que lo implemente (OpenAirInterface o srsRAN) en vez de UERANSIM.

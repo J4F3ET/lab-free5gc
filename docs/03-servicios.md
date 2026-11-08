@@ -48,8 +48,10 @@ documento.
 | `dozzle` | `amir20/dozzle` | `obs` | obs | `8888` | el socket de Docker |
 | `blackbox` | `prom/blackbox-exporter` | `probes` | *netns del `ue`* | — | `observability/blackbox/` |
 | `iperf-probe` | `alpine:3.20` | `probes` | *netns del `ue`* | — | `observability/probe/` |
-| `cmp-ue` | `python:3.12-alpine` | `compresion` | *netns del `ue`* | — | `compresion/` (solo lectura) + `/dev/net/tun` |
-| `cmp-dn` | `python:3.12-alpine` | `compresion` | dn, obs | — | `compresion/` (solo lectura) + `/dev/net/tun` |
+| `cmp-ue` | `python:3.14-alpine` | `compresion` | *netns del `ue`* | — | `compresion/` (solo lectura) + `/dev/net/tun` |
+| `cmp-dn` | `python:3.14-alpine` | `compresion` | dn, obs | `8088` (página de `envio`) | `compresion/` (solo lectura) + `/dev/net/tun` |
+| `envio` | `python:3.14-alpine` | `compresion` | *netns de `cmp-dn`* | — (lo publica `cmp-dn`) | `compresion/` (solo lectura) |
+| `envio-eco` | `python:3.14-alpine` | `compresion` | *netns del `ue`* | — | `compresion/` (solo lectura) |
 
 Las etiquetas de imagen salen de [`.env`](../.env.example): `FREE5GC_TAG`,
 `UERANSIM_TAG`, `MONGO_TAG`.
@@ -290,7 +292,7 @@ volumes: [ /:/rootfs:ro, /var/run:/var/run:rw, /sys:/sys:ro, ... ]
 Para medir a los demás contenedores necesita ver el sistema de ficheros y los
 cgroups del anfitrión. Los montajes son de solo lectura salvo `/var/run`.
 
-### `blackbox`, `iperf-probe` y `cmp-ue`
+### `blackbox`, `iperf-probe`, `cmp-ue` y `envio-eco`
 
 ```yaml
 network_mode: "service:ue"

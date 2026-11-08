@@ -19,7 +19,8 @@ Ojo con lo que esto mide: en el lab el compresor no puede ir dentro de PDCP (UER
 implementa), así que cada paquete comprimido paga 28 B de cabecera IP+UDP del túnel que en
 PDCP no existirían. Ver docs/08-compresion-paquetes.md.
 
-Solo biblioteca estándar: corre en python:3.12-alpine sin instalar nada.
+Solo biblioteca estándar: corre en python:3.14-alpine sin instalar nada (3.14 trae zstd en
+compression.zstd; con un Python más viejo todo funciona igual, solo sin el códec zstd_dict).
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ import fcntl, os, select, socket, struct, subprocess, sys, threading, time, urll
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from compresores import CODECS, Descompresor, Modelo
+from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import EmisorAdaptativo
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
@@ -72,7 +73,7 @@ class Metricas:
     def __init__(self, lado: str):
         self.lado = lado
         self.c = {"orig_tx": 0, "marco_tx": 0, "orig_rx": 0, "marco_rx": 0, "errores": 0}
-        self.codec = {n: 0 for n in CODECS.values()}
+        self.codec = {n: 0 for n in [*CODECS.values(), *CODECS_CON_PERDIDA.values()]}
 
     def texto(self) -> str:
         l = f'lado="{self.lado}"'
@@ -95,6 +96,23 @@ class Metricas:
                 urllib.request.urlopen(req, timeout=3).read()
             except OSError as e:
                 print(f"[cmp-{self.lado}] pushgateway: {e}", flush=True)
+
+
+def servir_contadores(met: Metricas, puerto: int) -> None:
+    """Los contadores al instante, en JSON, solo para 127.0.0.1 del mismo netns: envio.py (que
+    comparte netns con cmp-dn o con el UE) los lee antes y después de mandar un archivo. El
+    pushgateway sirve para Grafana pero se actualiza cada 10 s."""
+    import json
+
+    def atender():
+        s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", puerto)); s.listen(8)
+        while True:
+            c, _ = s.accept()
+            with c:
+                c.sendall(json.dumps({"bytes": dict(met.c), "codec": dict(met.codec)}).encode())
+
+    threading.Thread(target=atender, daemon=True).start()
 
 
 def esperar_interfaz(nombre: str, segundos: int = 300) -> None:
@@ -131,11 +149,24 @@ def main() -> None:
     par = (os.environ.get("PAR", "10.100.204.30"), PUERTO) if lado == "ue" else None
     if lado == "dn":
         sumideros()
-    emisor = EmisorAdaptativo(modelo, reinicio_flujo=int(os.environ.get("REINICIO_FLUJO", "16")))
+    # VELOCIDAD_ENLACE_BPS: si se define, el bandido se premia por latencia sabiendo esa velocidad
+    # (p. ej. 1000000 si el enlace se limitó a 1 Mbps con tc). Sin definir: premio por ahorro.
+    vel = os.environ.get("VELOCIDAD_ENLACE_BPS")
+    # PERDIDA_IOT: activa la compresión con pérdida acotada para la telemetría JSON. "1" = pasos
+    # por defecto (temp ±0,025, hum ±0,25, bat ±0,0025); "2" = el doble; o "temp=0.1,hum=1".
+    # Sin definir (o vacío): todo sin pérdida. Basta con definirla en el lado que envía.
+    perdida = os.environ.get("PERDIDA_IOT") or None
+    pasos = pasos_desde_texto(perdida) if perdida else None
+    emisor = EmisorAdaptativo(modelo, reinicio_flujo=int(os.environ.get("REINICIO_FLUJO", "16")),
+                              velocidad_bps=float(vel) if vel else None, perdida_iot=pasos)
     rx = Descompresor(modelo)
     met = Metricas(lado)
+    servir_contadores(met, int(os.environ.get("PUERTO_CONTADORES", "7701")))
     ultimo_pub = ultimo_ka = 0.0
-    print(f"[cmp-{lado}] listo: cmp0 ↔ UDP {PUERTO}" + (f" → {par[0]}" if par else ""), flush=True)
+    print(f"[cmp-{lado}] listo: cmp0 ↔ UDP {PUERTO}" + (f" → {par[0]}" if par else "")
+          + f" | códecs: {', '.join(CODECS.values())} | premio: "
+          + (f"latencia a {float(vel):g} bps" if vel else "ahorro")
+          + (f" | pérdida IoT: {pasos}" if pasos else ""), flush=True)
     while True:
         r, _, _ = select.select([tun, sock], [], [], 1.0)
         ahora = time.time()
@@ -145,7 +176,7 @@ def main() -> None:
                 marco, cod = emisor.enviar(pkt)
                 sock.sendto(marco, par)
                 met.c["orig_tx"] += len(pkt); met.c["marco_tx"] += len(marco)
-                met.codec[CODECS[cod]] += 1
+                met.codec[nombre_codec(cod)] += 1
         if sock in r:
             marco, origen = sock.recvfrom(65535)
             if lado == "dn":

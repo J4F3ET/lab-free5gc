@@ -12,7 +12,10 @@ escenario (velocidad del enlace × carga), para decir cuál conviene en cada cas
 Políticas evaluadas (todas automáticas: un códec nuevo registrado con @registrar entra solo):
   · sin compresión (crudo) — la referencia: 0 CPU, todos los bytes
   · ROHC + cada códec de compresores.CODECS, fijo
-  · ROHC + bandido UCB (configuración de red), la única política que elige el códec
+  · ROHC + bandido UCB (configuración de red), que elige el códec por ahorro de bytes
+  · ROHC + bandido UCB por latencia: el mismo bandido, pero premiado con el tiempo ganado
+    (bandido.py, velocidad_bps). Como lo que aprende depende del enlace, se corre una vez POR
+    VELOCIDAD, sabiendo esa velocidad, y en cada escenario se usa la corrida de su velocidad.
 
 Modelo de latencia (por paquete, en promedio):
 
@@ -75,6 +78,18 @@ def politicas(m) -> list[tuple[str, Callable[[], Callable[[bytes], bytes]]]]:
     pol += [(f"ROHC + {nom}", fija(cod)) for cod, nom in C.CODECS.items()]
     pol.append(("ROHC + bandido UCB", bandido))
     return pol
+
+
+LATENCIA = "ROHC + bandido UCB (latencia)"
+
+
+def bandido_latencia(m, velocidad: float, factor_cpu: float):
+    """Fábrica del bandido premiado por latencia, que sabe la velocidad del enlace."""
+    def fab():
+        em = EmisorAdaptativo(m, reinicio_flujo=REINICIO, velocidad_bps=velocidad, factor_cpu=factor_cpu)
+        fab.emisor = em
+        return lambda p: em.enviar(p)[0]
+    return fab
 
 
 def medir(m, mezcla, fab) -> list[tuple[str, int, int, float, float]]:
@@ -172,11 +187,25 @@ def evaluar(m, mezcla) -> dict:
     for etiqueta, factor in (("python", 1.0), ("cpu_10x", 0.1)):
         mo = {n: momentos(f, factor) for n, f in medidas.items()}
         ref = mo["sin compresión"]
+        # El bandido por latencia, una corrida por velocidad (aprende con el costo de CPU de esta vista).
+        lat_v = {}
+        for v in VELOCIDADES:
+            print(f"  midiendo {LATENCIA} a {_nombre(v)} ({etiqueta})...", flush=True)
+            fab = bandido_latencia(m, v, factor)
+            fil = medir(m, mezcla, fab)
+            elegidos = fab.emisor.elegidos
+            lat_v[v] = {"momentos": momentos(fil, factor), "mal": round(pct_mal(m, mezcla, fab), 2),
+                        "ahorro_pct": round(100 * (1 - sum(f[2] for f in fil) / sum(f[1] for f in fil)), 2),
+                        "comprimir_us": round(sum(f[3] for f in fil) / len(fil) * 1e6, 1),
+                        "elegidos_pct": {C.CODECS[k]: round(100 * n / sum(elegidos.values()), 1)
+                                         for k, n in sorted(elegidos.items())}}
         rejilla = []
         for v in VELOCIDADES:
             for carga in CARGAS:
                 lat = {n: latencia(mo[n], v, carga, ref["crudo_bits"]) for n in mo}
-                robustos = {n: t for n, t in lat.items() if mal[n] <= MAX_MAL_PCT}
+                lat[LATENCIA] = latencia(lat_v[v]["momentos"], v, carga, ref["crudo_bits"])
+                mal_v = dict(mal, **{LATENCIA: lat_v[v]["mal"]})
+                robustos = {n: t for n, t in lat.items() if mal_v[n] <= MAX_MAL_PCT}
                 rejilla.append({"velocidad_bps": v, "carga": carga,
                                 "latencia_ms": {n: (round(t * 1e3, 4) if math.isfinite(t) else None)
                                                 for n, t in lat.items()},
@@ -190,7 +219,10 @@ def evaluar(m, mezcla) -> dict:
             # JSON sin Infinity: "siempre" = gana en todo el rango, None = nunca
             por_clase[clase] = {n: ("siempre" if x is not None and math.isinf(x) else x)
                                 for n, x in por_clase[clase].items()}
-        vistas[etiqueta] = {"factor_cpu": factor, "rejilla": rejilla, "equilibrio_por_clase": por_clase}
+        bandido_lat = [{"velocidad_bps": v, **{k: x for k, x in d.items() if k != "momentos"}}
+                       for v, d in lat_v.items()]
+        vistas[etiqueta] = {"factor_cpu": factor, "rejilla": rejilla, "equilibrio_por_clase": por_clase,
+                            "bandido_latencia": bandido_lat}
     resumen = []
     for nombre, fil in medidas.items():
         crudo, marco = sum(f[1] for f in fil), sum(f[2] for f in fil)
@@ -232,21 +264,32 @@ def markdown(r: dict) -> str:
                f"{f['pct_mal_1pct_perdida']} |\n")
     titulos = {"python": "CPU medida (Python, esta máquina)",
                "cpu_10x": "CPU 10× más rápida (supuesto: implementación en C o en la estación base)"}
+    rejilla_nombres = nombres + [LATENCIA]
     for i, (et, v) in enumerate(r["vistas"].items()):
-        md += (f"\n## {2 + 2 * i}. Latencia media en ms por escenario — {titulos[et]}\n\n"
+        md += (f"\n## {2 + 3 * i}. Latencia media en ms por escenario — {titulos[et]}\n\n"
                "Carga = cuánto ocuparía el enlace el tráfico SIN comprimir. **Negrita** = menor latencia. "
                f"\"Robusto\" = el mejor entre los que reconstruyen mal ≤ {MAX_MAL_PCT:g} % con 1 % de pérdida. "
-               "∞ = alguna etapa no da abasto.\n\n"
-               "| enlace | carga | " + " | ".join(corto(n) for n in nombres) + " | gana | gana (robusto) |\n"
-               "|" + "---|" * (len(nombres) + 4) + "\n")
+               "∞ = alguna etapa no da abasto. La última columna es el bandido premiado por latencia, que "
+               "sabe la velocidad del enlace.\n\n"
+               "| enlace | carga | " + " | ".join(corto(n) for n in rejilla_nombres) + " | gana | gana (robusto) |\n"
+               "|" + "---|" * (len(rejilla_nombres) + 4) + "\n")
         for c in v["rejilla"]:
             celdas = []
-            for n in nombres:
+            for n in rejilla_nombres:
                 t = _ms(c["latencia_ms"][n])
                 celdas.append(f"**{t}**" if n == c["ganador"] else t)
             md += (f"| {_nombre(c['velocidad_bps'])} | {c['carga']:.0%} | " + " | ".join(celdas)
                    + f" | {corto(c['ganador'])} | {corto(c['ganador_robusto'])} |\n")
-        md += (f"\n## {3 + 2 * i}. Velocidad de equilibrio por clase — {titulos[et]}\n\n"
+        cods = list(dict.fromkeys(k for b in v["bandido_latencia"] for k in b["elegidos_pct"]))
+        md += (f"\n## {3 + 3 * i}. Qué aprende el bandido por latencia a cada velocidad — {titulos[et]}\n\n"
+               "Mismo bandido, mismos brazos; solo cambia la velocidad del enlace que conoce. % de paquetes en "
+               "que eligió cada códec (antes del respaldo a \"ninguno\").\n\n"
+               "| enlace | ahorro % | comprimir µs/paq | % mal con 1 % de pérdida | "
+               + " | ".join(f"elige {k} %" for k in cods) + " |\n|" + "---|" * (len(cods) + 4) + "\n")
+        for b in v["bandido_latencia"]:
+            md += (f"| {_nombre(b['velocidad_bps'])} | {b['ahorro_pct']} | {b['comprimir_us']} | {b['mal']} | "
+                   + " | ".join(str(b["elegidos_pct"].get(k, 0)) for k in cods) + " |\n")
+        md += (f"\n## {4 + 3 * i}. Velocidad de equilibrio por clase — {titulos[et]}\n\n"
                f"Con carga {r['parametros']['carga_equilibrio']:.0%}: por debajo de esta velocidad de enlace la "
                "política tiene MENOS latencia que no comprimir. \"nunca\" = no ahorra lo suficiente para pagar su "
                "CPU a ninguna velocidad; \"siempre\" = gana en todo el rango probado (1 kbps a 100 Gbps).\n\n"

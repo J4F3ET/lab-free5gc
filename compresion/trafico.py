@@ -31,6 +31,10 @@ DN_IP = bytes([10, 100, 204, 10])
 CLASES = ["iot_json", "urllc_ctrl", "voip_rtp", "video_rtp", "web_tls", "http_texto"]
 SLICE = {"iot_json": "mMTC", "urllc_ctrl": "URLLC", "voip_rtp": "eMBB", "video_rtp": "eMBB",
          "web_tls": "eMBB", "http_texto": "eMBB"}
+# Texto legible de cada clase (menú de Grafana).
+DESCRIPCION_CLASE = {"iot_json": "Telemetría IoT en JSON (mMTC)", "urllc_ctrl": "Control industrial binario (URLLC)",
+                     "voip_rtp": "Voz por RTP, ya comprimida (eMBB)", "video_rtp": "Video H.264, ya comprimido (eMBB)",
+                     "web_tls": "Web HTTPS cifrada (eMBB)", "http_texto": "HTTP con texto sin cifrar (eMBB)"}
 
 # Textos reales para http_texto. Se separan por archivo: unos para entrenar, otros para probar.
 # Son copias CONGELADAS de docs/01-07 (versión del commit de86f04, con CRLF), no los docs vivos:

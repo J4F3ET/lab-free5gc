@@ -491,7 +491,9 @@ estaría midiendo la red de Docker y no la red 5G, y el número no valdría nada
 
 Un túnel que **comprime cada paquete IP entre el teléfono y el destino**:
 ROHC-lite para las cabeceras y, para la carga, el códec que elige un bandido
-UCB (la "IA" del Lab 3 de Teoría de la Información). Usa el mismo truco que las
+UCB (la "IA" del Lab 3 de Teoría de la Información) entre "ninguno", zstd con
+diccionario y DEFLATE por flujo. Si se le da la velocidad del enlace
+(`VELOCIDAD_ENLACE_BPS`), el bandido se premia por latencia en vez de por bytes. Usa el mismo truco que las
 sondas: `cmp-ue` vive dentro del teléfono, así que lo comprimido viaja de verdad
 por `uesimtun0`, el gNB, el túnel GTP-U y el UPF.
 

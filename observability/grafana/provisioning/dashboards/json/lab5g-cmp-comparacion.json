@@ -20,16 +20,18 @@
    {
     "name": "clase",
     "label": "Clase de tráfico",
+    "description": "Una clase de tráfico (slice) o todas mezcladas, como en una celda real.",
     "type": "query",
     "datasource": {
      "type": "prometheus",
      "uid": "prometheus"
     },
     "query": {
-     "query": "label_values(lab5g_cmp_eval_ahorro_pct, clase)",
+     "query": "query_result(lab5g_cmp_eval_clase_info)",
      "refId": "v"
     },
-    "definition": "label_values(lab5g_cmp_eval_ahorro_pct, clase)",
+    "definition": "query_result(lab5g_cmp_eval_clase_info)",
+    "regex": "/clase=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
     "multi": false,
@@ -62,13 +64,116 @@
    "title": "Cómo leer este tablero",
    "options": {
     "mode": "markdown",
-    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte.\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan estado por flujo arrastran la pérdida a los paquetes siguientes).\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo.\n\nCada barra es un algoritmo. `sin_compresion` es la referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete."
+    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte.\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan estado por flujo arrastran la pérdida a los paquetes siguientes).\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo.\n\nCada barra es un algoritmo. `sin_compresion` es la referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete. La tabla de la derecha dice qué es cada uno."
    },
    "id": 1,
    "gridPos": {
-    "h": 5,
-    "w": 24,
+    "h": 10,
+    "w": 10,
     "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Qué es cada algoritmo",
+   "description": "El id es el nombre que sale en las barras de este tablero.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "lab5g_cmp_eval_algoritmo_info",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "Value": true,
+       "__name__": true,
+       "instance": true,
+       "job": true
+      },
+      "indexByName": {
+       "texto": 0,
+       "algoritmo": 1,
+       "descripcion": 2
+      },
+      "renameByName": {
+       "texto": "Algoritmo",
+       "algoritmo": "Id en las barras",
+       "descripcion": "Qué hace"
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Algoritmo"
+       }
+      ]
+     }
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "md"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto",
+       "wrapText": true
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Algoritmo"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 330
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Id en las barras"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 170
+       }
+      ]
+     }
+    ]
+   },
+   "id": 2,
+   "gridPos": {
+    "h": 10,
+    "w": 14,
+    "x": 10,
     "y": 0
    },
    "datasource": {
@@ -79,13 +184,13 @@
   {
    "type": "row",
    "title": "Tasa de compresión",
-   "id": 2,
+   "id": 3,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 5
+    "y": 10
    }
   },
   {
@@ -152,12 +257,12 @@
     },
     "overrides": []
    },
-   "id": 3,
+   "id": 4,
    "gridPos": {
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 6
+    "y": 11
    },
    "datasource": {
     "type": "prometheus",
@@ -167,7 +272,7 @@
   {
    "type": "barchart",
    "title": "Entropía: original vs comprimido",
-   "description": "Un buen compresor sube H(C) hacia 8 bits por byte.",
+   "description": "Un buen compresor sube H(C) hacia 8 bits por byte. El eje va de 7 a 8 bits/byte para que se vean las diferencias; en una clase con entropía menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.",
    "targets": [
     {
      "refId": "A",
@@ -211,7 +316,7 @@
    "options": {
     "xField": "algoritmo",
     "orientation": "auto",
-    "showValue": "auto",
+    "showValue": "always",
     "groupWidth": 0.7,
     "barWidth": 0.9,
     "legend": {
@@ -236,17 +341,18 @@
       "fillOpacity": 80,
       "lineWidth": 1,
       "gradientMode": "none",
-      "axisSoftMin": 0
+      "axisSoftMin": 7,
+      "axisSoftMax": 8
      }
     },
     "overrides": []
    },
-   "id": 4,
+   "id": 5,
    "gridPos": {
     "h": 9,
     "w": 12,
     "x": 12,
-    "y": 6
+    "y": 11
    },
    "datasource": {
     "type": "prometheus",
@@ -256,19 +362,19 @@
   {
    "type": "row",
    "title": "Información mutua y confiabilidad",
-   "id": 5,
+   "id": 6,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 15
+    "y": 20
    }
   },
   {
    "type": "barchart",
    "title": "I(O;R): canal perfecto vs 1 % de pérdida",
-   "description": "Bits por byte del original que llegan al receptor.",
+   "description": "Bits por byte del original que llegan al receptor. El eje va de 7 a 8 bits/byte para que se vean las diferencias; en una clase con entropía menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.",
    "targets": [
     {
      "refId": "A",
@@ -312,7 +418,7 @@
    "options": {
     "xField": "algoritmo",
     "orientation": "auto",
-    "showValue": "auto",
+    "showValue": "always",
     "groupWidth": 0.7,
     "barWidth": 0.9,
     "legend": {
@@ -337,17 +443,18 @@
       "fillOpacity": 80,
       "lineWidth": 1,
       "gradientMode": "none",
-      "axisSoftMin": 0
+      "axisSoftMin": 7,
+      "axisSoftMax": 8
      }
     },
     "overrides": []
    },
-   "id": 6,
+   "id": 7,
    "gridPos": {
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 16
+    "y": 21
    },
    "datasource": {
     "type": "prometheus",
@@ -418,12 +525,12 @@
     },
     "overrides": []
    },
-   "id": 7,
+   "id": 8,
    "gridPos": {
     "h": 9,
     "w": 6,
     "x": 12,
-    "y": 16
+    "y": 21
    },
    "datasource": {
     "type": "prometheus",
@@ -494,12 +601,12 @@
     },
     "overrides": []
    },
-   "id": 8,
+   "id": 9,
    "gridPos": {
     "h": 9,
     "w": 6,
     "x": 18,
-    "y": 16
+    "y": 21
    },
    "datasource": {
     "type": "prometheus",
@@ -509,13 +616,13 @@
   {
    "type": "row",
    "title": "Velocidad de procesamiento",
-   "id": 9,
+   "id": 10,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 25
+    "y": 30
    }
   },
   {
@@ -599,12 +706,12 @@
     },
     "overrides": []
    },
-   "id": 10,
+   "id": 11,
    "gridPos": {
     "h": 9,
     "w": 24,
     "x": 0,
-    "y": 26
+    "y": 31
    },
    "datasource": {
     "type": "prometheus",
@@ -614,13 +721,13 @@
   {
    "type": "row",
    "title": "Resumen",
-   "id": 11,
+   "id": 12,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 35
+    "y": 40
    }
   },
   {
@@ -774,12 +881,454 @@
     },
     "overrides": []
    },
-   "id": 12,
+   "id": 13,
    "gridPos": {
     "h": 10,
     "w": 24,
     "x": 0,
-    "y": 36
+    "y": 41
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Tasa–distorsión (IoT, compresión con pérdida)",
+   "id": 14,
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 51
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Ahorro de bytes por método",
+   "description": "Solo paquetes iot_json. «predictivo ×e»: PredictivoIoT con los pasos de cuantización × e (×0 ≈ sin pérdida). zstd_dict y deflate_flujo: los mejores sin pérdida, como referencia.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_ahorro_pct{canal=\"perfecto\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {}
+     }
+    }
+   ],
+   "options": {
+    "xField": "metodo",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 15,
+   "gridPos": {
+    "h": 9,
+    "w": 8,
+    "x": 0,
+    "y": 52
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Información entregada I(X;Y)/H(X)",
+   "description": "Media de temp, hum y bat, sobre los valores (no los bytes). Con pérdida baja aun con canal perfecto: es la información que se decide no mandar.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "perfecto",
+       "Value #B": "1 % de pérdida"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "metodo",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 16,
+   "gridPos": {
+    "h": 9,
+    "w": 8,
+    "x": 8,
+    "y": 52
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Dentro de tolerancia (error ≤ paso/2)",
+   "description": "% de paquetes recibidos con todos los campos dentro de la tolerancia. Con pérdida, tras un delta perdido el receptor predice mal hasta el siguiente marco completo (cada 16).",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perfecto\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "perfecto",
+       "Value #B": "1 % de pérdida"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "metodo",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 17,
+   "gridPos": {
+    "h": 9,
+    "w": 8,
+    "x": 16,
+    "y": 52
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Error máximo por campo (canal perfecto)",
+   "description": "Error absoluto máximo de cada medida.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"temp\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"hum\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "C",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"bat\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "temp °C",
+       "Value #B": "hum %",
+       "Value #C": "bat V"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "metodo",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 18,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 61
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Bytes por paquete transmitidos",
+   "description": "Marco completo por el túnel (cabecera ROHC + códec + carga); el paquete original IP/UDP/JSON mide ~120 B.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_bytes_por_paquete{canal=\"perfecto\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {}
+     }
+    }
+   ],
+   "options": {
+    "xField": "metodo",
+    "orientation": "auto",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": -30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "decbytes",
+     "decimals": 1,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 19,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 61
    },
    "datasource": {
     "type": "prometheus",
@@ -789,13 +1338,13 @@
   {
    "type": "row",
    "title": "En vivo: el bandido en la red 5G (cmp-ue / cmp-dn)",
-   "id": 13,
+   "id": 20,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 46
+    "y": 70
    }
   },
   {
@@ -835,12 +1384,12 @@
     },
     "overrides": []
    },
-   "id": 14,
+   "id": 21,
    "gridPos": {
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 47
+    "y": 71
    },
    "datasource": {
     "type": "prometheus",
@@ -873,12 +1422,12 @@
     },
     "overrides": []
    },
-   "id": 15,
+   "id": 22,
    "gridPos": {
     "h": 8,
     "w": 6,
     "x": 12,
-    "y": 47
+    "y": 71
    },
    "datasource": {
     "type": "prometheus",
@@ -911,12 +1460,12 @@
     },
     "overrides": []
    },
-   "id": 16,
+   "id": 23,
    "gridPos": {
     "h": 8,
     "w": 6,
     "x": 18,
-    "y": 47
+    "y": 71
    },
    "datasource": {
     "type": "prometheus",
@@ -949,12 +1498,12 @@
     },
     "overrides": []
    },
-   "id": 17,
+   "id": 24,
    "gridPos": {
     "h": 8,
     "w": 24,
     "x": 0,
-    "y": 55
+    "y": 79
    },
    "datasource": {
     "type": "prometheus",

@@ -21,8 +21,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.4,
+     "comprimir_us": 1.5,
+     "descomprimir_us": 1.3,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -42,8 +42,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.4,
+     "comprimir_us": 1.6,
+     "descomprimir_us": 1.2,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -63,8 +63,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.4,
+     "comprimir_us": 1.4,
+     "descomprimir_us": 1.3,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -84,8 +84,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.4,
+     "comprimir_us": 1.4,
+     "descomprimir_us": 1.2,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -105,8 +105,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.4,
+     "comprimir_us": 1.8,
+     "descomprimir_us": 1.3,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -126,8 +126,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.3,
+     "comprimir_us": 1.3,
+     "descomprimir_us": 1.5,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -147,8 +147,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.3,
+     "comprimir_us": 1.5,
+     "descomprimir_us": 1.3,
      "mal_pct": 0.0
     }
    },
@@ -170,8 +170,8 @@
       "info_mutua": 7.5048,
       "info_entregada_pct": 99.146
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.9,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.6,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -191,8 +191,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.9,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.6,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -212,8 +212,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.9,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.7,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -233,8 +233,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 0.4,
-     "descomprimir_us": 0.9,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.5,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -254,8 +254,8 @@
       "info_mutua": 7.9424,
       "info_entregada_pct": 99.336
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.9,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.6,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -275,8 +275,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 0.8,
+     "comprimir_us": 1.0,
+     "descomprimir_us": 2.5,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -296,8 +296,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 0.3,
-     "descomprimir_us": 1.1,
+     "comprimir_us": 1.1,
+     "descomprimir_us": 2.7,
      "mal_pct": 0.0
     }
    }
@@ -321,8 +321,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 15.8,
-     "descomprimir_us": 13.0,
+     "comprimir_us": 38.8,
+     "descomprimir_us": 29.0,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -342,8 +342,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 21.7,
-     "descomprimir_us": 19.9,
+     "comprimir_us": 51.6,
+     "descomprimir_us": 42.4,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -363,8 +363,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 7.1,
-     "descomprimir_us": 2.3,
+     "comprimir_us": 20.6,
+     "descomprimir_us": 6.8,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -384,8 +384,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 15.7,
-     "descomprimir_us": 15.1,
+     "comprimir_us": 39.9,
+     "descomprimir_us": 38.2,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -405,8 +405,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 25.2,
-     "descomprimir_us": 22.2,
+     "comprimir_us": 57.9,
+     "descomprimir_us": 45.2,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -426,8 +426,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 17.2,
-     "descomprimir_us": 15.9,
+     "comprimir_us": 41.2,
+     "descomprimir_us": 35.1,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -447,8 +447,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 8.0,
-     "descomprimir_us": 2.6,
+     "comprimir_us": 21.9,
+     "descomprimir_us": 6.4,
      "mal_pct": 0.0
     }
    },
@@ -470,8 +470,8 @@
       "info_mutua": 7.5047,
       "info_entregada_pct": 99.145
      },
-     "comprimir_us": 15.9,
-     "descomprimir_us": 13.8,
+     "comprimir_us": 36.9,
+     "descomprimir_us": 28.3,
      "mal_pct": 0.14
     },
     "voip_rtp": {
@@ -491,8 +491,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 22.7,
-     "descomprimir_us": 21.4,
+     "comprimir_us": 49.5,
+     "descomprimir_us": 42.4,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -512,8 +512,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 7.7,
-     "descomprimir_us": 3.3,
+     "comprimir_us": 18.7,
+     "descomprimir_us": 7.5,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -533,8 +533,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 15.4,
-     "descomprimir_us": 15.6,
+     "comprimir_us": 38.2,
+     "descomprimir_us": 33.8,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -554,8 +554,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 25.4,
-     "descomprimir_us": 22.8,
+     "comprimir_us": 56.0,
+     "descomprimir_us": 45.8,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -575,8 +575,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 16.4,
-     "descomprimir_us": 16.2,
+     "comprimir_us": 38.9,
+     "descomprimir_us": 32.6,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -596,8 +596,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 7.9,
-     "descomprimir_us": 3.4,
+     "comprimir_us": 19.9,
+     "descomprimir_us": 7.7,
      "mal_pct": 0.0
     }
    }
@@ -621,8 +621,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 565.0,
-     "descomprimir_us": 1043.2,
+     "comprimir_us": 971.2,
+     "descomprimir_us": 1812.2,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -642,8 +642,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 46.8,
-     "descomprimir_us": 25.8,
+     "comprimir_us": 87.0,
+     "descomprimir_us": 47.6,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -663,8 +663,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 892.8,
-     "descomprimir_us": 5834.2,
+     "comprimir_us": 1550.3,
+     "descomprimir_us": 10111.3,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -684,8 +684,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 39.3,
-     "descomprimir_us": 19.9,
+     "comprimir_us": 66.1,
+     "descomprimir_us": 36.8,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -705,8 +705,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 1051.8,
-     "descomprimir_us": 39.8,
+     "comprimir_us": 1789.0,
+     "descomprimir_us": 74.5,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -726,8 +726,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 55.4,
-     "descomprimir_us": 334.6,
+     "comprimir_us": 104.4,
+     "descomprimir_us": 593.3,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -747,8 +747,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 1303.8,
-     "descomprimir_us": 4.7,
+     "comprimir_us": 2230.3,
+     "descomprimir_us": 9.6,
      "mal_pct": 0.0
     }
    },
@@ -770,8 +770,8 @@
       "info_mutua": 7.5047,
       "info_entregada_pct": 99.145
      },
-     "comprimir_us": 506.9,
-     "descomprimir_us": 962.6,
+     "comprimir_us": 1013.1,
+     "descomprimir_us": 1872.1,
      "mal_pct": 0.14
     },
     "voip_rtp": {
@@ -791,8 +791,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 42.7,
-     "descomprimir_us": 24.2,
+     "comprimir_us": 91.0,
+     "descomprimir_us": 50.7,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -812,8 +812,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 808.1,
-     "descomprimir_us": 5376.3,
+     "comprimir_us": 1595.4,
+     "descomprimir_us": 10423.9,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -833,8 +833,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 31.6,
-     "descomprimir_us": 19.2,
+     "comprimir_us": 69.3,
+     "descomprimir_us": 41.0,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -854,8 +854,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 932.6,
-     "descomprimir_us": 35.9,
+     "comprimir_us": 1856.7,
+     "descomprimir_us": 78.4,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -875,8 +875,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 51.8,
-     "descomprimir_us": 314.2,
+     "comprimir_us": 110.2,
+     "descomprimir_us": 625.0,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -896,8 +896,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 1174.7,
-     "descomprimir_us": 5.7,
+     "comprimir_us": 2355.7,
+     "descomprimir_us": 13.3,
      "mal_pct": 0.0
     }
    }
@@ -921,8 +921,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 72.7,
-     "descomprimir_us": 21.3,
+     "comprimir_us": 152.8,
+     "descomprimir_us": 45.4,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -942,8 +942,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 49.1,
-     "descomprimir_us": 22.2,
+     "comprimir_us": 113.1,
+     "descomprimir_us": 49.5,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -963,8 +963,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 96.3,
-     "descomprimir_us": 28.2,
+     "comprimir_us": 194.2,
+     "descomprimir_us": 57.5,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -984,8 +984,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 41.9,
-     "descomprimir_us": 18.1,
+     "comprimir_us": 95.4,
+     "descomprimir_us": 38.2,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1005,8 +1005,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 109.6,
-     "descomprimir_us": 26.2,
+     "comprimir_us": 216.3,
+     "descomprimir_us": 53.9,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -1026,8 +1026,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 47.1,
-     "descomprimir_us": 29.6,
+     "comprimir_us": 110.0,
+     "descomprimir_us": 65.3,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1047,8 +1047,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 92.1,
-     "descomprimir_us": 3.4,
+     "comprimir_us": 187.7,
+     "descomprimir_us": 8.0,
      "mal_pct": 0.0
     }
    },
@@ -1070,8 +1070,8 @@
       "info_mutua": 7.5047,
       "info_entregada_pct": 99.145
      },
-     "comprimir_us": 77.2,
-     "descomprimir_us": 24.3,
+     "comprimir_us": 150.2,
+     "descomprimir_us": 45.5,
      "mal_pct": 0.14
     },
     "voip_rtp": {
@@ -1091,8 +1091,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 55.1,
-     "descomprimir_us": 23.9,
+     "comprimir_us": 108.4,
+     "descomprimir_us": 48.3,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1112,8 +1112,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 103.3,
-     "descomprimir_us": 36.0,
+     "comprimir_us": 193.4,
+     "descomprimir_us": 58.2,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -1133,8 +1133,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 43.4,
-     "descomprimir_us": 18.4,
+     "comprimir_us": 93.4,
+     "descomprimir_us": 37.9,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1154,8 +1154,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 110.4,
-     "descomprimir_us": 25.8,
+     "comprimir_us": 214.7,
+     "descomprimir_us": 54.3,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -1175,8 +1175,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 51.8,
-     "descomprimir_us": 38.0,
+     "comprimir_us": 108.8,
+     "descomprimir_us": 64.8,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1196,8 +1196,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 98.9,
-     "descomprimir_us": 3.7,
+     "comprimir_us": 182.4,
+     "descomprimir_us": 9.3,
      "mal_pct": 0.0
     }
    }
@@ -1221,8 +1221,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 100.8,
-     "descomprimir_us": 21.5,
+     "comprimir_us": 192.6,
+     "descomprimir_us": 45.0,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -1242,8 +1242,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 75.0,
-     "descomprimir_us": 23.6,
+     "comprimir_us": 147.9,
+     "descomprimir_us": 49.9,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1263,8 +1263,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 135.8,
-     "descomprimir_us": 29.7,
+     "comprimir_us": 253.3,
+     "descomprimir_us": 58.1,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -1284,8 +1284,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 66.0,
-     "descomprimir_us": 18.3,
+     "comprimir_us": 130.6,
+     "descomprimir_us": 38.2,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1305,8 +1305,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 133.3,
-     "descomprimir_us": 25.7,
+     "comprimir_us": 254.4,
+     "descomprimir_us": 54.7,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -1326,8 +1326,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 71.1,
-     "descomprimir_us": 28.1,
+     "comprimir_us": 144.1,
+     "descomprimir_us": 60.9,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1347,8 +1347,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 123.5,
-     "descomprimir_us": 3.4,
+     "comprimir_us": 225.5,
+     "descomprimir_us": 8.5,
      "mal_pct": 0.0
     }
    },
@@ -1370,8 +1370,8 @@
       "info_mutua": 7.5047,
       "info_entregada_pct": 99.145
      },
-     "comprimir_us": 104.9,
-     "descomprimir_us": 23.4,
+     "comprimir_us": 199.0,
+     "descomprimir_us": 47.8,
      "mal_pct": 0.14
     },
     "voip_rtp": {
@@ -1391,8 +1391,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 81.1,
-     "descomprimir_us": 25.3,
+     "comprimir_us": 153.1,
+     "descomprimir_us": 53.0,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1412,8 +1412,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 137.5,
-     "descomprimir_us": 31.9,
+     "comprimir_us": 256.8,
+     "descomprimir_us": 60.4,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -1433,8 +1433,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 70.7,
-     "descomprimir_us": 19.9,
+     "comprimir_us": 136.0,
+     "descomprimir_us": 40.8,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1454,8 +1454,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 135.8,
-     "descomprimir_us": 26.9,
+     "comprimir_us": 264.9,
+     "descomprimir_us": 58.6,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -1475,8 +1475,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 77.5,
-     "descomprimir_us": 32.1,
+     "comprimir_us": 147.2,
+     "descomprimir_us": 63.3,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1496,8 +1496,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 127.0,
-     "descomprimir_us": 4.5,
+     "comprimir_us": 235.7,
+     "descomprimir_us": 10.8,
      "mal_pct": 0.0
     }
    }
@@ -1521,8 +1521,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 138.6,
-     "descomprimir_us": 22.2,
+     "comprimir_us": 267.0,
+     "descomprimir_us": 46.4,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -1542,8 +1542,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 115.9,
-     "descomprimir_us": 24.8,
+     "comprimir_us": 233.5,
+     "descomprimir_us": 55.6,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1563,8 +1563,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 175.4,
-     "descomprimir_us": 30.8,
+     "comprimir_us": 332.1,
+     "descomprimir_us": 56.8,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -1584,8 +1584,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 105.6,
-     "descomprimir_us": 19.9,
+     "comprimir_us": 208.1,
+     "descomprimir_us": 41.9,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1605,8 +1605,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 181.2,
-     "descomprimir_us": 28.6,
+     "comprimir_us": 339.9,
+     "descomprimir_us": 60.8,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -1626,8 +1626,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 87.1,
-     "descomprimir_us": 26.0,
+     "comprimir_us": 170.0,
+     "descomprimir_us": 55.9,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1647,8 +1647,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 166.2,
-     "descomprimir_us": 3.2,
+     "comprimir_us": 318.2,
+     "descomprimir_us": 7.6,
      "mal_pct": 0.0
     }
    },
@@ -1670,8 +1670,8 @@
       "info_mutua": 7.3432,
       "info_entregada_pct": 97.012
      },
-     "comprimir_us": 141.3,
-     "descomprimir_us": 22.9,
+     "comprimir_us": 275.7,
+     "descomprimir_us": 49.4,
      "mal_pct": 3.06
     },
     "voip_rtp": {
@@ -1691,8 +1691,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 119.7,
-     "descomprimir_us": 25.7,
+     "comprimir_us": 234.7,
+     "descomprimir_us": 57.1,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1712,8 +1712,8 @@
       "info_mutua": 4.7882,
       "info_entregada_pct": 89.826
      },
-     "comprimir_us": 176.9,
-     "descomprimir_us": 30.6,
+     "comprimir_us": 343.1,
+     "descomprimir_us": 57.0,
      "mal_pct": 8.46
     },
     "urllc_ctrl": {
@@ -1733,8 +1733,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 111.7,
-     "descomprimir_us": 20.7,
+     "comprimir_us": 216.4,
+     "descomprimir_us": 46.7,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1754,8 +1754,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 181.4,
-     "descomprimir_us": 28.8,
+     "comprimir_us": 360.9,
+     "descomprimir_us": 68.2,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -1775,8 +1775,8 @@
       "info_mutua": 5.1577,
       "info_entregada_pct": 96.745
      },
-     "comprimir_us": 89.8,
-     "descomprimir_us": 27.5,
+     "comprimir_us": 170.2,
+     "descomprimir_us": 57.1,
      "mal_pct": 9.12
     },
     "web_tls": {
@@ -1796,8 +1796,8 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 168.4,
-     "descomprimir_us": 4.1,
+     "comprimir_us": 328.7,
+     "descomprimir_us": 10.7,
      "mal_pct": 0.0
     }
    }
@@ -1821,8 +1821,8 @@
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 2342.6,
-     "descomprimir_us": 944.7,
+     "comprimir_us": 4326.2,
+     "descomprimir_us": 1698.2,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -1842,8 +1842,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 236.0,
-     "descomprimir_us": 29.2,
+     "comprimir_us": 435.8,
+     "descomprimir_us": 54.3,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -1863,8 +1863,8 @@
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 3408.9,
-     "descomprimir_us": 5544.0,
+     "comprimir_us": 6378.6,
+     "descomprimir_us": 9958.5,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -1884,8 +1884,8 @@
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 144.3,
-     "descomprimir_us": 21.2,
+     "comprimir_us": 282.6,
+     "descomprimir_us": 41.0,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -1905,8 +1905,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 4555.4,
-     "descomprimir_us": 44.9,
+     "comprimir_us": 8310.0,
+     "descomprimir_us": 75.6,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -1926,8 +1926,8 @@
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 354.8,
-     "descomprimir_us": 23.1,
+     "comprimir_us": 655.2,
+     "descomprimir_us": 50.1,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -1947,8 +1947,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 5355.9,
-     "descomprimir_us": 5.9,
+     "comprimir_us": 9895.2,
+     "descomprimir_us": 10.0,
      "mal_pct": 0.0
     }
    },
@@ -1970,8 +1970,8 @@
       "info_mutua": 7.5047,
       "info_entregada_pct": 99.145
      },
-     "comprimir_us": 2408.4,
-     "descomprimir_us": 937.7,
+     "comprimir_us": 4141.4,
+     "descomprimir_us": 1580.6,
      "mal_pct": 0.14
     },
     "voip_rtp": {
@@ -1991,8 +1991,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 246.8,
-     "descomprimir_us": 30.1,
+     "comprimir_us": 428.7,
+     "descomprimir_us": 54.0,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -2012,8 +2012,8 @@
       "info_mutua": 5.2504,
       "info_entregada_pct": 98.497
      },
-     "comprimir_us": 3471.7,
-     "descomprimir_us": 5485.3,
+     "comprimir_us": 6060.8,
+     "descomprimir_us": 9254.2,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -2033,8 +2033,8 @@
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 152.0,
-     "descomprimir_us": 23.2,
+     "comprimir_us": 264.3,
+     "descomprimir_us": 40.1,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -2054,8 +2054,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 4674.8,
-     "descomprimir_us": 55.4,
+     "comprimir_us": 7997.1,
+     "descomprimir_us": 77.4,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -2075,8 +2075,8 @@
       "info_mutua": 5.2614,
       "info_entregada_pct": 98.69
      },
-     "comprimir_us": 363.4,
-     "descomprimir_us": 24.2,
+     "comprimir_us": 625.2,
+     "descomprimir_us": 44.5,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -2096,13 +2096,13 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 5541.6,
-     "descomprimir_us": 8.2,
+     "comprimir_us": 9472.5,
+     "descomprimir_us": 13.1,
      "mal_pct": 0.0
     }
    }
   },
-  "bandido_ucb": {
+  "zstd_dict": {
    "perfecto": {
     "todas": {
      "paquetes": 3600,
@@ -2111,18 +2111,18 @@
       "entropia": 7.5694
      },
      "comprimido": {
-      "bytes": 2029179,
-      "entropia": 7.9938,
-      "razon": 1.2889,
-      "ahorro_pct": 22.41
+      "bytes": 2082713,
+      "entropia": 7.9919,
+      "razon": 1.2558,
+      "ahorro_pct": 20.37
      },
      "recuperado": {
       "entropia": 7.5694,
       "info_mutua": 7.5694,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 107.9,
-     "descomprimir_us": 24.0,
+     "comprimir_us": 145.8,
+     "descomprimir_us": 42.4,
      "mal_pct": 0.0
     },
     "voip_rtp": {
@@ -2142,8 +2142,8 @@
       "info_mutua": 7.2846,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 69.6,
-     "descomprimir_us": 26.6,
+     "comprimir_us": 76.2,
+     "descomprimir_us": 44.7,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -2153,18 +2153,18 @@
       "entropia": 5.3305
      },
      "comprimido": {
-      "bytes": 382968,
-      "entropia": 7.9963,
-      "razon": 2.2469,
-      "ahorro_pct": 55.49
+      "bytes": 418842,
+      "entropia": 7.9761,
+      "razon": 2.0545,
+      "ahorro_pct": 51.33
      },
      "recuperado": {
       "entropia": 5.3305,
       "info_mutua": 5.3305,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 226.0,
-     "descomprimir_us": 34.7,
+     "comprimir_us": 276.9,
+     "descomprimir_us": 56.9,
      "mal_pct": 0.0
     },
     "urllc_ctrl": {
@@ -2174,18 +2174,18 @@
       "entropia": 5.1824
      },
      "comprimido": {
-      "bytes": 17098,
-      "entropia": 5.1349,
-      "razon": 1.7546,
-      "ahorro_pct": 43.01
+      "bytes": 17100,
+      "entropia": 5.1223,
+      "razon": 1.7544,
+      "ahorro_pct": 43.0
      },
      "recuperado": {
       "entropia": 5.1824,
       "info_mutua": 5.1824,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 61.2,
-     "descomprimir_us": 20.5,
+     "comprimir_us": 75.5,
+     "descomprimir_us": 35.9,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -2205,8 +2205,8 @@
       "info_mutua": 7.9955,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 95.6,
-     "descomprimir_us": 28.3,
+     "comprimir_us": 194.9,
+     "descomprimir_us": 50.4,
      "mal_pct": 0.0
     },
     "iot_json": {
@@ -2216,18 +2216,18 @@
       "entropia": 5.3312
      },
      "comprimido": {
-      "bytes": 15401,
-      "entropia": 6.9403,
-      "razon": 4.7472,
-      "ahorro_pct": 78.94
+      "bytes": 33059,
+      "entropia": 6.6963,
+      "razon": 2.2116,
+      "ahorro_pct": 54.78
      },
      "recuperado": {
       "entropia": 5.3312,
       "info_mutua": 5.3312,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 129.5,
-     "descomprimir_us": 29.4,
+     "comprimir_us": 79.4,
+     "descomprimir_us": 59.4,
      "mal_pct": 0.0
     },
     "web_tls": {
@@ -2247,8 +2247,8 @@
       "info_mutua": 7.9947,
       "info_entregada_pct": 100.0
      },
-     "comprimir_us": 65.5,
-     "descomprimir_us": 4.3,
+     "comprimir_us": 172.1,
+     "descomprimir_us": 7.0,
      "mal_pct": 0.0
     }
    },
@@ -2260,19 +2260,19 @@
       "entropia": 7.5694
      },
      "comprimido": {
-      "bytes": 2029179,
-      "entropia": 7.9938,
-      "razon": 1.2889,
-      "ahorro_pct": 22.41
+      "bytes": 2082713,
+      "entropia": 7.9919,
+      "razon": 1.2558,
+      "ahorro_pct": 20.37
      },
      "recuperado": {
-      "entropia": 7.5471,
-      "info_mutua": 7.3019,
-      "info_entregada_pct": 96.466
+      "entropia": 7.5793,
+      "info_mutua": 7.5047,
+      "info_entregada_pct": 99.145
      },
-     "comprimir_us": 112.2,
-     "descomprimir_us": 25.7,
-     "mal_pct": 3.54
+     "comprimir_us": 143.9,
+     "descomprimir_us": 44.8,
+     "mal_pct": 0.14
     },
     "voip_rtp": {
      "paquetes": 600,
@@ -2291,8 +2291,8 @@
       "info_mutua": 7.2161,
       "info_entregada_pct": 99.059
      },
-     "comprimir_us": 69.6,
-     "descomprimir_us": 27.7,
+     "comprimir_us": 75.3,
+     "descomprimir_us": 46.3,
      "mal_pct": 0.0
     },
     "http_texto": {
@@ -2302,19 +2302,19 @@
       "entropia": 5.3305
      },
      "comprimido": {
-      "bytes": 382968,
-      "entropia": 7.9963,
-      "razon": 2.2469,
-      "ahorro_pct": 55.49
+      "bytes": 418842,
+      "entropia": 7.9761,
+      "razon": 2.0545,
+      "ahorro_pct": 51.33
      },
      "recuperado": {
-      "entropia": 5.2261,
-      "info_mutua": 4.6649,
-      "info_entregada_pct": 87.513
+      "entropia": 5.3627,
+      "info_mutua": 5.2504,
+      "info_entregada_pct": 98.497
      },
-     "comprimir_us": 240.4,
-     "descomprimir_us": 32.9,
-     "mal_pct": 10.83
+     "comprimir_us": 275.2,
+     "descomprimir_us": 61.5,
+     "mal_pct": 0.0
     },
     "urllc_ctrl": {
      "paquetes": 600,
@@ -2323,18 +2323,18 @@
       "entropia": 5.1824
      },
      "comprimido": {
-      "bytes": 17098,
-      "entropia": 5.1349,
-      "razon": 1.7546,
-      "ahorro_pct": 43.01
+      "bytes": 17100,
+      "entropia": 5.1223,
+      "razon": 1.7544,
+      "ahorro_pct": 43.0
      },
      "recuperado": {
       "entropia": 5.2156,
       "info_mutua": 5.1185,
       "info_entregada_pct": 98.767
      },
-     "comprimir_us": 67.3,
-     "descomprimir_us": 22.9,
+     "comprimir_us": 73.7,
+     "descomprimir_us": 35.3,
      "mal_pct": 0.0
     },
     "video_rtp": {
@@ -2354,8 +2354,8 @@
       "info_mutua": 7.9423,
       "info_entregada_pct": 99.334
      },
-     "comprimir_us": 82.6,
-     "descomprimir_us": 25.5,
+     "comprimir_us": 191.2,
+     "descomprimir_us": 52.3,
      "mal_pct": 0.84
     },
     "iot_json": {
@@ -2365,19 +2365,19 @@
       "entropia": 5.3312
      },
      "comprimido": {
-      "bytes": 15401,
-      "entropia": 6.9403,
-      "razon": 4.7472,
-      "ahorro_pct": 78.94
+      "bytes": 33059,
+      "entropia": 6.6963,
+      "razon": 2.2116,
+      "ahorro_pct": 54.78
      },
      "recuperado": {
-      "entropia": 5.3706,
-      "info_mutua": 5.1545,
-      "info_entregada_pct": 96.684
+      "entropia": 5.3624,
+      "info_mutua": 5.2614,
+      "info_entregada_pct": 98.69
      },
-     "comprimir_us": 149.5,
-     "descomprimir_us": 40.0,
-     "mal_pct": 9.63
+     "comprimir_us": 77.6,
+     "descomprimir_us": 64.5,
+     "mal_pct": 0.0
     },
     "web_tls": {
      "paquetes": 600,
@@ -2396,11 +2396,903 @@
       "info_mutua": 7.9549,
       "info_entregada_pct": 99.503
      },
-     "comprimir_us": 64.1,
-     "descomprimir_us": 5.2,
+     "comprimir_us": 170.2,
+     "descomprimir_us": 8.7,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "bandido_ucb": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 3600,
+     "original": {
+      "bytes": 2615408,
+      "entropia": 7.5694
+     },
+     "comprimido": {
+      "bytes": 2065809,
+      "entropia": 7.9928,
+      "razon": 1.266,
+      "ahorro_pct": 21.01
+     },
+     "recuperado": {
+      "entropia": 7.5694,
+      "info_mutua": 7.5694,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 165.9,
+     "descomprimir_us": 50.9,
+     "mal_pct": 0.0
+    },
+    "voip_rtp": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 43800,
+      "entropia": 7.2846
+     },
+     "comprimido": {
+      "bytes": 23892,
+      "entropia": 7.8285,
+      "razon": 1.8332,
+      "ahorro_pct": 45.45
+     },
+     "recuperado": {
+      "entropia": 7.2846,
+      "info_mutua": 7.2846,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 103.8,
+     "descomprimir_us": 50.0,
+     "mal_pct": 0.0
+    },
+    "http_texto": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 860496,
+      "entropia": 5.3305
+     },
+     "comprimido": {
+      "bytes": 419644,
+      "entropia": 7.9765,
+      "razon": 2.0505,
+      "ahorro_pct": 51.23
+     },
+     "recuperado": {
+      "entropia": 5.3305,
+      "info_mutua": 5.3305,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 365.7,
+     "descomprimir_us": 65.7,
+     "mal_pct": 0.0
+    },
+    "urllc_ctrl": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 30000,
+      "entropia": 5.1824
+     },
+     "comprimido": {
+      "bytes": 17100,
+      "entropia": 5.1223,
+      "razon": 1.7544,
+      "ahorro_pct": 43.0
+     },
+     "recuperado": {
+      "entropia": 5.1824,
+      "info_mutua": 5.1824,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 91.0,
+     "descomprimir_us": 38.9,
+     "mal_pct": 0.0
+    },
+    "video_rtp": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 744000,
+      "entropia": 7.9955
+     },
+     "comprimido": {
+      "bytes": 725220,
+      "entropia": 7.9995,
+      "razon": 1.0259,
+      "ahorro_pct": 2.52
+     },
+     "recuperado": {
+      "entropia": 7.9955,
+      "info_mutua": 7.9955,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 127.0,
+     "descomprimir_us": 80.7,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 73112,
+      "entropia": 5.3312
+     },
+     "comprimido": {
+      "bytes": 15353,
+      "entropia": 6.9403,
+      "razon": 4.7621,
+      "ahorro_pct": 79.0
+     },
+     "recuperado": {
+      "entropia": 5.3312,
+      "info_mutua": 5.3312,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 220.7,
+     "descomprimir_us": 60.2,
+     "mal_pct": 0.0
+    },
+    "web_tls": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 864000,
+      "entropia": 7.9947
+     },
+     "comprimido": {
+      "bytes": 864600,
+      "entropia": 7.994,
+      "razon": 0.9993,
+      "ahorro_pct": -0.07
+     },
+     "recuperado": {
+      "entropia": 7.9947,
+      "info_mutua": 7.9947,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 87.1,
+     "descomprimir_us": 9.6,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 3600,
+     "original": {
+      "bytes": 2615408,
+      "entropia": 7.5694
+     },
+     "comprimido": {
+      "bytes": 2065809,
+      "entropia": 7.9928,
+      "razon": 1.266,
+      "ahorro_pct": 21.01
+     },
+     "recuperado": {
+      "entropia": 7.5792,
+      "info_mutua": 7.5007,
+      "info_entregada_pct": 99.093
+     },
+     "comprimir_us": 159.1,
+     "descomprimir_us": 46.5,
+     "mal_pct": 1.8
+    },
+    "voip_rtp": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 43800,
+      "entropia": 7.2846
+     },
+     "comprimido": {
+      "bytes": 23892,
+      "entropia": 7.8285,
+      "razon": 1.8332,
+      "ahorro_pct": 45.45
+     },
+     "recuperado": {
+      "entropia": 7.2925,
+      "info_mutua": 7.2161,
+      "info_entregada_pct": 99.059
+     },
+     "comprimir_us": 103.0,
+     "descomprimir_us": 51.4,
+     "mal_pct": 0.0
+    },
+    "http_texto": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 860496,
+      "entropia": 5.3305
+     },
+     "comprimido": {
+      "bytes": 419644,
+      "entropia": 7.9765,
+      "razon": 2.0505,
+      "ahorro_pct": 51.23
+     },
+     "recuperado": {
+      "entropia": 5.3627,
+      "info_mutua": 5.2504,
+      "info_entregada_pct": 98.497
+     },
+     "comprimir_us": 348.9,
+     "descomprimir_us": 65.4,
+     "mal_pct": 0.0
+    },
+    "urllc_ctrl": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 30000,
+      "entropia": 5.1824
+     },
+     "comprimido": {
+      "bytes": 17100,
+      "entropia": 5.1223,
+      "razon": 1.7544,
+      "ahorro_pct": 43.0
+     },
+     "recuperado": {
+      "entropia": 5.2156,
+      "info_mutua": 5.1185,
+      "info_entregada_pct": 98.767
+     },
+     "comprimir_us": 86.5,
+     "descomprimir_us": 39.1,
+     "mal_pct": 0.0
+    },
+    "video_rtp": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 744000,
+      "entropia": 7.9955
+     },
+     "comprimido": {
+      "bytes": 725220,
+      "entropia": 7.9995,
+      "razon": 1.0259,
+      "ahorro_pct": 2.52
+     },
+     "recuperado": {
+      "entropia": 8.0,
+      "info_mutua": 7.9423,
+      "info_entregada_pct": 99.334
+     },
+     "comprimir_us": 122.2,
+     "descomprimir_us": 54.6,
+     "mal_pct": 0.84
+    },
+    "iot_json": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 73112,
+      "entropia": 5.3312
+     },
+     "comprimido": {
+      "bytes": 15353,
+      "entropia": 6.9403,
+      "razon": 4.7621,
+      "ahorro_pct": 79.0
+     },
+     "recuperado": {
+      "entropia": 5.3679,
+      "info_mutua": 5.1561,
+      "info_entregada_pct": 96.714
+     },
+     "comprimir_us": 212.1,
+     "descomprimir_us": 58.1,
+     "mal_pct": 9.97
+    },
+    "web_tls": {
+     "paquetes": 600,
+     "original": {
+      "bytes": 864000,
+      "entropia": 7.9947
+     },
+     "comprimido": {
+      "bytes": 864600,
+      "entropia": 7.994,
+      "razon": 0.9993,
+      "ahorro_pct": -0.07
+     },
+     "recuperado": {
+      "entropia": 8.0001,
+      "info_mutua": 7.9549,
+      "info_entregada_pct": 99.503
+     },
+     "comprimir_us": 81.8,
+     "descomprimir_us": 10.3,
      "mal_pct": 0.0
     }
    }
   }
+ },
+ "tasa_distorsion_iot": {
+  "campos": [
+   "temp",
+   "hum",
+   "bat"
+  ],
+  "pasos_base": {
+   "temp": 0.05,
+   "hum": 0.5,
+   "bat": 0.005
+  },
+  "filas": [
+   {
+    "metodo": "predictivo ×0",
+    "escala": 0.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 1e-06,
+     "hum": 1e-06,
+     "bat": 1e-06
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 12377,
+    "bytes_por_paquete": 20.63,
+    "ahorro_pct": 83.07,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "predictivo ×0",
+    "escala": 0.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 1e-06,
+     "hum": 1e-06,
+     "bat": 1e-06
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 12377,
+    "bytes_por_paquete": 20.63,
+    "ahorro_pct": 83.07,
+    "error_max": {
+     "temp": 0.11,
+     "hum": 0.5,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.002976,
+     "hum": 0.006463,
+     "bat": 1.7e-05
+    },
+    "dentro_tolerancia_pct": 94.09,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 97.55,
+     "hum": 97.91,
+     "bat": 96.98
+    },
+    "info_entregada_media_pct": 97.48
+   },
+   {
+    "metodo": "predictivo ×0.1",
+    "escala": 0.1,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.005000000000000001,
+     "hum": 0.05,
+     "bat": 0.0005
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "predictivo ×0.1",
+    "escala": 0.1,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.005000000000000001,
+     "hum": 0.05,
+     "bat": 0.0005
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.11,
+     "hum": 0.5,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.002976,
+     "hum": 0.006463,
+     "bat": 1.7e-05
+    },
+    "dentro_tolerancia_pct": 94.09,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 97.55,
+     "hum": 97.91,
+     "bat": 96.98
+    },
+    "info_entregada_media_pct": 97.48
+   },
+   {
+    "metodo": "predictivo ×0.5",
+    "escala": 0.5,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.025,
+     "hum": 0.25,
+     "bat": 0.0025
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.01,
+     "hum": 0.1,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.005658,
+     "hum": 0.05625,
+     "bat": 0.000345
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 88.51,
+     "hum": 85.01,
+     "bat": 74.79
+    },
+    "info_entregada_media_pct": 82.77
+   },
+   {
+    "metodo": "predictivo ×0.5",
+    "escala": 0.5,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.025,
+     "hum": 0.25,
+     "bat": 0.0025
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.135,
+     "hum": 0.6,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.008316,
+     "hum": 0.064541,
+     "bat": 0.000335
+    },
+    "dentro_tolerancia_pct": 94.09,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 87.15,
+     "hum": 83.91,
+     "bat": 74.42
+    },
+    "info_entregada_media_pct": 81.83
+   },
+   {
+    "metodo": "predictivo ×1",
+    "escala": 1.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.05,
+     "hum": 0.5,
+     "bat": 0.005
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.02,
+     "hum": 0.2,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.011033,
+     "hum": 0.1115,
+     "bat": 0.000345
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 79.17,
+     "hum": 73.62,
+     "bat": 74.79
+    },
+    "info_entregada_media_pct": 75.86
+   },
+   {
+    "metodo": "predictivo ×1",
+    "escala": 1.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.05,
+     "hum": 0.5,
+     "bat": 0.005
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.12,
+     "hum": 0.3,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.012772,
+     "hum": 0.110714,
+     "bat": 0.000335
+    },
+    "dentro_tolerancia_pct": 96.62,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 78.25,
+     "hum": 73.27,
+     "bat": 74.42
+    },
+    "info_entregada_media_pct": 75.31
+   },
+   {
+    "metodo": "predictivo ×2",
+    "escala": 2.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.1,
+     "hum": 1.0,
+     "bat": 0.01
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.05,
+     "hum": 0.5,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.02365,
+     "hum": 0.231833,
+     "bat": 0.000345
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 69.38,
+     "hum": 64.54,
+     "bat": 74.79
+    },
+    "info_entregada_media_pct": 69.57
+   },
+   {
+    "metodo": "predictivo ×2",
+    "escala": 2.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.1,
+     "hum": 1.0,
+     "bat": 0.01
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.15,
+     "hum": 0.5,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.025918,
+     "hum": 0.231463,
+     "bat": 0.000335
+    },
+    "dentro_tolerancia_pct": 96.62,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 68.74,
+     "hum": 64.42,
+     "bat": 74.42
+    },
+    "info_entregada_media_pct": 69.19
+   },
+   {
+    "metodo": "predictivo ×5",
+    "escala": 5.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.25,
+     "hum": 2.5,
+     "bat": 0.025
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.12,
+     "hum": 1.2,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.053683,
+     "hum": 0.390833,
+     "bat": 0.000345
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 61.14,
+     "hum": 56.74,
+     "bat": 74.79
+    },
+    "info_entregada_media_pct": 64.22
+   },
+   {
+    "metodo": "predictivo ×5",
+    "escala": 5.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.25,
+     "hum": 2.5,
+     "bat": 0.025
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.31,
+     "hum": 1.2,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.056037,
+     "hum": 0.385884,
+     "bat": 0.000335
+    },
+    "dentro_tolerancia_pct": 97.8,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 61.17,
+     "hum": 56.66,
+     "bat": 74.42
+    },
+    "info_entregada_media_pct": 64.08
+   },
+   {
+    "metodo": "predictivo ×10",
+    "escala": 10.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.5,
+     "hum": 5.0,
+     "bat": 0.05
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.25,
+     "hum": 1.9,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.093017,
+     "hum": 0.403167,
+     "bat": 0.000345
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 55.69,
+     "hum": 55.42,
+     "bat": 74.79
+    },
+    "info_entregada_media_pct": 61.97
+   },
+   {
+    "metodo": "predictivo ×10",
+    "escala": 10.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.5,
+     "hum": 5.0,
+     "bat": 0.05
+    },
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 10452,
+    "bytes_por_paquete": 17.42,
+    "ahorro_pct": 85.7,
+    "error_max": {
+     "temp": 0.75,
+     "hum": 1.9,
+     "bat": 0.001
+    },
+    "error_medio": {
+     "temp": 0.096259,
+     "hum": 0.397789,
+     "bat": 0.000335
+    },
+    "dentro_tolerancia_pct": 98.14,
+    "dañados_pct": 0.68,
+    "info_entregada_pct": {
+     "temp": 55.76,
+     "hum": 55.55,
+     "bat": 74.42
+    },
+    "info_entregada_media_pct": 61.91
+   },
+   {
+    "metodo": "zstd_dict",
+    "escala": null,
+    "canal": "perfecto",
+    "pasos": null,
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 33059,
+    "bytes_por_paquete": 55.1,
+    "ahorro_pct": 54.78,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "zstd_dict",
+    "escala": null,
+    "canal": "perdida_1pct",
+    "pasos": null,
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 33059,
+    "bytes_por_paquete": 55.1,
+    "ahorro_pct": 54.78,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 99.47,
+     "hum": 99.46,
+     "bat": 99.17
+    },
+    "info_entregada_media_pct": 99.37
+   },
+   {
+    "metodo": "deflate_flujo",
+    "escala": null,
+    "canal": "perfecto",
+    "pasos": null,
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 15257,
+    "bytes_por_paquete": 25.43,
+    "ahorro_pct": 79.13,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "deflate_flujo",
+    "escala": null,
+    "canal": "perdida_1pct",
+    "pasos": null,
+    "paquetes": 600,
+    "bytes_original": 73112,
+    "bytes_comprimido": 15257,
+    "bytes_por_paquete": 25.43,
+    "ahorro_pct": 79.13,
+    "error_max": {
+     "temp": 0.03,
+     "hum": 0.1,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.000166,
+     "hum": 0.000552,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 90.71,
+    "dañados_pct": 8.28,
+    "info_entregada_pct": {
+     "temp": 93.14,
+     "hum": 92.75,
+     "bat": 93.46
+    },
+    "info_entregada_media_pct": 93.12
+   }
+  ]
  }
 }

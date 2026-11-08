@@ -112,7 +112,7 @@ def flujo_mezclado(m, mezcla):
     for cod, nom in C.CODECS.items():
         correr(f"ROHC + {nom}", cod)
     correr("ROHC + deflate_flujo, reinicio cada 16", C.DEFLATE_FLUJO, reinicio=16)
-    correr("ROHC + bandido UCB, 6 brazos, γ=0,99 (como el Lab 3)",
+    correr(f"ROHC + bandido UCB, {len(C.CODECS)} brazos, γ=0,99 (como el Lab 3)",
            EmisorAdaptativo(m, reinicio_flujo=16, gamma=0.99, brazos=tuple(C.CODECS)))
     correr("ROHC + bandido UCB, configuración de red, sin reinicio", EmisorAdaptativo(m, reinicio_flujo=0))
     correr("ROHC + bandido UCB, configuración de red", EmisorAdaptativo(m, reinicio_flujo=16))
@@ -143,7 +143,10 @@ def perdidas(m, mezcla, p_perdida=0.01, semilla=7):
     rng = random.Random(semilla)
     caen = [rng.random() < p_perdida for _ in mezcla]
     res = []
-    casos = [("ROHC + deflate_dict (sin estado)", C.DEFLATE_DICT, 0),
+    casos = [("ROHC + deflate_dict (sin estado)", C.DEFLATE_DICT, 0)]
+    if C.ZSTD_DICT in C.CODECS:
+        casos.append(("ROHC + zstd_dict (sin estado)", C.ZSTD_DICT, 0))
+    casos += [
              ("ROHC + deflate_flujo (con estado, sin reinicio)", C.DEFLATE_FLUJO, 0),
              ("ROHC + deflate_flujo (reinicio cada 16 paq.)", C.DEFLATE_FLUJO, 16),
              ("ROHC + ninguno", C.NINGUNO, 0)]
@@ -176,22 +179,43 @@ def ajustar():
     mezcla = T.intercalar(T.conjunto(1, P_FLUJO, F_CLASE, prueba=False), 3)
     crudo = sum(len(p) for *_, p in mezcla)
     filas = []
-    for nb, br in (("6 (todos)", tuple(C.CODECS)), ("3 (ninguno, dicc., flujo)", (0, 3, 4))):
+    opciones = [(f"{len(C.CODECS)} (todos)", tuple(C.CODECS)),
+                ("3 (ninguno, deflate_dict, deflate_flujo)", (C.NINGUNO, C.DEFLATE_DICT, C.DEFLATE_FLUJO))]
+    if C.ZSTD_DICT in C.CODECS:
+        opciones += [("3 (ninguno, zstd_dict, deflate_flujo)", (C.NINGUNO, C.ZSTD_DICT, C.DEFLATE_FLUJO)),
+                     ("4 (ninguno, zstd_dict, deflate_dict, deflate_flujo)",
+                      (C.NINGUNO, C.ZSTD_DICT, C.DEFLATE_DICT, C.DEFLATE_FLUJO))]
+    import balance as B
+    for nb, br in opciones:
         for g in (0.99, 0.995, 0.999):
             for c in (0.02, 0.05):
                 em = EmisorAdaptativo(m, reinicio_flujo=16, gamma=g, c=c, brazos=br)
                 t0 = time.perf_counter()
                 out = sum(len(em.enviar(p)[0]) for *_, p in mezcla)
-                filas.append({"brazos": nb, "gamma": g, "c": c, "ahorro_pct": _pct(crudo, out),
-                              "cpu_us_por_paquete": round((time.perf_counter() - t0) * 1e6 / len(mezcla), 1),
+                cpu = round((time.perf_counter() - t0) * 1e6 / len(mezcla), 1)
+                fab = lambda g=g, c=c, br=br: (lambda e: (lambda p: e.enviar(p)[0]))(
+                    EmisorAdaptativo(m, reinicio_flujo=16, gamma=g, c=c, brazos=br))
+                filas.append({"brazos": nb, "n_brazos": len(br), "gamma": g, "c": c, "ahorro_pct": _pct(crudo, out),
+                              "cpu_us_por_paquete": cpu, "mal_pct": round(B.pct_mal(m, mezcla, fab), 2),
                               "elegidos_ninguno": em.elegidos.get(0, 0)})
                 print(filas[-1])
-    md = ("# Ajuste del bandido (conjunto de ENTRENAMIENTO, semilla 1)\n\nCriterio: mayor ahorro; entre "
-          "los que quedan a menos de 0,1 puntos del mejor, el de menos CPU.\n\n")
-    md += tabla_md(filas, ["brazos", "gamma", "c", "ahorro_pct", "cpu_us_por_paquete", "elegidos_ninguno"],
-                   ["brazos", "γ", "c", "ahorro %", "CPU µs/paq", "veces que eligió ninguno (ideal 2400)"])
+    md = ("# Ajuste del bandido (conjunto de ENTRENAMIENTO, semilla 1)\n\nCriterio, en este orden:\n\n"
+          "1. ahorro a no más de 0,5 puntos del mejor;\n"
+          "2. con 1 % de pérdida, a lo sumo 2 % de los paquetes mal reconstruidos (el doble de lo que pierde "
+          "el canal);\n"
+          "3. de las que cumplen, la que menos intenta comprimir (más veces eligió \"ninguno\"): es el gasto de "
+          "CPU medido sin ruido. La CPU en µs se muestra, pero no decide: en esta máquina la misma configuración "
+          "dio 59 µs en una corrida y 113 µs en la siguiente. Si empatan, la de menos brazos.\n\n"
+          "Antes de medir la robustez el criterio era solo \"mayor ahorro y luego menos CPU\": con él ganaba "
+          "DEFLATE con diccionario, que ahorra ~0,4 puntos más pero reconstruye mal el doble de paquetes con "
+          "pérdida y gasta más CPU. Solo \"menos daño\" tampoco sirve: elige los 7 brazos, que gastan 4 veces "
+          "más CPU para dañar medio punto menos.\n\n")
+    md += tabla_md(filas, ["brazos", "gamma", "c", "ahorro_pct", "mal_pct", "cpu_us_por_paquete", "elegidos_ninguno"],
+                   ["brazos", "γ", "c", "ahorro %", "% mal con 1 % de pérdida", "CPU µs/paq",
+                    "veces que eligió ninguno (ideal 2400)"])
     mejor = max(f["ahorro_pct"] for f in filas)
-    elegido = min((f for f in filas if f["ahorro_pct"] >= mejor - 0.1), key=lambda f: f["cpu_us_por_paquete"])
+    cumplen = [f for f in filas if f["ahorro_pct"] >= mejor - 0.5 and f["mal_pct"] <= 2.0] or filas
+    elegido = min(cumplen, key=lambda f: (-f["elegidos_ninguno"], f["n_brazos"]))
     md += f"\nElegido: brazos {elegido['brazos']}, γ = {elegido['gamma']}, c = {elegido['c']}.\n"
     SALIDA.mkdir(exist_ok=True)
     (SALIDA / "ajuste.md").write_text(md, encoding="utf-8")
@@ -221,11 +245,11 @@ def comparar():
 
     md = "# Resultados (generado por `evaluar.py comparar`)\n\n"
     md += "## 1. Ahorro por clase de tráfico (% de bytes)\n\n"
-    cols = ["clase", "slice", "largo_medio", "rohc+ninguno"] + [f"rohc+{n}" for n in C.CODECS.values() if n != "ninguno"] \
+    otros = [n for n in C.CODECS.values() if n != "ninguno"]
+    cols = ["clase", "slice", "largo_medio", "rohc+ninguno"] + [f"rohc+{n}" for n in otros] \
         + ["tic_por_paquete", "deflate_flujo"]
-    md += tabla_md(pc, cols, ["clase", "slice", "B/paq", "solo ROHC", "ROHC+Huffman estático", "ROHC+DEFLATE",
-                              "ROHC+DEFLATE dicc.", "ROHC+DEFLATE flujo", "ROHC+TIC por paquete",
-                              "TIC por paquete (sin ROHC)", "DEFLATE flujo (sin ROHC)"])
+    md += tabla_md(pc, cols, ["clase", "slice", "B/paq", "solo ROHC"] + [f"ROHC+{n}" for n in otros]
+                   + ["tic_por_paquete (sin ROHC)", "deflate_flujo (sin ROHC)"])
     md += f"\n## 2. Flujo mezclado ({fm['paquetes']} paquetes, {fm['bytes_crudos']:,} B)\n\n"
     md += tabla_md(fm["politicas"], ["politica", "bytes", "razon", "ahorro_pct", "bytes_comprimidos_por_byte",
                                      "cpu_us_por_paquete"],
