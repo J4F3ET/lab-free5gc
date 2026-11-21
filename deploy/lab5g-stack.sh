@@ -356,6 +356,24 @@ purge_orphans() {
   for o in "${ORPHANS[@]}"; do dk rm -f "$o" >/dev/null 2>&1 || true; done
 }
 
+# Un contenedor con el nombre del servicio creado a mano ('docker run', sin etiquetas de
+# compose) hace que 'up' falle con "container name already in use" y el servicio nunca
+# arranque (visto en el primer arranque en frio con cmp-dn y envio, del 18 nov).
+# Si esta parado se elimina: es sin estado (el codigo va montado) y compose lo recrea.
+# Si esta CORRIENDO no se toca: alguien lo lanzo a proposito y se avisa.
+clear_foreign() {   # $1 nombre del servicio/contenedor
+  local c="$1" proj st
+  proj=$(dk inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null) || return 0
+  [ "$proj" = "$PROJECT" ] && return 0
+  st=$(dk inspect -f '{{.State.Status}}' "$c" 2>/dev/null || true)
+  if [ "$st" = running ]; then
+    log "ERROR: $c corre y no pertenece al proyecto $PROJECT (lanzado a mano): no lo toco"
+    return 1
+  fi
+  log "$c: contenedor viejo sin proyecto compose ($st): lo elimino para que compose lo recree"
+  dk rm "$c" >/dev/null 2>&1 || return 1
+}
+
 # 'up -d --no-deps' es idempotente: solo recrea si cambio la configuracion
 # (hash). Asi un 'start' tras un 'sync' aplica el compose nuevo aunque el
 # servicio ya corra. Los hijos con network_mode "service:X" se RECREAN: un
@@ -364,6 +382,7 @@ apply_svc() {   # $1 servicio, $2 "force" para recrear
   local extra=()
   [ "$FIRST_UP" = 1 ] && extra+=(--remove-orphans)
   [ "${2:-}" = force ] && extra+=(--force-recreate)
+  clear_foreign "$1" || return 1
   dc up -d --no-deps "${extra[@]}" "$1" || return 1
   FIRST_UP=0
   normalize_restart "$1"
