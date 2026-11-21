@@ -27,10 +27,10 @@
      "uid": "prometheus"
     },
     "query": {
-     "query": "query_result(lab5g_cmp_eval_algoritmo_info)",
+     "query": "query_result(last_over_time(lab5g_cmp_eval_algoritmo_info[30d]))",
      "refId": "v"
     },
-    "definition": "query_result(lab5g_cmp_eval_algoritmo_info)",
+    "definition": "query_result(last_over_time(lab5g_cmp_eval_algoritmo_info[30d]))",
     "regex": "/algoritmo=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
@@ -52,10 +52,10 @@
      "uid": "prometheus"
     },
     "query": {
-     "query": "query_result(lab5g_cmp_eval_clase_info)",
+     "query": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
      "refId": "v"
     },
-    "definition": "query_result(lab5g_cmp_eval_clase_info)",
+    "definition": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
     "regex": "/clase=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
@@ -89,7 +89,7 @@
    "title": "Cómo leer este tablero",
    "options": {
     "mode": "markdown",
-    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte.\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan estado por flujo arrastran la pérdida a los paquetes siguientes).\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo."
+    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original** (O), el **comprimido** (C) y el **recuperado** (R), y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte (de 0 a 8).\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja; **H(O) − I(O;R)** es la información que el receptor ya no tiene.\n- Cada gráfica explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde.\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo."
    },
    "id": 1,
    "gridPos": {
@@ -106,11 +106,11 @@
   {
    "type": "stat",
    "title": "Última evaluación",
-   "description": "Cuándo se publicaron estos datos.",
+   "description": "**Significado:** Cuándo se publicaron los datos de este tablero.\n\n**Cómo funciona:** Hora en que terminó `evaluar.py informacion`.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** tiempo transcurrido.\n\n**A qué responde:** ¿Estos números son de hoy o de una corrida vieja?",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_ultima_corrida_segundos * 1000",
+     "expr": "last_over_time(lab5g_cmp_eval_ultima_corrida_segundos[30d]) * 1000",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -165,7 +165,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_algoritmo_info{algoritmo=\"$algoritmo\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_algoritmo_info{algoritmo=\"$algoritmo\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -218,7 +218,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_clase_info{clase=\"$clase\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_clase_info{clase=\"$clase\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -280,11 +280,11 @@
   {
    "type": "stat",
    "title": "H(O) — entropía del original",
-   "description": "Bits de información por byte del paquete original.",
+   "description": "**Significado:** Cuánta información trae cada byte del paquete original.\n\n**Cómo funciona:** H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bits por byte, de 0 (todos los bytes iguales) a 8 (bytes al azar).\n\n**A qué responde:** ¿Qué tan comprimible es este tráfico? Cerca de 8 (cifrado, voz, video) casi no se puede comprimir.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -336,11 +336,11 @@
   {
    "type": "stat",
    "title": "Bytes originales",
-   "description": "Total de bytes de los paquetes originales.",
+   "description": "**Significado:** Tamaño total de los paquetes originales evaluados.\n\n**Cómo funciona:** Suma de los largos de todos los paquetes de la clase elegida.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bytes.\n\n**A qué responde:** ¿Sobre cuántos datos se midió? Es el 100 % contra el que se calcula el ahorro.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -404,11 +404,11 @@
   {
    "type": "stat",
    "title": "Bytes comprimidos",
-   "description": "",
+   "description": "**Significado:** Lo que de verdad viaja por la red.\n\n**Cómo funciona:** Suma de los largos de los marcos: cabecera comprimida + id del códec + carga comprimida.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bytes.\n\n**A qué responde:** ¿Cuántos bytes ocupa el tráfico después de comprimir?",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -459,12 +459,12 @@
   },
   {
    "type": "stat",
-   "title": "Razón de compresión",
-   "description": "Bytes originales / bytes comprimidos.",
+   "title": "Redundancia que sacó: H(C) − H(O)",
+   "description": "**Significado:** Cuánta redundancia por byte le quitó el algoritmo al tráfico.\n\n**Cómo funciona:** H(C) − H(O), las dos con H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b. Si es positiva, C se parece más a ruido que O: se sacó redundancia. Si es negativa, el algoritmo agregó estructura (cabeceras, marcos) sin achicar.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bits por byte (0 = no cambió nada).\n\n**A qué responde:** ¿Cuánta redundancia sacó? Junto con el ahorro dice si achicó quitando redundancia o solo cabeceras.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_razon{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "expr": "sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])) - sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -516,11 +516,11 @@
   {
    "type": "stat",
    "title": "Ahorro",
-   "description": "Porcentaje de bytes ahorrados.",
+   "description": "**Significado:** Porcentaje de bytes que ya no viajan.\n\n**Cómo funciona:** ahorro = 100 · (1 − bytes C / bytes O).\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** % (0 = nada; rojo < 1 %, verde ≥ 15 %).\n\n**A qué responde:** ¿Vale la pena comprimir esta clase con este algoritmo?",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase=\"$clase\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -580,11 +580,11 @@
   {
    "type": "stat",
    "title": "H(C) — entropía del comprimido",
-   "description": "Cerca de 8 = bytes casi aleatorios: el compresor ya sacó la redundancia.",
+   "description": "**Significado:** Qué tan parecido a ruido quedó lo comprimido.\n\n**Cómo funciona:** H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b. Aquí sobre los bytes de C.\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bits por byte, de 0 a 8.\n\n**A qué responde:** ¿Queda redundancia por sacar? Cerca de 8 = el compresor ya sacó casi todo lo que se podía.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -647,12 +647,12 @@
   },
   {
    "type": "stat",
-   "title": "I(O;R) — canal perfecto",
-   "description": "Información mutua original–recuperado, bits por byte.",
+   "title": "Información perdida: H(O) − I(O;R)",
+   "description": "**Significado:** Lo que el receptor ya no puede saber del original cuando la red pierde 1 % de los paquetes.\n\n**Cómo funciona:** H(O|R) = H(O) − I(O;R), con H(O) = H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b. I(O;R) = I(O;R) = H(O) + H(R) − H(O,R), comparando byte a byte el original O con el recuperado R; un byte que no llegó cuenta como el símbolo «borrado». Si R = O, da I(O;R) = H(O). Aquí el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos). Con canal perfecto da 0 en todos los algoritmos sin pérdida, porque C es invertible: I(O;C) = H(O).\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bits por byte del original (0 = no se perdió nada; verde < 0,1, rojo ≥ 0,3).\n\n**A qué responde:** ¿Cuánta información se pierde de verdad? Comparar con «sin_compresion» dice cuánto pone el canal y cuánto agrega el algoritmo.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perfecto\"}",
+     "expr": "sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])) - sum(last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -668,7 +668,7 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
+    "colorMode": "background",
     "graphMode": "none",
     "textMode": "value",
     "orientation": "auto"
@@ -681,8 +681,16 @@
       "mode": "absolute",
       "steps": [
        {
-        "color": "blue",
+        "color": "green",
         "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 0.1
+       },
+       {
+        "color": "red",
+        "value": 0.3
        }
       ]
      }
@@ -704,11 +712,11 @@
   {
    "type": "stat",
    "title": "I(O;R) — 1 % de pérdida",
-   "description": "",
+   "description": "**Significado:** Información del original que llega cuando la red pierde paquetes.\n\n**Cómo funciona:** I(O;R) = H(O) + H(R) − H(O,R), comparando byte a byte el original O con el recuperado R; un byte que no llegó cuenta como el símbolo «borrado». Si R = O, da I(O;R) = H(O). Aquí el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** bits por byte del original.\n\n**A qué responde:** ¿Cuánta información sobrevive a una red que pierde paquetes? La diferencia con H(O) es la información perdida, H(O) − I(O;R).",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -760,11 +768,11 @@
   {
    "type": "stat",
    "title": "Información entregada — 1 % de pérdida",
-   "description": "I(O;R) / H(O). Con canal perfecto es 100 %.",
+   "description": "**Significado:** Fracción de la información del original que llega.\n\n**Cómo funciona:** 100 · I(O;R) / H(O), con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** % (verde ≥ 99 %, amarillo ≥ 97 %, rojo menos).\n\n**A qué responde:** ¿El algoritmo agrega daño a la pérdida del canal? Si el canal pierde 1 %, lo esperable es ~99 %; menos es daño del algoritmo.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_info_entregada_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_info_entregada_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -824,11 +832,11 @@
   {
    "type": "stat",
    "title": "Paquetes que llegan mal — 1 % de pérdida",
-   "description": "Confiabilidad: % de los que llegan pero salen distintos del original.",
+   "description": "**Significado:** Confiabilidad: paquetes que llegan pero salen distintos del original.\n\n**Cómo funciona:** 100 · (recibidos que no son idénticos al original) / recibidos, con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** no aplica: es un solo número.\n\n**Eje Y:** % de los paquetes recibidos (verde < 0,5 %, rojo ≥ 2 %).\n\n**A qué responde:** ¿Una pérdida arrastra a otros paquetes? Pasa en los algoritmos que recuerdan los paquetes anteriores del flujo.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -898,110 +906,124 @@
    }
   },
   {
-   "type": "stat",
-   "title": "Comprimir",
-   "description": "Microsegundos por paquete (Python puro).",
+   "type": "xychart",
+   "title": "Ahorro contra tiempo de CPU, por clase (dispersión)",
+   "description": "**Significado:** Para el algoritmo elegido: en qué clase de tráfico gasta más CPU y si ese gasto le rinde en ahorro. Cada punto es una clase; no depende del menú de clase.\n\n**Cómo funciona:** x = µs de comprimir + µs de descomprimir por paquete (tiempo total / paquetes, Python puro, en la máquina de la evaluación); y = 100 · (1 − bytes C / bytes O).\n\n**Eje X:** microsegundos por paquete, en escala logarítmica (cada marca es 10 veces la anterior).\n\n**Eje Y:** ahorro %.\n\n**A qué responde:** ¿Dónde le conviene a este algoritmo trabajar? Arriba a la izquierda: rápido y ahorra. Abajo a la derecha: caro y no ahorra. Al tocar un punto sale de qué clase es.",
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_comprimir_us{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_comprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d])) + sum by (clase) (last_over_time(lab5g_cmp_eval_descomprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
       "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "indexByName": {
+       "clase": 0,
+       "Value #A": 1,
+       "Value #B": 2
+      },
+      "renameByName": {
+       "Value #A": "µs por paquete",
+       "Value #B": "Ahorro %",
+       "clase": "Clase"
+      }
      }
     }
    ],
    "options": {
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
+    "mapping": "auto",
+    "series": [
+     {}
+    ],
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
     },
-    "colorMode": "value",
-    "graphMode": "none",
-    "textMode": "value",
-    "orientation": "auto"
+    "tooltip": {
+     "mode": "single",
+     "sort": "none"
+    }
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "µs",
-     "decimals": 1,
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     },
+     "custom": {
+      "show": "points",
+      "pointSize": {
+       "fixed": 12
+      },
+      "pointShape": "circle",
+      "axisPlacement": "auto"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "µs por paquete"
+      },
+      "properties": [
        {
-        "color": "blue",
-        "value": null
+        "id": "unit",
+        "value": "µs"
+       },
+       {
+        "id": "custom.scaleDistribution",
+        "value": {
+         "type": "log",
+         "log": 10
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Ahorro %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
        }
       ]
      }
-    },
-    "overrides": []
+    ]
    },
    "id": 19,
    "gridPos": {
-    "h": 5,
-    "w": 12,
+    "h": 9,
+    "w": 24,
     "x": 0,
-    "y": 29
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   }
-  },
-  {
-   "type": "stat",
-   "title": "Descomprimir",
-   "description": "",
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "lab5g_cmp_eval_descomprimir_us{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
-     "instant": true,
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     }
-    }
-   ],
-   "options": {
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
-    },
-    "colorMode": "value",
-    "graphMode": "none",
-    "textMode": "value",
-    "orientation": "auto"
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "µs",
-     "decimals": 1,
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "color": "blue",
-        "value": null
-       }
-      ]
-     }
-    },
-    "overrides": []
-   },
-   "id": 20,
-   "gridPos": {
-    "h": 5,
-    "w": 12,
-    "x": 12,
     "y": 29
    },
    "datasource": {
@@ -1012,23 +1034,23 @@
   {
    "type": "row",
    "title": "Este algoritmo en cada clase de tráfico",
-   "id": 21,
+   "id": 20,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 34
+    "y": 38
    }
   },
   {
    "type": "barchart",
-   "title": "Entropía por etapa",
-   "description": "H del original, del comprimido y del recuperado con pérdida.",
+   "title": "Entropía e información mutua por clase",
+   "description": "**Significado:** Para el algoritmo elegido: cuánta información trae cada clase, qué tan comprimido queda y cuánta llega con pérdida.\n\n**Cómo funciona:** H(O) y H(C) con H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b. I(O;R) con I(O;R) = H(O) + H(R) − H(O,R), comparando byte a byte el original O con el recuperado R; un byte que no llegó cuenta como el símbolo «borrado». Si R = O, da I(O;R) = H(O).\n\n**Eje X:** clase de tráfico.\n\n**Eje Y:** bits por byte, de 0 a 8.\n\n**A qué responde:** ¿En qué clases comprime (H(C) por encima de H(O)) y en cuáles pierde información (I(O;R) por debajo de H(O))?",
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"original\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1038,7 +1060,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"comprimido\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"comprimido\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1048,7 +1070,7 @@
     },
     {
      "refId": "C",
-     "expr": "sum by (clase) (lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1109,12 +1131,12 @@
     },
     "overrides": []
    },
-   "id": 22,
+   "id": 21,
    "gridPos": {
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 35
+    "y": 39
    },
    "datasource": {
     "type": "prometheus",
@@ -1122,13 +1144,13 @@
    }
   },
   {
-   "type": "barchart",
-   "title": "Ahorro y daño por clase",
-   "description": "",
+   "type": "xychart",
+   "title": "Ahorro contra daño por clase (dispersión)",
+   "description": "**Significado:** Para el algoritmo elegido: si ahorrar más en una clase se paga con más paquetes dañados. Cada punto es una clase de tráfico.\n\n**Cómo funciona:** x = 100 · (1 − bytes C / bytes O); y = 100 · recibidos distintos del original / recibidos, con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** ahorro % (más a la derecha = ahorra más).\n\n**Eje Y:** paquetes que llegan mal % (más abajo = más confiable).\n\n**A qué responde:** ¿En qué clase conviene este algoritmo (abajo a la derecha) y en cuál es arriesgado (arriba)? Al tocar un punto sale de qué clase es.",
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (clase) (lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1138,7 +1160,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (clase) (lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase!=\"todas\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1158,52 +1180,86 @@
       "excludeByName": {
        "Time": true
       },
+      "indexByName": {
+       "clase": 0,
+       "Value #A": 1,
+       "Value #B": 2
+      },
       "renameByName": {
-       "Value #A": "ahorro %",
-       "Value #B": "llegan mal % (1 % pérdida)"
+       "Value #A": "Ahorro %",
+       "Value #B": "Llegan mal %",
+       "clase": "Clase"
       }
      }
     }
    ],
    "options": {
-    "xField": "clase",
-    "orientation": "auto",
-    "showValue": "auto",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
+    "mapping": "auto",
+    "series": [
+     {}
+    ],
     "legend": {
-     "showLegend": true,
+     "showLegend": false,
      "displayMode": "list",
      "placement": "bottom"
     },
     "tooltip": {
-     "mode": "multi",
+     "mode": "single",
      "sort": "none"
-    },
-    "xTickLabelRotation": -30
+    }
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
-     "decimals": 2,
      "color": {
-      "mode": "palette-classic"
+      "mode": "fixed",
+      "fixedColor": "green"
      },
      "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 0
+      "show": "points",
+      "pointSize": {
+       "fixed": 12
+      },
+      "pointShape": "circle",
+      "axisPlacement": "auto"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Ahorro %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Llegan mal %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "custom.axisSoftMin",
+        "value": 0
+       }
+      ]
+     }
+    ]
    },
-   "id": 23,
+   "id": 22,
    "gridPos": {
     "h": 9,
     "w": 12,
     "x": 12,
-    "y": 35
+    "y": 39
    },
    "datasource": {
     "type": "prometheus",

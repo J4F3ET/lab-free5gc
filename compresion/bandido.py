@@ -32,13 +32,24 @@ Recompensa de un paquete, dos variantes (la regla de decisión es la misma en la
       cuenta que balance.py hace fuera de línea, pero aprendida en vivo paquete a paquete.
       t_cpu se MIDE (reloj del emisor) y solo incluye comprimir: el emisor no ve cuánto tarda
       el receptor en descomprimir (en DEFLATE y zstd es 4 a 6 veces menos que comprimir).
+
+Qué deja ver el bandido (para Grafana, tablero "bandido en vivo"; lo publica shim.py):
+
+  · Por brazo: veces elegido, veces que cayó al respaldo (lo eligió y no achicó), bytes de carga
+    que entraron y que salieron, segundos de CPU y suma de recompensas. Con eso se grafica la
+    recompensa media, el ahorro efectivo y los µs por paquete de cada brazo.
+  · Por contexto y brazo: N (cuántas veces lo probó, con descuento), la media S/N y el índice UCB
+    con el que decide. Es el estado interno: explica cada decisión.
+  · Sombra: 1 de cada SOMBRA_CADA paquetes se comprime además con todos los códecs rápidos, sin
+    mandarlo ni tocar estado, solo para medir. Da el ahorro que habría tenido cada algoritmo sobre
+    el tráfico real y el "mejor por paquete", y de ahí el arrepentimiento del bandido.
 """
 from __future__ import annotations
 
 import math, time
 
-from compresores import (CODECS, DEFLATE_DICT, DEFLATE_FLUJO, NINGUNO, ZSTD_DICT, Compresor, clave_flujo,
-                         entropia_relativa)
+from compresores import (CODECS, DEFLATE_DICT, DEFLATE_FLUJO, NINGUNO, PREDICTIVO_AUDIO, REGISTRO, ZSTD_DICT,
+                         Compresor, clave_flujo, entropia_relativa, nombre_codec)
 
 COSTO_CPU = 0.01
 
@@ -49,10 +60,28 @@ COSTO_CPU = 0.01
 # diccionario, si está disponible, reemplaza a DEFLATE con diccionario: el bandido ahorra
 # ~0,4 puntos menos pero reconstruye mal la mitad de paquetes con pérdida y explora menos
 # (ver resultados/ajuste.md). Sin zstd queda la configuración anterior.
+# predictivo_audio (2026-11-13): el tráfico de prueba no trae audio PCM, así que ahí no gana nada y el
+# bandido lo deja; en audio sin comprimir (un WAV por la página de envío) ahorra ~40 % donde los
+# otros brazos sacan ~0-12 %.
 if ZSTD_DICT in CODECS:
-    BRAZOS_RED, GAMMA_RED, C_RED = (NINGUNO, ZSTD_DICT, DEFLATE_FLUJO), 0.999, 0.02
+    BRAZOS_RED, GAMMA_RED, C_RED = (NINGUNO, ZSTD_DICT, DEFLATE_FLUJO, PREDICTIVO_AUDIO), 0.999, 0.02
 else:
-    BRAZOS_RED, GAMMA_RED, C_RED = (NINGUNO, DEFLATE_DICT, DEFLATE_FLUJO), 0.999, 0.05
+    BRAZOS_RED, GAMMA_RED, C_RED = (NINGUNO, DEFLATE_DICT, DEFLATE_FLUJO, PREDICTIVO_AUDIO), 0.999, 0.05
+
+# Ráfaga: cuando el bandido elige un brazo CON MEMORIA POR FLUJO (deflate_flujo), lo sostiene
+# RAFAGA paquetes seguidos de ese flujo antes de volver a decidir. Sin esto, probarlo un paquete
+# suelto lo subestima: rinde más cuanto más se usa, porque recuerda los anteriores (docs/08 §4.12).
+# La recompensa se sigue anotando en cada paquete, así que la media ve lo que de verdad rinde.
+RAFAGA_RED = 8
+CON_MEMORIA = frozenset({DEFLATE_FLUJO})
+
+
+# Nombres de las cubetas del contexto (etiquetas de las métricas). Los cortes están en contexto().
+# tamaño de la carga: chico < 64 B, mediano 64 a 511 B, grande >= 512 B
+# entropía relativa (H de los primeros 256 B / el máximo posible): baja < 0,75, media 0,75 a 0,9, alta >= 0,9
+TAMANOS = ("chico", "mediano", "grande")
+ENTROPIAS = ("baja", "media", "alta")
+SOMBRA_CADA = 100  # en la red: 1 de cada 100 paquetes se mide con todos los códecs rápidos
 
 
 def contexto(carga: bytes) -> tuple[int, int]:
@@ -76,18 +105,34 @@ class BandidoCodec:
             self.estado[ctx] = ([0.0] * n, [0.0] * n)
         return self.estado[ctx]
 
-    def elegir(self, ctx) -> int:
+    def indices(self, ctx) -> list[tuple[float, float, float]]:
+        """Por brazo: (N, media, índice UCB) en ese contexto. Es la cuenta con la que decide:
+
+            índice_j = S_j / N_j  +  c · sqrt( ln(Σ N) / N_j )
+                       └ media ┘     └── bono de exploración ──┘
+
+        media = recompensa promedio reciente del brazo (S y N se multiplican por γ en cada paquete:
+        lo viejo pesa cada vez menos). El bono es grande si el brazo se ha probado poco frente al
+        total, y baja al probarlo: así un brazo abandonado vuelve a probarse cada tanto. Un brazo
+        sin probar (N = 0) tiene índice infinito: se prueba primero."""
         N, S = self._ctx(ctx)
-        for j, nj in enumerate(N):        # un brazo nunca probado se prueba primero
-            if nj == 0.0:
-                return self.brazos[j]
-        tot = math.log(sum(N))
+        tot = max(math.log(sum(N)), 0.0) if sum(N) > 0 else 0.0
+        return [(nj, sj / nj, sj / nj + self.c * math.sqrt(tot / nj)) if nj > 0 else (0.0, 0.0, math.inf)
+                for nj, sj in zip(N, S)]
+
+    def elegir(self, ctx) -> int:
         mejor, jmejor = -1e9, 0
-        for j, (nj, sj) in enumerate(zip(N, S)):
-            v = sj / nj + self.c * math.sqrt(max(tot, 0.0) / nj)
+        for j, (nj, _, v) in enumerate(self.indices(ctx)):
+            if nj == 0.0:                  # un brazo nunca probado se prueba primero
+                return self.brazos[j]
             if v > mejor + 1e-12:          # empate -> el de menor id (ninguno = 0)
                 mejor, jmejor = v, j
         return self.brazos[jmejor]
+
+    def estado_exportable(self) -> list[tuple[tuple, int, float, float, float]]:
+        """(contexto, brazo, N, media, índice) de cada contexto visto y cada brazo ya probado."""
+        return [(ctx, self.brazos[j], n, media, ind) for ctx in sorted(self.estado)
+                for j, (n, media, ind) in enumerate(self.indices(ctx)) if n > 0]
 
     def actualizar(self, ctx, codec: int, r: float) -> None:
         N, S = self._ctx(ctx)
@@ -128,7 +173,18 @@ class EmisorAdaptativo:
 
     def __init__(self, modelo, reinicio_flujo: int = 16, gamma: float = GAMMA_RED, c: float = C_RED,
                  brazos=BRAZOS_RED, velocidad_bps: float | None = None, factor_cpu: float = 1.0,
-                 perdida_iot: dict | None = None):
+                 perdida_iot: dict | None = None, sombra_cada: int = 0, sombra_codecs=None,
+                 contexto_fn=contexto, rafaga: int = RAFAGA_RED):
+        # sombra_cada = K > 0: 1 de cada K paquetes se mide además con sombra_codecs (por defecto,
+        # los códecs sin pérdida que no están marcados `lento`). 0 = sin sombra (las evaluaciones
+        # fuera de línea no la necesitan: ya corren cada algoritmo por separado).
+        # contexto_fn: cómo se saca el contexto de una carga (para medir qué aporta: evaluar.py bandido).
+        self.contexto_fn = contexto_fn
+        # rafaga = R > 1: un brazo de CON_MEMORIA elegido para un flujo se sostiene R paquetes de ese
+        # flujo (se corta antes si un paquete cae al respaldo). 0 o 1 = decidir en cada paquete.
+        self.rafaga = rafaga
+        self.en_rafaga: dict[tuple, list] = {}  # clave de flujo -> [brazo, paquetes que le quedan]
+        self.por_rafaga = 0  # paquetes que se mandaron por ráfaga sin consultar al bandido
         # perdida_iot: la telemetría JSON va con PredictivoIoT (con pérdida acotada) en vez de
         # pasar por el bandido; el resto del tráfico sigue igual. None = todo sin pérdida.
         self.tx = Compresor(modelo, reinicio_flujo=reinicio_flujo, perdida_iot=perdida_iot)
@@ -136,6 +192,17 @@ class EmisorAdaptativo:
         self.velocidad_bps, self.factor_cpu = velocidad_bps, factor_cpu
         self.elegidos: dict[int, int] = {}  # cuántas veces se ELIGIÓ cada códec (antes del respaldo)
         self.ctx_flujo: dict[tuple, list] = {}  # clave -> [contexto, paquetes desde que se midió]
+        # Por brazo ELEGIDO: [veces elegido, respaldos, bytes de carga que entraron, bytes que
+        # salieron, segundos de CPU, suma de recompensas]. Acumulados: Grafana saca tasas con rate().
+        self.por_brazo: dict[int, list] = {b: [0, 0, 0, 0, 0.0, 0.0] for b in self.bandido.brazos}
+        self.por_contexto: dict[tuple, int] = {}  # paquetes que pasaron por cada contexto
+        self.sombra_cada, self.n = sombra_cada, 0
+        self.sombra_codecs = list(sombra_codecs) if sombra_codecs is not None else [
+            i for i in CODECS if not REGISTRO[i].lento]
+        # Bytes de carga de los paquetes muestreados: lo que entró ("original"), lo que mandó el
+        # bandido, el mejor códec de cada paquete, y lo que habría salido con cada códec.
+        self.sombra = {"paquetes": 0, "original": 0, "bandido": 0, "mejor": 0,
+                       "bytes": {i: 0 for i in self.sombra_codecs}, "cpu": {i: 0.0 for i in self.sombra_codecs}}
 
     def enviar(self, pkt: bytes) -> tuple[bytes, int]:
         _, forzado = self.tx.preparar(pkt)
@@ -148,19 +215,108 @@ class EmisorAdaptativo:
         if ent is None or ent[1] >= self.REFRESCO_CTX:
             if len(self.ctx_flujo) > 4096:
                 self.ctx_flujo.clear()
-            ent = self.ctx_flujo[clave] = [contexto(carga), 0]
+            ent = self.ctx_flujo[clave] = [self.contexto_fn(carga), 0]
         ent[1] += 1
         ctx = ent[0]
-        elegido = cod = self.ultimo_elegido = self.bandido.elegir(ctx)
+        raf = self.en_rafaga.get(clave)
+        if raf and raf[1] > 0:
+            elegido = raf[0]; raf[1] -= 1; self.por_rafaga += 1
+        else:
+            elegido = self.bandido.elegir(ctx)
+            if self.rafaga > 1 and elegido in CON_MEMORIA:
+                if len(self.en_rafaga) > 4096:
+                    self.en_rafaga.clear()
+                self.en_rafaga[clave] = [elegido, self.rafaga - 1]
+            elif raf:
+                del self.en_rafaga[clave]
+        cod = self.ultimo_elegido = elegido
         self.elegidos[elegido] = self.elegidos.get(elegido, 0) + 1
         t0 = time.perf_counter()
         d, conf = self.tx.probar(cod, carga, clave)
         t_cpu = (time.perf_counter() - t0) * self.factor_cpu
         if cod != NINGUNO and len(d) >= len(carga):
             cod, d, conf = NINGUNO, carga, None
+            self.en_rafaga.pop(clave, None)  # no achicó: no tiene sentido insistir con este flujo
+        self.n += 1
+        if self.sombra_cada and self.n % self.sombra_cada == 0:
+            self._medir_sombra(carga, clave, len(d))   # antes de confirmar: con el estado de ANTES
         if conf:
             conf()
         # Se premia (y se cobra el costo de CPU a) el brazo ELEGIDO aunque haya caído al
         # respaldo "ninguno": intentarlo gastó CPU igual, y así aprende que ahí no sirve.
-        self.bandido.actualizar(ctx, elegido, recompensa(len(carga), len(d), elegido, t_cpu, self.velocidad_bps))
+        r = recompensa(len(carga), len(d), elegido, t_cpu, self.velocidad_bps)
+        self.bandido.actualizar(ctx, elegido, r)
+        e = self.por_brazo[elegido]
+        e[0] += 1; e[1] += cod != elegido; e[2] += len(carga); e[3] += len(d); e[4] += t_cpu; e[5] += r
+        self.por_contexto[ctx] = self.por_contexto.get(ctx, 0) + 1
         return bytes([(0x80 if hc else 0) | cod]) + pref + d, cod
+
+    def _medir_sombra(self, carga: bytes, clave: tuple, enviado: int) -> None:
+        """Comprime la carga con cada códec de la sombra SIN confirmar estado ni mandar nada.
+
+        Qué mide: para ESTE paquete, con el estado que tiene el emisor en este momento, cuántos
+        bytes habría mandado cada códec (con el mismo respaldo: si no achica, va tal cual). Es
+        el contrafactual de la DECISIÓN, que es lo que le importa al bandido:
+
+            arrepentimiento = (bytes del bandido − bytes del mejor códec de cada paquete)
+                              / bytes originales
+
+        No es exactamente "ese códec fijo todo el día": deflate_flujo solo recuerda los paquetes
+        que el bandido sí mandó por él, así que aquí sale algo peor que si fuera fijo."""
+        s = self.sombra
+        mejor = len(carga)
+        for cod in self.sombra_codecs:
+            t0 = time.perf_counter()
+            try:
+                largo = min(len(self.tx.probar(cod, carga, clave)[0]), len(carga))
+            except Exception:
+                largo = len(carga)
+            s["cpu"][cod] += time.perf_counter() - t0
+            s["bytes"][cod] += largo
+            mejor = min(mejor, largo)
+        s["paquetes"] += 1; s["original"] += len(carga); s["bandido"] += enviado
+        s["mejor"] += min(mejor, enviado)
+
+
+def texto_bandido(em: "EmisorAdaptativo", l: str) -> str:
+    """Las variables del bandido en formato Prometheus (ver el encabezado de bandido.py). Todo lo
+    que termina en un contador es acumulado desde que arrancó el proceso; el tablero
+    "bandido en vivo" (observability/grafana/dashboards_compresion.py) saca de ahí:
+
+        recompensa media del brazo   = Δ recompensa_suma / Δ elegidos
+        ahorro efectivo del brazo    = 1 − Δ carga_bytes{salida} / Δ carga_bytes{entrada}
+        µs de CPU por paquete        = 1e6 · Δ cpu_segundos / Δ elegidos
+        tasa de respaldo             = Δ respaldos / Δ elegidos
+        ahorro que habría tenido X   = 1 − Δ sombra_bytes{X} / Δ sombra_bytes{original}
+        arrepentimiento del bandido  = (Δ sombra_bytes{bandido_ucb} − Δ sombra_bytes{mejor}) / Δ sombra_bytes{original}
+
+    lab5g_cmp_bandido_* son el estado interno en este instante (no acumulados)."""
+    familias: dict[str, list[str]] = {}   # las muestras de una misma métrica van juntas
+
+    def g(nombre, etiquetas, valor):
+        et = ",".join([l] + [f'{k}="{v}"' for k, v in etiquetas.items()])
+        familias.setdefault(nombre, []).append(f"lab5g_cmp_{nombre}{{{et}}} {valor}\n")
+        return ""
+
+    s = ""
+    for cod, (elegido, respaldos, entro, salio, cpu, rec) in em.por_brazo.items():
+        n = {"codec": nombre_codec(cod)}
+        s += g("elegidos", n, elegido) + g("respaldos", n, respaldos)
+        s += g("carga_bytes", dict(n, tipo="entrada"), entro) + g("carga_bytes", dict(n, tipo="salida"), salio)
+        s += g("cpu_segundos", n, f"{cpu:.6f}") + g("recompensa_suma", n, f"{rec:.6f}")
+    for (t, e), paquetes in em.por_contexto.items():
+        s += g("contexto_paquetes", {"tam": TAMANOS[t], "ent": ENTROPIAS[e]}, paquetes)
+    for (t, e), cod, n, media, indice in em.bandido.estado_exportable():
+        et = {"tam": TAMANOS[t], "ent": ENTROPIAS[e], "codec": nombre_codec(cod)}
+        s += g("bandido_n", et, f"{n:.3f}") + g("bandido_media", et, f"{media:.5f}")
+        s += g("bandido_indice", et, f"{indice:.5f}")
+    sm = em.sombra
+    if em.sombra_cada:
+        s += g("sombra_paquetes", {}, sm["paquetes"])
+        for nombre in ("original", "mejor"):
+            s += g("sombra_bytes", {"codec": nombre}, sm[nombre])
+        s += g("sombra_bytes", {"codec": "bandido_ucb"}, sm["bandido"])   # mismo nombre que en la evaluación
+        for cod in em.sombra_codecs:
+            s += g("sombra_bytes", {"codec": nombre_codec(cod)}, sm["bytes"][cod])
+            s += g("sombra_cpu_segundos", {"codec": nombre_codec(cod)}, f"{sm['cpu'][cod]:.6f}")
+    return "".join(x for v in familias.values() for x in v)

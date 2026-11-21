@@ -1,6 +1,6 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 30s
+  evaluation_interval: 30s
   external_labels:
     lab: lab-free5gc
     plmn: "732101"
@@ -10,22 +10,23 @@ scrape_configs:
   - job_name: prometheus
     static_configs: [ { targets: [ "localhost:9090" ] } ]
 
-  # Recursos del LXC completo
-  - job_name: node
-    static_configs:
-      - targets: [ "10.100.205.13:9100" ]
-        labels: { scope: lxc }
-
-  # Recursos por contenedor Docker
-  - job_name: cadvisor
-    static_configs:
-      - targets: [ "10.100.205.12:8080" ]
-        labels: { scope: container }
-    metric_relabel_configs:
-      # Reduce cardinalidad: quedate con los contenedores del lab
-      - source_labels: [ name ]
-        regex: "(nrf|amf|smf|upf|ausf|udm|udr|pcf|nssf|gnb|ue|mongodb)"
-        action: keep
+  # retirados: el servicio lab5g-stack publica esos datos al pushgateway
+#  # Recursos del LXC completo
+#  - job_name: node
+#    static_configs:
+#      - targets: [ "10.100.205.13:9100" ]
+#        labels: { scope: lxc }
+#
+#  # Recursos por contenedor Docker
+#  - job_name: cadvisor
+#    static_configs:
+#      - targets: [ "10.100.205.12:8080" ]
+#        labels: { scope: container }
+#    metric_relabel_configs:
+#      # Reduce cardinalidad: quedate con los contenedores del lab
+#      - source_labels: [ name ]
+#        regex: "(nrf|amf|smf|upf|ausf|udm|udr|pcf|nssf|gnb|ue|mongodb)"
+#        action: keep
 
   # Latencia ICMP DESDE el UE a traves de uesimtun0
   - job_name: blackbox-ue-icmp
@@ -65,7 +66,9 @@ scrape_configs:
       - target_label: plane
         replacement: control
 
-  # Throughput empujado por la sonda iperf3
+  # Todo lo empujado al pushgateway (sondas, compresion, datos de host de lab5g-stack).
+  # honor_labels: true conserva los labels job/instance de quien empuja; sin el,
+  # Prometheus los pisaria con job=pushgateway.
   - job_name: pushgateway
     honor_labels: true
     static_configs: [ { targets: [ "10.100.205.14:9091" ] } ]

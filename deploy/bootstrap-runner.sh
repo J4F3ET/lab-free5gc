@@ -33,6 +33,41 @@ else
   exit 1
 fi
 
+# --- 2b. Pila escalonada del lab (entorno, directorios, scripts, unidades) ---
+# El compose deja todos los servicios con 'restart: "no"': el unico que los
+# arranca y repone es lab5g-stack.service. Aqui solo se INSTALA y se HABILITA;
+# no se arranca (un arranque en frio tarda 20-30 min y lo decide el operador
+# o el pipeline con 'lab5g.sh start').
+install -d -m 755 -o root -g root /etc/lab5g
+if [ -e /etc/lab5g/lab5g.env ]; then
+  echo "[bootstrap] /etc/lab5g/lab5g.env ya existe: no se toca"
+else
+  install -m 640 -o root -g "$RUNNER_USER" "$REPO_DIR/.env.example" /etc/lab5g/lab5g.env
+  echo "[bootstrap] /etc/lab5g/lab5g.env creado desde .env.example"
+  echo "[bootstrap] AVISO: GRAFANA_ADMIN_PASSWORD tiene el valor de ejemplo;" \
+       "fijala con: printf '%s' 'TU_CLAVE' | lab5g.sh env-set GRAFANA_ADMIN_PASSWORD" >&2
+fi
+# Se reafirman dueno y modo aunque ya existiera (sin tocar el contenido).
+chown "root:$RUNNER_USER" /etc/lab5g/lab5g.env
+chmod 640 /etc/lab5g/lab5g.env
+
+install -d -m 755 -o "$RUNNER_USER" -g "$RUNNER_USER" /opt/lab5g
+# .env es un enlace al entorno real: sync lo excluye (sobrevive) y asi
+# 'docker compose' a mano tambien funciona desde /opt/lab5g.
+ln -sfn /etc/lab5g/lab5g.env /opt/lab5g/.env
+install -d -m 755 /var/lib/lab5g /var/backups/lab5g
+
+for s in lab5g.sh lab5g-stack.sh lab5g-backup.sh; do
+  install -m 755 "$REPO_DIR/deploy/$s" "/usr/local/sbin/$s"
+done
+for u in lab5g-stack.service lab5g-backup.service lab5g-backup.timer; do
+  install -m 644 "$REPO_DIR/deploy/$u" "/etc/systemd/system/$u"
+done
+systemctl daemon-reload
+systemctl enable lab5g-stack.service lab5g-backup.timer >/dev/null
+echo "[bootstrap] lab5g-stack.service y lab5g-backup.timer instalados y habilitados (NO arrancados)"
+echo "[bootstrap] siguiente: lab5g.sh sync && lab5g.sh start"
+
 # --- 3. Dependencias de los checks de CI -------------------------------
 # ci/check-plmn.py necesita pyyaml. Se instala como paquete del sistema:
 # Debian 13 marca el entorno como externally-managed (PEP 668) y en este

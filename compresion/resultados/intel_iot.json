@@ -1,0 +1,1408 @@
+{
+ "paquetes": 6000,
+ "p_perdida": 0.01,
+ "algoritmos": {
+  "sin_compresion": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 766706,
+      "entropia": 5.4019,
+      "razon": 1.0,
+      "ahorro_pct": 0.0
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 0.4,
+     "descomprimir_us": 0.5,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 766706,
+      "entropia": 5.4019,
+      "razon": 1.0,
+      "ahorro_pct": 0.0
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 0.4,
+     "descomprimir_us": 0.5,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 766706,
+      "entropia": 5.4019,
+      "razon": 1.0,
+      "ahorro_pct": 0.0
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 0.4,
+     "descomprimir_us": 1.0,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 766706,
+      "entropia": 5.4019,
+      "razon": 1.0,
+      "ahorro_pct": 0.0
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 0.4,
+     "descomprimir_us": 1.0,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "solo_rohc": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 18.9,
+     "descomprimir_us": 18.9,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 18.9,
+     "descomprimir_us": 18.9,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 39.0,
+     "descomprimir_us": 34.3,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 39.0,
+     "descomprimir_us": 34.3,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "huffman_estatico": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565909,
+      "entropia": 7.07,
+      "razon": 1.3548,
+      "ahorro_pct": 26.19
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 106.8,
+     "descomprimir_us": 717.2,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565909,
+      "entropia": 7.07,
+      "razon": 1.3548,
+      "ahorro_pct": 26.19
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 106.8,
+     "descomprimir_us": 717.2,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565909,
+      "entropia": 7.07,
+      "razon": 1.3548,
+      "ahorro_pct": 26.19
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 76.0,
+     "descomprimir_us": 541.4,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565909,
+      "entropia": 7.07,
+      "razon": 1.3548,
+      "ahorro_pct": 26.19
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 76.0,
+     "descomprimir_us": 541.4,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "deflate": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565698,
+      "entropia": 7.8501,
+      "razon": 1.3553,
+      "ahorro_pct": 26.22
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 76.8,
+     "descomprimir_us": 44.9,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565698,
+      "entropia": 7.8501,
+      "razon": 1.3553,
+      "ahorro_pct": 26.22
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 76.8,
+     "descomprimir_us": 44.9,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565698,
+      "entropia": 7.8501,
+      "razon": 1.3553,
+      "ahorro_pct": 26.22
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 72.0,
+     "descomprimir_us": 43.3,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 565698,
+      "entropia": 7.8501,
+      "razon": 1.3553,
+      "ahorro_pct": 26.22
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 72.0,
+     "descomprimir_us": 43.3,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "deflate_dict": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 462580,
+      "entropia": 7.0515,
+      "razon": 1.6575,
+      "ahorro_pct": 39.67
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 97.4,
+     "descomprimir_us": 33.6,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 462580,
+      "entropia": 7.0515,
+      "razon": 1.6575,
+      "ahorro_pct": 39.67
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 97.4,
+     "descomprimir_us": 33.6,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 462580,
+      "entropia": 7.0515,
+      "razon": 1.6575,
+      "ahorro_pct": 39.67
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 97.0,
+     "descomprimir_us": 34.6,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 462580,
+      "entropia": 7.0515,
+      "razon": 1.6575,
+      "ahorro_pct": 39.67
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 97.0,
+     "descomprimir_us": 34.6,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "deflate_flujo": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 173774,
+      "entropia": 7.0753,
+      "razon": 4.4121,
+      "ahorro_pct": 77.33
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 114.1,
+     "descomprimir_us": 33.5,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 173774,
+      "entropia": 7.0753,
+      "razon": 4.4121,
+      "ahorro_pct": 77.33
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 114.1,
+     "descomprimir_us": 33.5,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 173774,
+      "entropia": 7.0753,
+      "razon": 4.4121,
+      "ahorro_pct": 77.33
+     },
+     "recuperado": {
+      "entropia": 5.4323,
+      "info_mutua": 5.1155,
+      "info_entregada_pct": 94.699
+     },
+     "comprimir_us": 126.4,
+     "descomprimir_us": 39.5,
+     "mal_pct": 7.28
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 173774,
+      "entropia": 7.0753,
+      "razon": 4.4121,
+      "ahorro_pct": 77.33
+     },
+     "recuperado": {
+      "entropia": 5.4323,
+      "info_mutua": 5.1155,
+      "info_entregada_pct": 94.699
+     },
+     "comprimir_us": 126.4,
+     "descomprimir_us": 39.5,
+     "mal_pct": 7.28
+    }
+   }
+  },
+  "tic_por_paquete": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 571.2,
+     "descomprimir_us": 33.8,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 571.2,
+     "descomprimir_us": 33.8,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 667.7,
+     "descomprimir_us": 39.6,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 637031,
+      "entropia": 4.9442,
+      "razon": 1.2036,
+      "ahorro_pct": 16.91
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 667.7,
+     "descomprimir_us": 39.6,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "zstd_dict": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 488661,
+      "entropia": 7.5131,
+      "razon": 1.569,
+      "ahorro_pct": 36.26
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 67.6,
+     "descomprimir_us": 43.5,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 488661,
+      "entropia": 7.5131,
+      "razon": 1.569,
+      "ahorro_pct": 36.26
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 67.6,
+     "descomprimir_us": 43.5,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 488661,
+      "entropia": 7.5131,
+      "razon": 1.569,
+      "ahorro_pct": 36.26
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 50.1,
+     "descomprimir_us": 34.8,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 488661,
+      "entropia": 7.5131,
+      "razon": 1.569,
+      "ahorro_pct": 36.26
+     },
+     "recuperado": {
+      "entropia": 5.429,
+      "info_mutua": 5.3463,
+      "info_entregada_pct": 98.971
+     },
+     "comprimir_us": 50.1,
+     "descomprimir_us": 34.8,
+     "mal_pct": 0.0
+    }
+   }
+  },
+  "bandido_ucb": {
+   "perfecto": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 174332,
+      "entropia": 7.0804,
+      "razon": 4.398,
+      "ahorro_pct": 77.26
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 135.1,
+     "descomprimir_us": 34.1,
+     "mal_pct": 0.0
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 174332,
+      "entropia": 7.0804,
+      "razon": 4.398,
+      "ahorro_pct": 77.26
+     },
+     "recuperado": {
+      "entropia": 5.4019,
+      "info_mutua": 5.4019,
+      "info_entregada_pct": 100.0
+     },
+     "comprimir_us": 135.1,
+     "descomprimir_us": 34.1,
+     "mal_pct": 0.0
+    }
+   },
+   "perdida_1pct": {
+    "todas": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 174332,
+      "entropia": 7.0804,
+      "razon": 4.398,
+      "ahorro_pct": 77.26
+     },
+     "recuperado": {
+      "entropia": 5.4327,
+      "info_mutua": 5.1044,
+      "info_entregada_pct": 94.493
+     },
+     "comprimir_us": 136.0,
+     "descomprimir_us": 34.5,
+     "mal_pct": 8.24
+    },
+    "iot_json": {
+     "paquetes": 6000,
+     "original": {
+      "bytes": 766706,
+      "entropia": 5.4019
+     },
+     "comprimido": {
+      "bytes": 174332,
+      "entropia": 7.0804,
+      "razon": 4.398,
+      "ahorro_pct": 77.26
+     },
+     "recuperado": {
+      "entropia": 5.4327,
+      "info_mutua": 5.1044,
+      "info_entregada_pct": 94.493
+     },
+     "comprimir_us": 136.0,
+     "descomprimir_us": 34.5,
+     "mal_pct": 8.24
+    }
+   }
+  }
+ },
+ "tasa_distorsion_iot": {
+  "campos": [
+   "temp",
+   "hum",
+   "bat"
+  ],
+  "pasos_base": {
+   "temp": 0.05,
+   "hum": 0.5,
+   "bat": 0.005
+  },
+  "filas": [
+   {
+    "metodo": "predictivo ×0",
+    "escala": 0.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 1e-06,
+     "hum": 1e-06,
+     "bat": 1e-06
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 140645,
+    "bytes_por_paquete": 23.44,
+    "ahorro_pct": 81.66,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "predictivo ×0",
+    "escala": 0.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 1e-06,
+     "hum": 1e-06,
+     "bat": 1e-06
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 140645,
+    "bytes_por_paquete": 23.44,
+    "ahorro_pct": 81.66,
+    "error_max": {
+     "temp": 0.0686,
+     "hum": 0.3437,
+     "bat": 0.01267
+    },
+    "error_medio": {
+     "temp": 0.001154,
+     "hum": 0.003828,
+     "bat": 0.000251
+    },
+    "dentro_tolerancia_pct": 92.52,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 97.4,
+     "hum": 97.85,
+     "bat": 96.87
+    },
+    "info_entregada_media_pct": 97.37
+   },
+   {
+    "metodo": "predictivo ×0.1",
+    "escala": 0.1,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.005000000000000001,
+     "hum": 0.05,
+     "bat": 0.0005
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122118,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0024,
+     "hum": 0.025,
+     "bat": 0.00024
+    },
+    "error_medio": {
+     "temp": 0.000895,
+     "hum": 0.010789,
+     "bat": 4.2e-05
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 95.68,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 98.56
+   },
+   {
+    "metodo": "predictivo ×0.1",
+    "escala": 0.1,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.005000000000000001,
+     "hum": 0.05,
+     "bat": 0.0005
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122118,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.067,
+     "hum": 0.3688,
+     "bat": 0.01267
+    },
+    "error_medio": {
+     "temp": 0.001948,
+     "hum": 0.014036,
+     "bat": 0.000291
+    },
+    "dentro_tolerancia_pct": 92.64,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 99.03,
+     "hum": 94.46,
+     "bat": 96.17
+    },
+    "info_entregada_media_pct": 96.55
+   },
+   {
+    "metodo": "predictivo ×0.5",
+    "escala": 0.5,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.025,
+     "hum": 0.25,
+     "bat": 0.0025
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0124,
+     "hum": 0.1249,
+     "bat": 0.00111
+    },
+    "error_medio": {
+     "temp": 0.005768,
+     "hum": 0.049695,
+     "bat": 0.000101
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 91.35,
+     "hum": 77.92,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 89.76
+   },
+   {
+    "metodo": "predictivo ×0.5",
+    "escala": 0.5,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.025,
+     "hum": 0.25,
+     "bat": 0.0025
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0832,
+     "hum": 0.6124,
+     "bat": 0.01311
+    },
+    "error_medio": {
+     "temp": 0.006465,
+     "hum": 0.052071,
+     "bat": 0.000355
+    },
+    "dentro_tolerancia_pct": 95.84,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 90.67,
+     "hum": 77.41,
+     "bat": 95.86
+    },
+    "info_entregada_media_pct": 87.98
+   },
+   {
+    "metodo": "predictivo ×1",
+    "escala": 1.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.05,
+     "hum": 0.5,
+     "bat": 0.005
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0248,
+     "hum": 0.2497,
+     "bat": 0.00244
+    },
+    "error_medio": {
+     "temp": 0.011212,
+     "hum": 0.079342,
+     "bat": 0.000731
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 84.41,
+     "hum": 71.75,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 85.39
+   },
+   {
+    "metodo": "predictivo ×1",
+    "escala": 1.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.05,
+     "hum": 0.5,
+     "bat": 0.005
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0744,
+     "hum": 0.7432,
+     "bat": 0.01744
+    },
+    "error_medio": {
+     "temp": 0.012159,
+     "hum": 0.08228,
+     "bat": 0.000933
+    },
+    "dentro_tolerancia_pct": 95.82,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 83.77,
+     "hum": 71.3,
+     "bat": 96.32
+    },
+    "info_entregada_media_pct": 83.8
+   },
+   {
+    "metodo": "predictivo ×2",
+    "escala": 2.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.1,
+     "hum": 1.0,
+     "bat": 0.01
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.0494,
+     "hum": 0.4968,
+     "bat": 0.005
+    },
+    "error_medio": {
+     "temp": 0.02309,
+     "hum": 0.107574,
+     "bat": 0.000803
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 77.65,
+     "hum": 67.75,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 81.8
+   },
+   {
+    "metodo": "predictivo ×2",
+    "escala": 2.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.1,
+     "hum": 1.0,
+     "bat": 0.01
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.149,
+     "hum": 0.4968,
+     "bat": 0.01389
+    },
+    "error_medio": {
+     "temp": 0.02422,
+     "hum": 0.107478,
+     "bat": 0.000985
+    },
+    "dentro_tolerancia_pct": 96.36,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 77.06,
+     "hum": 67.37,
+     "bat": 96.17
+    },
+    "info_entregada_media_pct": 80.2
+   },
+   {
+    "metodo": "predictivo ×5",
+    "escala": 5.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.25,
+     "hum": 2.5,
+     "bat": 0.025
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.1226,
+     "hum": 1.242,
+     "bat": 0.01244
+    },
+    "error_medio": {
+     "temp": 0.044479,
+     "hum": 0.117406,
+     "bat": 0.003994
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 70.95,
+     "hum": 66.7,
+     "bat": 74.59
+    },
+    "info_entregada_media_pct": 70.75
+   },
+   {
+    "metodo": "predictivo ×5",
+    "escala": 5.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.25,
+     "hum": 2.5,
+     "bat": 0.025
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.3332,
+     "hum": 1.242,
+     "bat": 0.03744
+    },
+    "error_medio": {
+     "temp": 0.045249,
+     "hum": 0.117346,
+     "bat": 0.004087
+    },
+    "dentro_tolerancia_pct": 99.19,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 70.54,
+     "hum": 66.34,
+     "bat": 72.95
+    },
+    "info_entregada_media_pct": 69.94
+   },
+   {
+    "metodo": "predictivo ×10",
+    "escala": 10.0,
+    "canal": "perfecto",
+    "pasos": {
+     "temp": 0.5,
+     "hum": 5.0,
+     "bat": 0.05
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.2452,
+     "hum": 2.4205,
+     "bat": 0.025
+    },
+    "error_medio": {
+     "temp": 0.061088,
+     "hum": 0.123671,
+     "bat": 0.0043
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 67.9,
+     "hum": 66.57,
+     "bat": 62.13
+    },
+    "info_entregada_media_pct": 65.53
+   },
+   {
+    "metodo": "predictivo ×10",
+    "escala": 10.0,
+    "canal": "perdida_1pct",
+    "pasos": {
+     "temp": 0.5,
+     "hum": 5.0,
+     "bat": 0.05
+    },
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 122117,
+    "bytes_por_paquete": 20.35,
+    "ahorro_pct": 84.07,
+    "error_max": {
+     "temp": 0.343,
+     "hum": 2.4205,
+     "bat": 0.025
+    },
+    "error_medio": {
+     "temp": 0.061255,
+     "hum": 0.123677,
+     "bat": 0.004307
+    },
+    "dentro_tolerancia_pct": 99.88,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 67.55,
+     "hum": 66.21,
+     "bat": 61.48
+    },
+    "info_entregada_media_pct": 65.08
+   },
+   {
+    "metodo": "zstd_dict",
+    "escala": null,
+    "canal": "perfecto",
+    "pasos": null,
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 488661,
+    "bytes_por_paquete": 81.44,
+    "ahorro_pct": 36.26,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "zstd_dict",
+    "escala": null,
+    "canal": "perdida_1pct",
+    "pasos": null,
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 488661,
+    "bytes_por_paquete": 81.44,
+    "ahorro_pct": 36.26,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 99.36,
+     "hum": 99.28,
+     "bat": 99.01
+    },
+    "info_entregada_media_pct": 99.22
+   },
+   {
+    "metodo": "deflate_flujo",
+    "escala": null,
+    "canal": "perfecto",
+    "pasos": null,
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 173774,
+    "bytes_por_paquete": 28.96,
+    "ahorro_pct": 77.33,
+    "error_max": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "error_medio": {
+     "temp": 0.0,
+     "hum": 0.0,
+     "bat": 0.0
+    },
+    "dentro_tolerancia_pct": 100.0,
+    "dañados_pct": 0.0,
+    "info_entregada_pct": {
+     "temp": 100.0,
+     "hum": 100.0,
+     "bat": 100.0
+    },
+    "info_entregada_media_pct": 100.0
+   },
+   {
+    "metodo": "deflate_flujo",
+    "escala": null,
+    "canal": "perdida_1pct",
+    "pasos": null,
+    "paquetes": 6000,
+    "bytes_original": 766706,
+    "bytes_comprimido": 173774,
+    "bytes_por_paquete": 28.96,
+    "ahorro_pct": 77.33,
+    "error_max": {
+     "temp": 226035.395,
+     "hum": 357803.2161,
+     "bat": 3961.34857
+    },
+    "error_medio": {
+     "temp": 145.165643,
+     "hum": 190.29052,
+     "bat": 0.710627
+    },
+    "dentro_tolerancia_pct": 92.84,
+    "dañados_pct": 6.11,
+    "info_entregada_pct": {
+     "temp": 94.15,
+     "hum": 93.67,
+     "bat": 92.14
+    },
+    "info_entregada_media_pct": 93.32
+   }
+  ]
+ }
+}

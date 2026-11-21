@@ -2,6 +2,11 @@
 
 Ya está instalado. Esto es lo que se hace con él.
 
+> El arranque, la parada y la recuperación los hace la pila escalonada
+> `lab5g-stack`. Cómo funciona y qué comandos usar cada día está en
+> [09 — Arranque seguro y recuperación](09-arranque-seguro.md). Aquí aparecen los
+> mismos comandos en contexto.
+
 ---
 
 ## Índice
@@ -23,59 +28,96 @@ Ya está instalado. Esto es lo que se hace con él.
 ### Lo primero, en cada terminal
 
 ```bash
-export COMPOSE_PROFILES=ran
+export COMPOSE_PROFILES=ran,compresion,obs,grafana,obs-extra,probes
 ```
 
 Sin esto, `docker compose logs ue` responde `no such service` aunque el
 contenedor esté corriendo. Los servicios de un perfil inactivo son invisibles
 para compose, y es la confusión número uno al operar este laboratorio.
 
-### Arranque completo desde cero
+Si solo te interesa el núcleo y la RAN, basta con `COMPOSE_PROFILES=ran`.
 
-Cuatro comandos, en este orden:
-
-```bash
-docker compose up -d --wait --wait-timeout 600 mongodb
-```
+En el LXC, el código vive en `/opt/lab5g`. Para que compose use el mismo proyecto
+que la pila, exporta:
 
 ```bash
-docker compose up -d && bash ci/wait-ready.sh
+export COMPOSE_PROJECT_NAME=lab5g
 ```
+
+`/opt/lab5g/.env` es un enlace a `/etc/lab5g/lab5g.env` (lo crea
+`deploy/bootstrap-runner.sh`), así que compose lee el entorno real desde
+`/opt/lab5g` sin más configuración.
+
+### Arrancar la pila
 
 ```bash
-bash ci/provision-subscriber.sh
+sudo /usr/local/sbin/lab5g.sh start
 ```
+
+Arranca, **de una en una y por etapas**, todo lo gestionado: observabilidad,
+núcleo, `ran` y `compresion`. No arranca Grafana, las sondas ni `phy-sim`. Tarda
+18.5 minutos en frío (medido el 21 de noviembre). Es la única forma recomendada: los servicios no tienen
+reinicio automático de Docker, así que sin la pila nadie los vigila.
+
+Para arrancar solo una parte:
 
 ```bash
-docker compose --profile ran up -d
+sudo /usr/local/sbin/lab5g.sh start ran      # alias: nucleo, ran, compresion u obs
+sudo /usr/local/sbin/lab5g.sh start amf      # un servicio concreto
 ```
 
-El primero es el que más sorprende: **espera hasta 10 minutos** a que MongoDB
-esté sano antes de continuar. No es paranoia — arrancar el resto antes de tiempo
-es lo que dejaba los nueve servicios del núcleo en estado `created`, sin logs y
-sin explicación.
-
-### Añadir la observabilidad
-
-Solo cuando el núcleo ya funcione, y solo si te sobran ~2 GB de RAM:
+Las sondas y `phy-sim` se arrancan por nombre, con la misma compuerta. Requieren
+`ue` arriba:
 
 ```bash
-docker compose --profile obs --profile probes up -d
+sudo /usr/local/sbin/lab5g.sh start blackbox
+sudo /usr/local/sbin/lab5g.sh start iperf-probe
+sudo /usr/local/sbin/lab5g.sh start phy-sim
 ```
+
+Detalle y criterios en [09 §3](09-arranque-seguro.md#3-el-arranque-por-etapas). La
+configuración del host que lo hace posible (contenedor 110 con `--onboot` y
+`--startup`, zram y swappiness) está en [09 §2](09-arranque-seguro.md#2-las-piezas).
+
+### Grafana
+
+Grafana es bajo demanda:
+
+```bash
+sudo /usr/local/sbin/lab5g.sh grafana up
+```
+
+Si la compuerta de memoria no pasa, `grafana up` se niega y dice por qué. Ver
+[09 §9](09-arranque-seguro.md#encender-y-apagar-grafana).
 
 ### Parar sin perder nada
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down
+sudo /usr/local/sbin/lab5g.sh stop
 ```
 
-Hay que nombrar **todos** los perfiles: `down` a secas deja corriendo lo que
-pertenece a perfiles no declarados.
+Para todo, en orden inverso y uno a uno. Un apagado limpio medido el 21 de noviembre
+tardó 254 s. Crea `/run/lab5g/parado`, que suspende
+la recuperación hasta el próximo `start`.
+
+Para parar solo algunos servicios:
+
+```bash
+sudo /usr/local/sbin/lab5g.sh stop cmp-gen cmp-ue cmp-dn envio envio-eco
+```
+
+Un servicio parado así queda anotado como parado a mano: la recuperación no lo
+revive hasta que lo arranques.
 
 ### Parar y borrarlo todo
 
+Primero para la pila, después borra los contenedores. Hay que nombrar **todos**
+los perfiles:
+
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down -v
+sudo /usr/local/sbin/lab5g.sh stop
+cd /opt/lab5g
+docker compose --profile ran --profile compresion --profile obs --profile grafana --profile obs-extra --profile probes down -v
 ```
 
 ⚠️ El `-v` borra el volumen de MongoDB **y con él el abonado**. Después de esto,
@@ -95,14 +137,33 @@ O, sin recrear el contenedor, usando la CLI de UERANSIM:
 docker compose exec ue nr-cli imsi-732101000000001 --exec "deregister normal"
 ```
 
+Para parar y volver a arrancar solo el `ue` a través de la pila:
+
+```bash
+sudo /usr/local/sbin/lab5g.sh stop ue
+sudo /usr/local/sbin/lab5g.sh start ue
+```
+
+El `ue` necesita `gnb` y `smf` arriba; si no, la CLI lo omite con error.
+
 ---
 
 ## 2. Ver qué está pasando
 
-### Estado general
+### Estado de la pila
 
 ```bash
-docker compose --profile ran --profile obs --profile probes ps
+sudo /usr/local/sbin/lab5g.sh status
+```
+
+Una fila por servicio con su estado, tiempo de vida y memoria, y al final la
+carga del host y la etapa. Un servicio que agotó sus reinicios aparece como
+`agotado`.
+
+### Estado de los contenedores
+
+```bash
+docker compose --profile ran --profile compresion --profile obs --profile grafana --profile obs-extra --profile probes ps
 ```
 
 Lo que hay que mirar en la salida:
@@ -110,10 +171,13 @@ Lo que hay que mirar en la salida:
 | Estado | Significa |
 |---|---|
 | `Up` | Corriendo |
-| `Up (healthy)` | Corriendo y su chequeo pasa. Solo MongoDB tiene chequeo |
-| `Restarting` | **Crash-loop.** Mira sus logs ya |
+| `Up (healthy)` | Corriendo y su chequeo pasa. Solo MongoDB tiene chequeo de Docker |
 | `Created` | Nunca llegó a arrancar. Casi siempre: una dependencia no está sana |
 | `Exited (0)` | Terminó bien. En este laboratorio, sospechoso |
+| `agotado` (en `lab5g.sh status`) | La recuperación se rindió: 5 reinicios en 60 min. Ver [09 §6](09-arranque-seguro.md#6-la-recuperación-y-sus-límites) |
+
+Los servicios tienen `restart: "no"`, así que `Restarting` ya no aparece por sí
+solo: quien reinicia es `lab5g-stack`.
 
 ### ¿Se registraron todas las piezas del núcleo?
 
@@ -161,12 +225,12 @@ Varios a la vez, que es como se ve una conversación completa:
 docker compose logs -f --tail 50 amf smf upf
 ```
 
-### Con Dozzle, en el navegador
+Las decisiones de la pila (qué arranca, qué se reinicia, por qué espera) están en
+el journal de systemd, no en los contenedores:
 
-`http://192.168.1.50:8888` (necesita el perfil `obs`).
-
-Es más cómodo cuando hay que seguir varios servicios a la vez: permite filtrar
-por texto en vivo y ver dos contenedores en paralelo sin partir la terminal.
+```bash
+journalctl -u lab5g-stack -f
+```
 
 ### Qué buscar en cada uno
 
@@ -186,11 +250,29 @@ funcionará, por muy bien que se vea el resto.
 
 ## 4. Grafana
 
-`http://192.168.1.50:3000` — usuario `admin`, contraseña la de tu `.env`.
+`http://192.168.1.50:3000` — usuario `admin`, contraseña la de `GRAFANA_ADMIN_PASSWORD`.
 
-El panel **lab5g-overview** ya está montado: no hay que importar nada ni
-configurar la fuente de datos. Aparece solo al arrancar Grafana, porque el
-directorio `observability/grafana/provisioning/` se monta dentro del contenedor.
+Grafana **no está encendido por defecto**:
+
+```bash
+sudo /usr/local/sbin/lab5g.sh grafana up
+sudo /usr/local/sbin/lab5g.sh grafana down
+```
+
+`up` exige que Prometheus tenga datos de menos de 2 minutos. También se puede
+hacer desde GitHub Actions con el workflow `observability-control`:
+
+```bash
+gh workflow run observability-control.yml --repo J4F3ET/lab-free5gc -f accion=grafana-up
+gh workflow run observability-control.yml --repo J4F3ET/lab-free5gc -f accion=grafana-down
+```
+
+Los tres paneles ya están montados: no hay que importar nada ni configurar la
+fuente de datos. Aparecen solos al arrancar Grafana, porque el directorio
+`observability/grafana/provisioning/` se monta dentro del contenedor:
+
+- `lab5g-overview` — el estado de la red y del host
+- `lab5g-cmp-algoritmo` y `lab5g-cmp-comparacion` — la compresión de paquetes (ver [docs/08](08-compresion-paquetes.md))
 
 ### Cómo leerlo
 
@@ -205,13 +287,18 @@ responde. Rojo aquí significa "ese servicio no acepta conexiones".
 - Velocidad de bajada y subida, en escalones: la sonda mide cada 5 minutos, así
   que la línea es escalonada por diseño y no por un fallo
 
-**Fila 3 — Recursos.** CPU y memoria por contenedor, más el **iowait** del LXC.
+**Fila 3 — Recursos.** Tres paneles salen de la pila (`lab5g-stack` al
+pushgateway): «Presion de I/O del host (%)» (`lab5g_host_io_presion_pct`),
+«Memoria disponible del host» (`lab5g_host_mem_disponible_mb`) y «Memoria por
+contenedor del lab» (`lab5g_ct_mem_mb`). El cuarto, «CPU por contenedor del lab»,
+no tiene fuente: consulta cAdvisor, retirado. Ver
+[09 §12](09-arranque-seguro.md#12-pendientes-y-cosas-por-confirmar).
 
-> Ese último panel es el más útil del conjunto y el menos obvio. En este tipo de
-> host el cuello de botella casi nunca es la CPU: es el disco. Cuando el iowait
-> sube, los chequeos de salud empiezan a expirar y los servicios parecen caídos
-> sin tener nada roto. Si ves timeouts que no se explican, mira ahí antes que en
-> ningún otro sitio.
+El dashboard tiene además una sección de capa física simulada (`lab5g_phy_*`).
+
+> Cuando el iowait o la presión de I/O suben, los chequeos de salud empiezan a
+> expirar y los servicios parecen caídos sin tener nada roto. Si ves timeouts que
+> no se explican, mira el disco antes que en ningún otro sitio.
 
 ### Si un panel dice "Datasource not found"
 
@@ -226,6 +313,9 @@ paneles provisionados dejan de encontrarlo. Si tocas ese fichero, mantén el
 ## 5. Consultas útiles de Prometheus
 
 Para escribirlas directamente en `http://192.168.1.50:9090` o en un panel nuevo.
+
+Los dashboards usan `last_over_time(...)` para mostrar el último dato de cada
+serie, porque las sondas y el pushgateway no publican de forma continua.
 
 Latencia del plano de usuario, vista por el teléfono:
 
@@ -245,33 +335,46 @@ Velocidad de bajada en megabits:
 ue_throughput_downlink_bps / 1000000
 ```
 
-CPU del UPF — aquí se ve si `gtp5g` es el cuello de botella:
-
-```promql
-rate(container_cpu_usage_seconds_total{name="upf"}[2m])
-```
-
 Alguna pieza del núcleo caída:
 
 ```promql
 probe_success{plane="control"} == 0
 ```
 
-**iowait del LXC**, que es la métrica que más veces explica un fallo raro:
+Presión de I/O del host — la métrica que más veces explica un fallo raro:
 
 ```promql
-rate(node_cpu_seconds_total{mode="iowait"}[5m])
+lab5g_host_io_presion_pct
 ```
 
-Memoria por contenedor, de mayor a menor:
+Memoria por servicio, de mayor a menor:
 
 ```promql
-topk(5, container_memory_working_set_bytes{name!=""})
+topk(5, lab5g_ct_mem_mb)
+```
+
+Servicios gestionados que no están corriendo, y los que agotaron sus reinicios:
+
+```promql
+lab5g_stack_servicio_up == 0
+```
+
+```promql
+lab5g_stack_agotado == 1
+```
+
+Segundos desde la última publicación de la pila (si crece sin parar, la pila no publica):
+
+```promql
+time() - lab5g_stack_latido_segundos
 ```
 
 Un truco que vale la pena: superpón en el mismo panel la **latencia del teléfono**
-y la **CPU del UPF**. Si suben juntas, el problema es de capacidad. Si la
-latencia sube sola, es de red.
+y la **presión de I/O**. Si suben juntas, el problema es de capacidad del host.
+Si la latencia sube sola, es de red.
+
+> No hay CPU por contenedor: el panel «CPU por contenedor del lab» consulta
+> cAdvisor, retirado, y no tiene fuente. Por confirmar cómo sustituirlo.
 
 ---
 
@@ -339,14 +442,10 @@ Recuerda que el IMSI debe tener **15 dígitos exactos** y empezar por
 docker compose exec mongodb mongosh --quiet free5gc --eval 'db.subscriptionData.provisionedData.amData.find({}, {ueId:1}).toArray()'
 ```
 
-### Con la consola web
+### Sin consola web
 
-```bash
-docker compose --profile tools up -d webui
-```
-
-Y entra en `http://192.168.1.50:5000`. Es más cómoda para explorar, pero
-innecesaria para el flujo normal.
+La consola web de free5GC (`webui`) ya no está en el compose. Los abonados se
+dan de alta solo por línea de comandos, con `ci/provision-subscriber.sh`.
 
 ---
 
@@ -386,11 +485,18 @@ once ficheros, no uno.
 ### Si cambias el MTU
 
 `UE_MTU` debe ser siempre `DOCKER_MTU - 36`. Los 36 bytes son la cabecera GTP-U y
-no son negociables. Cambiar `DOCKER_MTU` obliga a recrear las redes:
+no son negociables. Cambiar `DOCKER_MTU` obliga a recrear las redes. Para el
+procedimiento, para la pila primero:
 
 ```bash
-docker compose --profile ran down && docker compose up -d && docker compose --profile ran up -d
+sudo /usr/local/sbin/lab5g.sh stop
+cd /opt/lab5g
+docker compose --profile ran --profile compresion --profile obs --profile grafana --profile obs-extra --profile probes down
+sudo /usr/local/sbin/lab5g.sh start
 ```
+
+Por confirmar que el `down` seguido de `lab5g.sh start` recree las redes con el
+MTU nuevo. No se ha probado en este commit.
 
 ---
 
@@ -404,16 +510,30 @@ docker stats --no-stream
 
 ### La regla práctica
 
-| Perfil | Contenedores | RAM aproximada |
-|---|---|---|
-| núcleo | 10 | ~1.5 GB |
-| + `ran` | 13 | ~1.8 GB |
-| + `obs` | 19 | ~2.8 GB |
-| + `probes` | 21 | ~2.9 GB |
-| + `tools` | 22 | ~3.0 GB |
-| núcleo + `ran` + `compresion` | 15 | ~1.85 GB |
+Los 24 servicios definidos son **20 siempre encendidos** (núcleo 10, `ran` 3,
+`compresion` 5, `obs` 2) y **4 bajo demanda** (grafana, blackbox, phy-sim,
+iperf-probe).
 
-Son cifras de referencia en reposo. Bajo tráfico el UPF sube bastante.
+Las cifras de la tabla son **topes** (`mem_limit`), no uso real. Los topes de los
+20 siempre encendidos suman **1824 MB**. El uso medido en reposo el 21 de
+noviembre fue de unos **0.3 GB** para la pila. Grafana, solo, medía **524 MB**; con
+Grafana encendido el conjunto ronda **0.85 GB**.
+
+| Grupo | Servicios (tope en MB) | Contenedores | Suma de topes |
+|---|---|---|---|
+| Núcleo (sin perfil) | mongodb 384, nrf 48, udr 48, udm 48, ausf 48, pcf 64, nssf 48, amf 96, smf 96, upf 128 | 10 | 1008 MB |
+| `ran` | gnb 48, ue 64, dn-iperf 32 | 3 | 144 MB |
+| `compresion` | cmp-dn 64, cmp-ue 64, envio 96, envio-eco 96, cmp-gen 48 | 5 | 368 MB |
+| `obs` | prometheus 256, pushgateway 48 | 2 | 304 MB |
+| **Siempre encendidos** (lo que arranca `lab5g.sh start`) | | **20** | **1824 MB** |
+| `grafana` (bajo demanda; con él la suma es 2592 MB) | grafana 768 | 1 | 768 MB |
+| `obs-extra` (bajo demanda) | phy-sim 48 | 1 | 48 MB |
+| `probes` (bajo demanda) | blackbox 48, iperf-probe 32 | 2 | 80 MB |
+
+La protección real del arranque de Grafana no es la suma de topes. Es la compuerta
+`GATE_MEM`: `lab5g.sh grafana up` exige al menos **300 MB** de `MemAvailable` y se
+niega si no los hay. Los topes siguen siendo provisionales hasta medir
+`memory.peak` con `docker stats`.
 
 ### La señal de alarma
 
@@ -422,24 +542,31 @@ uptime
 ```
 
 Si la carga (*load average*) supera el número de núcleos de forma sostenida, el
-laboratorio está entrando en la espiral descrita en el README: los servicios se
-reinician, cada reinicio consume el disco que los demás necesitan, y la carga
-crece sola.
+laboratorio está entrando en la espiral descrita en [09 §1](09-arranque-seguro.md#1-por-qué-existe).
 
-**Qué hacer si eso pasa:** bajar de perfil inmediatamente.
+**Qué hacer si eso pasa:** el procedimiento completo está en
+[09 §10](09-arranque-seguro.md#10-qué-hacer-si-el-host-se-satura). Lo primero,
+soltar lo que no hace falta:
 
 ```bash
-docker compose --profile obs --profile probes stop
+sudo /usr/local/sbin/lab5g.sh grafana down
+sudo /usr/local/sbin/lab5g.sh stop cmp-gen cmp-ue cmp-dn envio envio-eco
 ```
-
-Ojo al apagar el LXC: al prenderlo vuelve **todo lo que estaba corriendo**,
-porque los servicios tienen `restart: unless-stopped`. Para antes lo que no
-quieras de vuelta (un contenedor parado a mano no revive). Al prenderlo,
-además, el runner de CI se autoactualiza si estuvo semanas apagado, y copia
-cientos de MB al disco durante unos minutos.
 
 No esperes a que "se estabilice". No lo hace: cuando la carga llega a 100 en 4
 núcleos, ni siquiera SSH responde, y la única salida es la consola física.
+
+### Al encender el LXC
+
+`lab5g-stack.service` arranca solo al encender el LXC y levanta la pila por
+etapas, con las mismas compuertas. Tarda unos 18.5 minutos. Grafana, las sondas y
+`phy-sim` no arrancan solos.
+
+Lo que paraste a mano **no sobrevive a un reinicio**: `/run/lab5g` se vacía y la
+pila levanta todo lo gestionado. Si quieres que algo se quede parado, hay que
+pararlo después de cada arranque. Además, al encender, el runner de CI puede
+actualizarse si estuvo apagado mucho tiempo, y copiar cientos de MB al disco
+durante unos minutos (por confirmar).
 
 ---
 

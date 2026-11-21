@@ -7,6 +7,7 @@ evaluar.py — Compara las opciones de compresión sobre tráfico 5G de prueba, 
   python evaluar.py comparar            # mide todo sobre el conjunto de PRUEBA -> resultados/
   python evaluar.py balance             # latencia neta de cada algoritmo según el enlace (balance.py)
   python evaluar.py informacion [--publicar URL]  # original/comprimido/recuperado e I(O;R) (informacion.py)
+  python evaluar.py bandido             # qué decide el bandido y por qué: brazos, contextos, arrepentimiento
 
 Entrenamiento (semilla 1, textos TEXTOS_ENTRENO) y prueba (semilla 2, TEXTOS_PRUEBA) no
 comparten paquetes: lo que se mide es sobre tráfico que el modelo nunca vio. Es justo lo
@@ -303,15 +304,133 @@ def informacion(publicar_en: str | None = None, archivos: bool = True):
         print(f"publicado en {publicar_en} (job cmp_eval)")
 
 
+def bandido():
+    """El bandido por dentro, sobre el flujo mezclado de PRUEBA -> resultados/bandido.md.
+
+    Usa las mismas variables que shim.py publica para Grafana (bandido.texto_bandido), pero con la
+    sombra en cada paquete (sombra_cada = 1): así el arrepentimiento es exacto y no una muestra.
+    Además corre variantes (sin contexto, otros brazos) para validar la configuración de la red."""
+    import bandido as B
+    m = C.Modelo.cargar(MODELO) if MODELO.exists() else entrenar()
+    mezcla = T.intercalar(T.conjunto(2, P_FLUJO, F_CLASE, prueba=True), 3)
+
+    def correr(**kw):
+        em, rx = EmisorAdaptativo(m, sombra_cada=1, **kw), C.Descompresor(m)
+        clases, por_clase = {}, {}
+        for clase, _, p in mezcla:
+            antes = (em.sombra["original"], em.sombra["bandido"], em.sombra["mejor"])
+            n_ctx = dict(em.por_contexto)
+            assert rx.desempaquetar(em.enviar(p)[0]) == p
+            d = por_clase.setdefault(clase, [0, 0, 0])
+            for i, k in enumerate(("original", "bandido", "mejor")):
+                d[i] += em.sombra[k] - antes[i]
+            ctx = next(c for c, n in em.por_contexto.items() if n != n_ctx.get(c, 0))
+            clases.setdefault(ctx, {}).setdefault(clase, 0)
+            clases[ctx][clase] += 1
+        return em, clases, por_clase
+
+    def resumen(em):
+        s = em.sombra
+        intentos = sum(v[0] for c, v in em.por_brazo.items() if c != C.NINGUNO)
+        return {"ahorro": _pct(s["original"], s["bandido"]), "mejor": _pct(s["original"], s["mejor"]),
+                "arrepentimiento": round(100 * (s["bandido"] - s["mejor"]) / s["original"], 2),
+                "intentos": intentos, "respaldos": sum(v[1] for v in em.por_brazo.values()),
+                "cpu_us": round(1e6 * sum(v[4] for v in em.por_brazo.values()) / len(mezcla), 1)}
+
+    em, clases, por_clase = correr()
+    tot = len(mezcla)
+    md = ("# El bandido por dentro (generado por `evaluar.py bandido`)\n\n"
+          f"{tot} paquetes del flujo mezclado de PRUEBA. Brazos: {', '.join(C.CODECS[b] for b in em.bandido.brazos)}; "
+          f"γ = {em.bandido.gamma}, c = {em.bandido.c}. Los bytes son de CARGA (después de comprimir cabeceras). "
+          "Son las mismas variables que `shim.py` publica para el tablero «bandido en vivo».\n\n"
+          "## 1. Por brazo\n\n"
+          "recompensa = ahorro − 0,01 si el brazo comprime (costo de CPU); «respaldo» = lo eligió y la salida no "
+          "achicó, así que el paquete fue sin comprimir.\n\n")
+    filas = []
+    for cod, (eleg, resp, entro, salio, cpu, rec) in em.por_brazo.items():
+        filas.append({"brazo": C.CODECS[cod], "elegido": eleg, "pct": round(100 * eleg / tot, 1),
+                      "respaldo": round(100 * resp / eleg, 1) if eleg else 0, "ahorro": _pct(entro, salio),
+                      "recompensa": round(rec / eleg, 4) if eleg else 0, "us": round(1e6 * cpu / eleg, 1) if eleg else 0})
+    md += tabla_md(filas, ["brazo", "elegido", "pct", "respaldo", "ahorro", "recompensa", "us"],
+                   ["brazo", "veces elegido", "% de los paquetes", "% que cayó al respaldo",
+                    "ahorro efectivo %", "recompensa media", "µs de CPU por paquete"])
+    md += ("\n## 2. Por contexto (estado interno al terminar)\n\n"
+           "Contexto = (tamaño de la carga: chico < 64 B, mediano 64-511 B, grande ≥ 512 B; entropía relativa de "
+           "sus primeros 256 B: baja < 0,75, media 0,75-0,9, alta ≥ 0,9). N es con descuento "
+           "(γ): cuenta sobre todo los últimos ~1/(1−γ) paquetes. El bandido manda el brazo de mayor índice = "
+           "media + c·√(ln ΣN / N).\n\n")
+    filas = []
+    est = {}
+    for ctx, cod, n, media, ind in em.bandido.estado_exportable():
+        est.setdefault(ctx, {})[cod] = (n, media, ind)
+    for ctx in sorted(est):
+        f = {"ctx": f"{B.TAMANOS[ctx[0]]} / {B.ENTROPIAS[ctx[1]]}", "paq": em.por_contexto.get(ctx, 0),
+             "clases": ", ".join(f"{k} {v}" for k, v in sorted(clases.get(ctx, {}).items(), key=lambda x: -x[1]))}
+        for cod in em.bandido.brazos:
+            n, media, ind = est[ctx].get(cod, (0, 0, 0))
+            f[C.CODECS[cod]] = f"{media:.3f} / {n:.0f} / {ind:.3f}"
+        filas.append(f)
+    nombres = [C.CODECS[b] for b in em.bandido.brazos]
+    md += tabla_md(filas, ["ctx", "paq", "clases"] + nombres,
+                   ["contexto (tamaño / entropía)", "paquetes", "clases que caen ahí"]
+                   + [f"{n}: media / N / índice" for n in nombres])
+    s = em.sombra
+    md += ("\n## 3. ¿Podía hacerlo mejor? (sombra)\n\n"
+           "Cada paquete se comprimió además con todos los códecs rápidos, sin mandarlo. «mejor por paquete» = "
+           "el códec que menos bytes daba en cada paquete (un oráculo: nadie puede saberlo antes de comprimir). "
+           "arrepentimiento = (bytes del bandido − bytes del mejor) / bytes originales.\n\n")
+    filas = [{"alg": C.CODECS[c], "bytes": s["bytes"][c], "ahorro": _pct(s["original"], s["bytes"][c]),
+              "us": round(1e6 * s["cpu"][c] / s["paquetes"], 1)} for c in em.sombra_codecs]
+    filas.append({"alg": "**bandido_ucb**", "bytes": s["bandido"], "ahorro": _pct(s["original"], s["bandido"]),
+                  "us": round(1e6 * sum(v[4] for v in em.por_brazo.values()) / tot, 1)})
+    filas.append({"alg": "mejor por paquete (oráculo)", "bytes": s["mejor"], "ahorro": _pct(s["original"], s["mejor"]), "us": "—"})
+    md += tabla_md(sorted(filas, key=lambda f: f["bytes"]), ["alg", "bytes", "ahorro", "us"],
+                   ["algoritmo", "bytes de carga", "ahorro %", "µs por paquete"])
+    r0 = resumen(em)
+    md += (f"\nArrepentimiento del bandido: **{r0['arrepentimiento']} puntos** (ahorra {r0['ahorro']} % de un máximo "
+           f"de {r0['mejor']} %).\n\nPor clase de tráfico:\n\n")
+    md += tabla_md([{"clase": k, "ahorro": _pct(o, b), "mejor": _pct(o, mj), "arr": round(100 * (b - mj) / o, 2)}
+                    for k, (o, b, mj) in sorted(por_clase.items())], ["clase", "ahorro", "mejor", "arr"],
+                   ["clase", "ahorro del bandido %", "mejor por paquete %", "arrepentimiento (puntos)"])
+    md += ("\n## 4. Validación: ¿sirven estos brazos y este contexto?\n\n"
+           "La misma corrida cambiando una sola cosa. «intentos» = veces que eligió un brazo que comprime "
+           "(gasta CPU); «respaldos» = intentos que no achicaron (CPU perdida).\n\n")
+    variantes = [(f"red: {len(B.BRAZOS_RED)} brazos + contexto 3×3 + ráfaga {B.RAFAGA_RED}", {}),
+                 ("sin ráfaga (decide en cada paquete)", {"rafaga": 0}),
+                 ("ráfaga 4", {"rafaga": 4}),
+                 ("ráfaga 16", {"rafaga": 16}),
+                 ("sin predictivo_audio", {"brazos": tuple(b for b in B.BRAZOS_RED if b != C.PREDICTIVO_AUDIO)}),
+                 ("sin contexto (un solo estado)", {"contexto_fn": lambda carga: (0, 0)}),
+                 ("solo tamaño (3 contextos)", {"contexto_fn": lambda carga: (B.contexto(carga)[0], 0)}),
+                 ("solo entropía (3 contextos)", {"contexto_fn": lambda carga: (0, B.contexto(carga)[1])}),
+                 ("2 brazos: ninguno, deflate_flujo", {"brazos": (C.NINGUNO, C.DEFLATE_FLUJO)})]
+    if C.ZSTD_DICT in C.CODECS:
+        variantes.append(("2 brazos: ninguno, zstd_dict", {"brazos": (C.NINGUNO, C.ZSTD_DICT)}))
+    variantes.append((f"todos los rápidos ({len(em.sombra_codecs)} brazos)", {"brazos": tuple(em.sombra_codecs)}))
+    filas = []
+    for nombre, kw in variantes:
+        print(f"  {nombre}...", flush=True)
+        r = r0 if not kw else resumen(correr(**kw)[0])
+        filas.append(dict(r, variante=nombre))
+    md += tabla_md(filas, ["variante", "ahorro", "mejor", "arrepentimiento", "intentos", "respaldos", "cpu_us"],
+                   ["variante", "ahorro %", "mejor por paquete %", "arrepentimiento (puntos)", "intentos", "respaldos",
+                    "µs de CPU por paquete"])
+    md += ("\nEl «mejor por paquete» se calcula con los mismos códecs de la sombra en todas las filas; cambia un "
+           "poco entre filas porque deflate_flujo recuerda solo los paquetes que esa variante mandó por él.\n")
+    SALIDA.mkdir(exist_ok=True)
+    (SALIDA / "bandido.md").write_text(md, encoding="utf-8")
+    print(md)
+
+
 if __name__ == "__main__":
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion"])
+    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion", "bandido"])
     ap.add_argument("--publicar", metavar="URL", help="informacion: subir al pushgateway (p. ej. http://10.100.205.14:9091)")
     ap.add_argument("--sin-archivos", action="store_true", help="informacion: no escribir resultados/ (contenedor de solo lectura)")
     a = ap.parse_args()
     if a.accion == "informacion":
         informacion(a.publicar, not a.sin_archivos)
     else:
-        {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance}[a.accion]()
+        {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance, "bandido": bandido}[a.accion]()

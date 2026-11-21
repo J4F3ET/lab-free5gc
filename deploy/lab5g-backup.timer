@@ -1,0 +1,13 @@
+[Unit]
+Description=Copia diaria de Prometheus del lab 5G
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+# Desfase aleatorio de hasta 15 min; Persistent recupera la ejecucion perdida
+# si el host estaba apagado a las 03:30.
+RandomizedDelaySec=900
+Persistent=true
+Unit=lab5g-backup.service
+
+[Install]
+WantedBy=timers.target

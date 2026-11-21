@@ -253,6 +253,9 @@ def texto_prometheus(r: dict) -> str:
     for alg, canales in r["algoritmos"].items():
         for clase, x in canales["perfecto"].items():
             e = {"algoritmo": alg, "clase": clase}
+            # Paquetes: para pasar de totales a "por paquete" en Grafana (caudal de procesamiento y
+            # velocidad de equilibrio; las cuentas están en dashboards_compresion.py).
+            g("lab5g_cmp_eval_paquetes", "Paquetes evaluados", e, x["paquetes"])
             g("lab5g_cmp_eval_bytes", "Bytes por etapa (original / comprimido)", dict(e, etapa="original"),
               x["original"]["bytes"])
             g("lab5g_cmp_eval_bytes", "Bytes por etapa (original / comprimido)", dict(e, etapa="comprimido"),

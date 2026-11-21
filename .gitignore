@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .env
+
+# Muestras de 12 MB para probar el bandido (se regeneran con compresion/generar.py)
+muestras_bandido/

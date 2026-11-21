@@ -6,6 +6,9 @@ on:
     paths:
       - 'config/**'
       - 'ueransim/**'
+      - 'compresion/**'
+      - 'deploy/**'
+      - 'ci/**'
       - 'docker-compose.yaml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -15,24 +18,30 @@ on:
         type: boolean
         default: false
 
-# Nunca dos despliegues simultaneos sobre el mismo LXC
+# Nunca dos despliegues simultaneos sobre el mismo LXC (tambien serializa
+# 'observability-control', que comparte el grupo)
 concurrency:
   group: lab5g-deploy
   cancel-in-progress: false
 
 env:
+  # Contrato con el CLI del LXC (/usr/local/sbin/lab5g.sh): el despliegue vivo
+  # esta en /opt/lab5g, el entorno en /etc/lab5g/lab5g.env (fuera del checkout:
+  # 'actions/checkout' hace 'git clean -ffdx' y borraria cualquier .env local).
+  # Estas variables solo las usan los scripts ci/*.sh, que llaman a
+  # 'docker compose exec' en el directorio actual -> se ejecutan con
+  # working-directory: /opt/lab5g.
   COMPOSE_PROJECT_NAME: lab5g
-  DOCKER_BUILDKIT: '1'
+  COMPOSE_ENV_FILES: /etc/lab5g/lab5g.env
   # Con perfiles, 'docker compose exec/logs/ps' no ve los servicios de un
-  # perfil inactivo. El smoke test opera sobre 'ue', 'gnb' y 'dn-iperf', que
-  # viven en el perfil 'ran', asi que se declara aqui para todos los jobs.
-  # La observabilidad NO va aqui: se activa solo con --profile en su paso.
-  COMPOSE_PROFILES: ran
+  # perfil inactivo. Grafana (perfil 'grafana') es bajo demanda y no entra.
+  # OJO: '--profile' por CLI REEMPLAZA a COMPOSE_PROFILES (no se une).
+  COMPOSE_PROFILES: ran,compresion,obs
 
 jobs:
 
   # ------------------------------------------------------------------
-  #  1. Validacion estatica — sin tocar el despliegue vivo
+  #  1. Validacion estatica - sin tocar el despliegue vivo
   # ------------------------------------------------------------------
   validate:
     runs-on: [ self-hosted, lxc, free5gc ]
@@ -42,132 +51,194 @@ jobs:
       - name: Verificar kernel, modulos y devices
         run: bash ci/preflight.sh
 
+      # Se valida contra .env.example (el checkout no tiene .env) y con todos
+      # los perfiles para que compose vea todos los servicios.
       - name: Validar sintaxis de docker-compose
-        run: docker compose config --quiet
+        env:
+          COMPOSE_ENV_FILES: ''
+          COMPOSE_PROFILES: ran,compresion,obs,grafana
+        run: docker compose --env-file .env.example config --quiet
 
       - name: Coherencia de PLMN / TAC / S-NSSAI / nodeID
         run: |
           # pyyaml va como paquete del sistema (python3-yaml), instalado por
-          # deploy/bootstrap-runner.sh. Antes este paso hacia
-          # 'pip install --user pyyaml', que aqui falla siempre: Debian 13
-          # marca el entorno como externally-managed (PEP 668) y en este
-          # runner pip no esta ni instalado.
+          # deploy/bootstrap-runner.sh: Debian 13 marca pip como
+          # externally-managed (PEP 668), asi que no se usa pip.
           python3 -c 'import yaml' 2>/dev/null || {
             echo "::error::falta python3-yaml en el runner -> ejecuta deploy/bootstrap-runner.sh"
             exit 1
           }
           python3 ci/check-plmn.py
 
+      # Si falta 'zstandard' las pruebas de zstd se omiten solas.
+      - name: Pruebas de compresion
+        run: python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py
+
   # ------------------------------------------------------------------
-  #  2. Despliegue
+  #  2. Capacidad del host: sincroniza /opt/lab5g y comprueba recursos
   # ------------------------------------------------------------------
-  deploy:
+  capacidad:
     needs: validate
     runs-on: [ self-hosted, lxc, free5gc ]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      # El host es de 4 nucleos / 3.8 GB: no aguanta el nucleo+RAN a la vez
-      # que obs+probes (Grafana, Prometheus, cAdvisor, phy-sim, blackbox...).
-      # En la corrida 34793481927 quedaron 9 contenedores de obs/probes
-      # corriendo de una sesion manual anterior y el load average llego a
-      # 11.99 durante el smoke test. Esa carga NO resulto ser la causa del
-      # fallo de esa corrida en concreto -eso era un bug de 'pipefail' en
-      # ci/smoke-ue.sh, ver ese fichero-, pero sigue siendo un riesgo real
-      # para los pasos funcionales del smoke (registro NAS, sesion PDU,
-      # throughput), asi que este paso se queda como precaucion: detener
-      # obs/probes ANTES de tocar el nucleo, sin importar si quedaron de una
-      # corrida manual o de una ejecucion del workflow
-      # 'deploy-observability.yml'. Ese workflow comparte el mismo
-      # concurrency.group ('lab5g-deploy'), asi que si este despliegue esta
-      # corriendo, GitHub Actions lo deja en cola en vez de dejarlo competir
-      # por el host - y 'rollback' nunca los toca.
-      # OJO: '--profile' por CLI NO se une con COMPOSE_PROFILES del entorno
-      # en esta version de docker compose (v5.5.1) - lo reemplaza. 'ran' se
-      # repite aqui explicitamente porque 'probes' (blackbox/iperf-probe)
-      # usa 'network_mode: service:ue', y sin 'ran' en la lista de perfiles
-      # activos la propia carga del proyecto falla con "undefined service
-      # ue" (verificado en vivo contra el runner).
-      #
-      # OJO 2: los servicios se nombran uno por uno a proposito. 'stop' sin
-      # argumentos detiene TODOS los servicios del proyecto resuelto -
-      # incluido el nucleo, que no tiene 'profiles:' y por eso siempre
-      # cuenta como activo-, y eso se probo en vivo por error: tumbo
-      # mongodb+las 9 NF del core sin querer. Nunca usar 'stop' a secas
-      # aqui.
-      - name: Detener observabilidad si estaba corriendo (libera el host)
-        run: |
-          docker compose --profile ran --profile obs --profile probes stop \
-            grafana prometheus cadvisor node-exporter pushgateway dozzle \
-            phy-sim blackbox iperf-probe || true
+      - name: Sincronizar archivos versionados a /opt/lab5g
+        run: sudo -n /usr/local/sbin/lab5g.sh sync
 
-      - name: Generar .env con secretos
+      # Avisa (no falla) si los scripts instalados en el LXC difieren de los
+      # versionados: el sync no los reinstala, lo hace bootstrap-runner.sh.
+      - name: Comprobar scripts instalados en el LXC
         run: |
-          cp .env.example .env
-          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
+          for x in lab5g.sh lab5g-stack.sh lab5g-backup.sh; do
+            if ! cmp -s "/opt/lab5g/deploy/$x" "/usr/local/sbin/$x"; then
+              echo "::warning::/usr/local/sbin/$x difiere de deploy/$x: ejecuta deploy/bootstrap-runner.sh en el LXC"
+            fi
+          done
+
+      # 0 = ok, 1 = fallo duro (aborta), 2 = advertencias (continua).
+      # Sin tuberias: el codigo de salida del CLI se captura tal cual.
+      - name: Comprobar capacidad (RAM, swap, load, I/O, disco, gtp5g)
+        run: |
+          set +e
+          sudo -n /usr/local/sbin/lab5g.sh check
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "Capacidad del host OK" ;;
+            2) echo "::warning::lab5g.sh check termino con advertencias (codigo 2); se continua. Revisa la salida de este paso." ;;
+            *) echo "::error::lab5g.sh check fallo (codigo $rc): el host no tiene capacidad. Revisa RAM/swap/load/IO/disco/gtp5g en la salida, libera recursos (p. ej. 'lab5g.sh grafana down' o detener contenedores sueltos) y relanza el workflow."
+               exit 1 ;;
+          esac
+
+  # ------------------------------------------------------------------
+  #  3. Despliegue
+  # ------------------------------------------------------------------
+  deploy:
+    needs: capacidad
+    runs-on: [ self-hosted, lxc, free5gc ]
+    timeout-minutes: 90
+    steps:
+      # Checkout completo solo para calcular el diff de config (el .env vive
+      # fuera del checkout, el 'git clean' ya no lo afecta).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # El host (4 nucleos / 3.8 GB, disco mecanico) no aguanta arrancar todo
+      # de golpe: 24 servicios definidos (20 siempre encendidos + 4 de perfiles
+      # bajo demanda) a la vez llevaron el load a 105 y no convergia.
+      # Por eso el UNICO paso de arranque es 'lab5g.sh start', que escalona
+      # por etapas con compuertas de carga y puede tardar 20-40 min. No hay
+      # 'compose pull' global ni 'up' sueltos aqui.
+      # El checkout de abajo solo sirve para calcular el diff de config; los
+      # archivos vivos estan en /opt/lab5g (sincronizados por 'capacidad').
+
+      # El valor entra por stdin (nunca por argumento ni 'echo' en el log) y
+      # el paso no usa 'set -x'.
+      - name: Aplicar secreto de Grafana
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GRAFANA_ADMIN_PASSWORD" \
+            | sudo -n /usr/local/sbin/lab5g.sh env-set GRAFANA_ADMIN_PASSWORD
 
       - name: Reaplicar reglas de red del host
         run: sudo -n /usr/local/sbin/lab5g-netrules.sh
 
-      - name: Descargar imagenes
-        run: docker compose pull --quiet
-
-      # El arranque va por etapas y con perfiles, a proposito.
-      #
-      # Arrancar los 22 servicios de golpe llevo el host (4 nucleos, 3.8 GB)
-      # a un load average de 105: los NF entraban en crash-loop, cada
-      # reinicio consumia el I/O que los demas necesitaban para arrancar, y
-      # el host dejaba de atender hasta SSH. No convergia.
-      #
-      # Por eso el perfil por defecto es SOLO el nucleo (10 contenedores) y
-      # la observabilidad vive en su propio workflow
-      # ('deploy-observability.yml'), fuera de este pipeline.
-      - name: Levantar la base de datos y esperar a que este sana
+      # Los bind-mounts de config/ y ueransim/ no entran en el hash del
+      # servicio: 'start' no recrea un contenedor cuyo yaml cambio. Se
+      # reinicia (stop + start, uno a la vez, por nombre) solo el servicio
+      # afectado. Base del diff: 'github.event.before' en push; en dispatch
+      # (o si 'before' no es valido) el ultimo sha desplegado con exito
+      # ('lab5g.sh ultimo-desplegado'). Sin base, no se reinicia nada y se avisa.
+      # ./compresion se monta :ro en los cmp-*: su hash no cambia con el
+      # codigo, por eso se reinician cmp-dn y cmp-ue (en ese orden); envio,
+      # envio-eco y cmp-gen quedan obsoletos y el 'start' completo los
+      # recrea por StartedAt.
+      # NOTA: un cambio en nrf o ue implicaria reiniciar tambien sus
+      # dependientes; eso lo reordena la recuperacion de lab5g-stack
+      # (por StartedAt), no este paso.
+      - name: Reiniciar servicios cuya configuracion cambio
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
-          docker compose up -d --remove-orphans --wait --wait-timeout 600 mongodb
-          docker compose ps mongodb
+          set -euo pipefail
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "${base//0/}" = "" ]              || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(sudo -n /usr/local/sbin/lab5g.sh ultimo-desplegado || true)"
+          fi
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::sin sha base valido (ni 'before' ni ultimo desplegado): no se reinician servicios por cambios de config"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$base" "$AFTER" -- config ueransim compresion)"
+          svcs=""
+          add() { case " $svcs " in *" $1 "*) ;; *) svcs="$svcs $1" ;; esac; }
+          while IFS= read -r f; do
+            case "$f" in
+              config/amfcfg.yaml)   add amf ;;
+              config/ausfcfg.yaml)  add ausf ;;
+              config/nrfcfg.yaml)   add nrf ;;
+              config/nssfcfg.yaml)  add nssf ;;
+              config/pcfcfg.yaml)   add pcf ;;
+              config/smfcfg.yaml|config/uerouting.yaml) add smf ;;
+              config/udmcfg.yaml)   add udm ;;
+              config/udrcfg.yaml)   add udr ;;
+              config/upfcfg.yaml|config/upf-nat.sh) add upf ;;
+              ueransim/gnb.yaml)    add gnb ;;
+              ueransim/ue.yaml|ueransim/ue-entrypoint.sh) add ue ;;
+              compresion/*)         add cmp-dn; add cmp-ue ;;
+            esac
+          done <<< "$changed"
+          if [ -z "$svcs" ]; then
+            echo "Sin cambios de configuracion que requieran reinicio"
+            exit 0
+          fi
+          for svc in $svcs; do
+            echo "Reiniciando $svc"
+            sudo -n /usr/local/sbin/lab5g.sh stop "$svc" || true
+            sudo -n /usr/local/sbin/lab5g.sh start "$svc"
+          done
 
-      - name: Levantar el plano de control
-        run: |
-          docker compose up -d nrf udr udm ausf pcf nssf amf upf smf
-          docker compose ps
+      - name: Arranque escalonado (nucleo, RAN, compresion, obs)
+        timeout-minutes: 60
+        run: sudo -n /usr/local/sbin/lab5g.sh start
 
       - name: Esperar a que el plano de control este listo
+        working-directory: /opt/lab5g
+        timeout-minutes: 15
         run: bash ci/wait-ready.sh
 
       - name: Aprovisionar suscriptor en MongoDB
+        working-directory: /opt/lab5g
+        timeout-minutes: 10
         run: bash ci/provision-subscriber.sh
 
-      # Perfil 'ran': gnb, ue y dn-iperf (el destino del trafico del UE).
-      - name: Levantar RAN emulada
-        run: |
-          docker compose --profile ran up -d
-          docker compose ps
+      # Base para el diff de config del siguiente despliegue (sobre todo en
+      # workflow_dispatch, donde no hay github.event.before).
+      - name: Marcar sha desplegado
+        run: sudo -n /usr/local/sbin/lab5g.sh marcar-desplegado "${{ github.sha }}"
 
   # ------------------------------------------------------------------
-  #  3. Smoke test end-to-end
+  #  4. Smoke test end-to-end
   # ------------------------------------------------------------------
   smoke:
     needs: deploy
     if: ${{ !inputs.skip_smoke }}
     runs-on: [ self-hosted, lxc, free5gc ]
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      # checkout limpia el workspace con 'git clean -ffdx', que borra el .env
-      # generado en el job de deploy porque no esta trackeado. Sin el, las
-      # variables de imagen quedan vacias y 'docker compose exec' apunta a
-      # servicios equivocados. Se regenera aqui.
-      - name: Regenerar .env
-        run: |
-          cp .env.example .env
-          echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" >> .env
-
       - name: Validar tunel uesimtun0 y conectividad
+        working-directory: /opt/lab5g
         run: bash ci/smoke-ue.sh
 
       - name: Recolectar diagnostico si algo fallo
         if: failure()
+        working-directory: /opt/lab5g
         run: bash ci/collect-logs.sh
 
       - name: Publicar diagnostico
@@ -179,27 +250,26 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
-  #  4. Rollback si el smoke test fallo
+  #  5. Rollback si algo fallo
   # ------------------------------------------------------------------
   rollback:
     needs: [ deploy, smoke ]
-    if: failure()
+    # 'failure()' mira todos los ancestros: sin esta condicion, un fallo de
+    # validate/capacidad (nada desplegado) tambien detendria RAN y compresion.
+    if: failure() && (needs.deploy.result == 'failure' || needs.smoke.result == 'failure')
     runs-on: [ self-hosted, lxc, free5gc ]
+    timeout-minutes: 15
     steps:
-      # Se detiene la RAN y las sondas, dejando el nucleo en pie para poder
-      # inspeccionarlo. 'probes' se nombra explicitamente porque no esta en
-      # COMPOSE_PROFILES y de otro modo compose no lo veria.
-      #
-      # A proposito NO toca 'obs' (Grafana/Prometheus/phy-sim/...): ese
-      # perfil ya quedo detenido por el paso de 'deploy' que libera el host
-      # antes de desplegar, y solo lo vuelve a levantar el workflow separado
-      # 'deploy-observability.yml' cuando corresponda. 'rollback' nunca los
-      # redespliega.
-      - name: Detener RAN y sondas para no dejar el lab inconsistente
+      # Detiene RAN y compresion POR NOMBRE, dejando el nucleo y obs en pie
+      # para inspeccionarlos. Nunca 'stop' sin nombres: tumbaria tambien el
+      # nucleo (no tiene 'profiles:' y siempre cuenta como activo).
+      # 'lab5g.sh stop <servicios>' los detiene en orden inverso, de uno en uno, y
+      # los apunta en /run/lab5g/parados para que la recuperacion no los reinicie.
+      - name: Detener RAN y compresion para no dejar el lab inconsistente
         run: |
-          docker compose --profile ran --profile probes stop \
-            gnb ue dn-iperf blackbox iperf-probe || true
+          sudo -n /usr/local/sbin/lab5g.sh stop \
+            gnb ue dn-iperf cmp-gen cmp-ue cmp-dn envio envio-eco || true
       - name: Resumen
         run: |
-          echo "::error::Smoke test fallido. El nucleo sigue en pie para" \
-               "inspeccion; RAN detenida. Revisa el artefacto de diagnostico."
+          echo "::error::Despliegue o smoke test fallido. El nucleo sigue en pie para" \
+               "inspeccion; RAN y compresion detenidas. Revisa el artefacto de diagnostico."

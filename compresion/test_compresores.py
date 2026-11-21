@@ -41,6 +41,7 @@ class Estrategias(unittest.TestCase):
                     5: "tic_por_paquete"}
         if C.ZSTD:
             esperado[6] = "zstd_dict"
+        esperado[8] = "predictivo_audio"
         self.assertEqual(C.CODECS, esperado)
 
     def test_todo_codec_tiene_titulo_y_descripcion(self):
@@ -188,6 +189,73 @@ class ConPerdidaIoT(unittest.TestCase):
         p = self.IOT[0]
         self.assertEqual(tx.preparar(p), (p, None))
 
+    def test_marco_clave_mas_grande_que_el_json_igual_se_acepta(self):
+        """Muchos campos numéricos (como el Intel Lab: 6) hacen el marco clave más grande que el
+        JSON. Antes eso lo mandaba sin comprimir sin guardar el esquema y nunca había deltas."""
+        tx, rx = C.Compresor(MODELO, perdida_iot=C.PASOS_IOT), C.Descompresor(MODELO)
+        largos = []
+        for i in range(20):
+            c = (f'{{"dev":"intel-22","ts":{1077929956 + 31 * i},"seq":{3 + i},"temp":{19.6356 + 0.0123 * i!r},'
+                 f'"hum":{37.0246 - 0.031 * i!r},"luz":{82.8 + i!r},"bat":{2.65143 - 1e-5 * i!r}}}').encode()
+            p = T.paquete_udp(c, 41022, 5683, i)
+            marco, usado = tx.empaquetar(p, C.PREDICTIVO_IOT)
+            self.assertEqual(usado, C.PREDICTIVO_IOT)
+            r = rx.desempaquetar(marco)
+            e = C.PredictivoIoT.error_campos(p[28:], r[28:])
+            self.assertTrue(all(e[k] <= v / 2 + 1e-9 for k, v in C.PASOS_IOT.items()), i)
+            largos.append(len(marco))
+        self.assertLess(sum(largos[1:16]) / 15, 30)   # deltas, no marcos completos
+
+
+class VariablesDelBandido(unittest.TestCase):
+    """Lo que el bandido deja ver para Grafana (bandido.texto_bandido) no cambia lo que manda."""
+
+    def test_la_sombra_no_cambia_ni_un_byte_de_lo_enviado(self):
+        mezcla = T.intercalar(PRUEBA, 1)
+        sin, con = EmisorAdaptativo(MODELO), EmisorAdaptativo(MODELO, sombra_cada=1)
+        for _, _, p in mezcla:
+            self.assertEqual(sin.enviar(p)[0], con.enviar(p)[0])
+        s = con.sombra
+        self.assertEqual(s["paquetes"], len(mezcla))
+        # el mejor por paquete nunca es peor que el bandido, ni que ningún códec fijo
+        self.assertLessEqual(s["mejor"], s["bandido"])
+        self.assertTrue(all(s["mejor"] <= b <= s["original"] for b in s["bytes"].values()))
+        self.assertEqual(s["bytes"][C.NINGUNO], s["original"])
+
+    def test_contadores_por_brazo_cuadran(self):
+        em = EmisorAdaptativo(MODELO)
+        mezcla = T.intercalar(PRUEBA, 1)
+        usados = {}
+        for _, _, p in mezcla:
+            cod = em.enviar(p)[1]
+            usados[cod] = usados.get(cod, 0) + 1
+        self.assertEqual(sum(v[0] for v in em.por_brazo.values()), len(mezcla))
+        self.assertEqual(sum(em.por_contexto.values()), len(mezcla))
+        self.assertEqual(em.por_brazo[C.NINGUNO][1], 0)   # "ninguno" no tiene respaldo
+        for cod, (elegido, respaldos, entro, salio, _, _) in em.por_brazo.items():
+            self.assertLessEqual(salio, entro)
+            if cod != C.NINGUNO:                          # lo que no cayó al respaldo salió con ese códec
+                self.assertEqual(elegido - respaldos, usados.get(cod, 0))
+
+    def test_el_indice_es_media_mas_bono_y_el_texto_es_prometheus(self):
+        import math, re
+        from bandido import texto_bandido
+        em = EmisorAdaptativo(MODELO, sombra_cada=4)
+        for _, _, p in T.intercalar(PRUEBA, 1):
+            em.enviar(p)
+        b = em.bandido
+        for ctx, (N, S) in b.estado.items():
+            for (n, media, indice), nj, sj in zip(b.indices(ctx), N, S):
+                if nj > 0:
+                    self.assertAlmostEqual(media, sj / nj)
+                    self.assertAlmostEqual(indice, sj / nj + b.c * math.sqrt(max(math.log(sum(N)), 0) / nj))
+        linea = re.compile(r'^lab5g_cmp_[a-z_]+\{lado="ue"(,[a-z]+="[^"]*")*\} -?[0-9.]+(e[+-]?\d+)?$')
+        texto = texto_bandido(em, 'lado="ue"')
+        self.assertTrue(all(linea.match(l) for l in texto.splitlines()), texto)
+        for nombre in ("elegidos", "respaldos", "carga_bytes", "cpu_segundos", "recompensa_suma", "contexto_paquetes",
+                       "bandido_n", "bandido_media", "bandido_indice", "sombra_bytes", "sombra_paquetes"):
+            self.assertIn(f"lab5g_cmp_{nombre}{{", texto)
+
 
 class Cabeceras(unittest.TestCase):
     def test_voip_baja_de_40_a_5_bytes(self):
@@ -208,6 +276,77 @@ class Cabeceras(unittest.TestCase):
                 continue
             pos, armar = rx.descomprimir(cab, 0)
             self.assertEqual(armar(resto), p)
+
+
+def _pcm(n_muestras: int, semilla: int = 3) -> bytes:
+    """Audio de prueba: dos senos con ruido, PCM 16 bit little-endian."""
+    import math, struct
+    rng = random.Random(semilla)
+    return b"".join(struct.pack("<h", max(-32768, min(32767, int(9000 * math.sin(i / 7) + 4000 * math.sin(i / 23)
+                                                                  + rng.gauss(0, 150))))) for i in range(n_muestras))
+
+
+class PredictivoAudio(unittest.TestCase):
+    def test_ida_y_vuelta_con_cualquier_corte_y_largo(self):
+        c = C.REGISTRO[C.PREDICTIVO_AUDIO](MODELO)
+        pcm, rng = _pcm(20000), random.Random(9)
+        for _ in range(300):
+            i, n = rng.randrange(len(pcm) - 1500), rng.randrange(16, 1400)  # cortes pares e impares
+            s = pcm[i:i + n]
+            z, conf = c.comprimir(s, None)
+            self.assertIsNone(conf)                       # sin estado
+            if z is not s:
+                self.assertEqual(c.descomprimir(z), s)
+        for s in (bytes(16), bytes(17), b"\xff" * 31, bytes(range(256)) * 5 + b"x", b"\x00\x80" * 40,
+                  b"\xff\x7f\x00\x80" * 100):           # extremos de int16: errores de 17+ bits
+            z, _ = c.comprimir(s, None)
+            self.assertTrue(z is s or c.descomprimir(z) == s)
+
+    def test_comprime_audio_y_no_azar(self):
+        c = C.REGISTRO[C.PREDICTIVO_AUDIO](MODELO)
+        pcm = _pcm(700)[:1360]
+        self.assertLess(len(c.comprimir(pcm, None)[0]), 0.8 * len(pcm))
+        azar = random.Random(1).randbytes(1360)
+        self.assertIs(c.comprimir(azar, None)[0], azar)  # ni lo arma: el Compresor manda NINGUNO
+
+    def test_por_el_marco_completo_y_con_perdidas(self):
+        tx, rx = C.Compresor(MODELO), C.Descompresor(MODELO)
+        pcm = _pcm(30000)
+        pkts = [T.paquete_tcp(pcm[i:i + 1360], 40000, 7800, i, 1, i) for i in range(0, len(pcm) - 1360, 1360)]
+        for j, p in enumerate(pkts):
+            marco, usado = tx.empaquetar(p, C.PREDICTIVO_AUDIO)
+            self.assertEqual(usado, C.PREDICTIVO_AUDIO)
+            if j % 3:                                     # se pierde 1 de cada 3: no arrastra nada
+                self.assertEqual(rx.desempaquetar(marco), p)
+
+    def test_el_bandido_lo_aprende_con_audio(self):
+        em, rx = EmisorAdaptativo(MODELO), C.Descompresor(MODELO)
+        self.assertIn(C.PREDICTIVO_AUDIO, em.bandido.brazos)
+        pcm, usados = _pcm(200000), {}
+        for i in range(0, len(pcm) - 1360, 1360):
+            p = T.paquete_tcp(pcm[i:i + 1360], 40000, 7800, i, 1, i // 1360)
+            marco, cod = em.enviar(p)
+            self.assertEqual(rx.desempaquetar(marco), p)
+            if i > len(pcm) // 2:
+                usados[cod] = usados.get(cod, 0) + 1
+        self.assertGreater(usados.get(C.PREDICTIVO_AUDIO, 0), 0.8 * sum(usados.values()))
+
+
+class Rafagas(unittest.TestCase):
+    def test_deflate_flujo_se_sostiene_y_nada_cambia_en_el_receptor(self):
+        mezcla = T.intercalar(PRUEBA, 1)
+        em, rx = EmisorAdaptativo(MODELO, rafaga=8), C.Descompresor(MODELO)
+        for _, _, p in mezcla:
+            self.assertEqual(rx.desempaquetar(em.enviar(p)[0]), p)
+        self.assertGreater(em.por_rafaga, 0)
+        self.assertTrue(all(0 <= r[1] < 8 and r[0] in (C.DEFLATE_FLUJO,) for r in em.en_rafaga.values()))
+
+    def test_sin_rafaga_siempre_consulta(self):
+        em = EmisorAdaptativo(MODELO, rafaga=0)
+        for _, _, p in T.intercalar(PRUEBA, 1)[:500]:
+            em.enviar(p)
+        self.assertEqual(em.por_rafaga, 0)
+        self.assertEqual(em.en_rafaga, {})
 
 
 if __name__ == "__main__":

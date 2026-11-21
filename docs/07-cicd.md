@@ -15,7 +15,8 @@ Todo esto es **opcional**: el laboratorio funciona igual desplegándolo a mano.
 - [4. Preparar los permisos](#4-preparar-los-permisos)
 - [5. El secreto](#5-el-secreto)
 - [6. Lanzarlo](#6-lanzarlo)
-- [7. Los cinco fallos que ya nos pasaron](#7-los-cinco-fallos-que-ya-nos-pasaron)
+- [7. Concurrencia](#7-concurrencia)
+- [8. Los cinco fallos que ya nos pasaron](#8-los-cinco-fallos-que-ya-nos-pasaron)
 
 ---
 
@@ -37,83 +38,110 @@ Consecuencias que hay que aceptar antes de instalarlo:
 
 ## 2. Qué hace el pipeline
 
-Son **dos workflows separados**, que comparten el mismo `concurrency.group`
-para no competir nunca por el host (ver la [sección de
-concurrencia](#concurrencia) más abajo):
+Son **dos workflows**, que comparten el mismo `concurrency.group` para no
+competir nunca por el host (ver [concurrencia](#7-concurrencia)).
 
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) — núcleo +
-RAN, con cuatro trabajos encadenados:
+### `deploy.yml` — la pila completa
+
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), nombre
+`deploy-5g-lab`, con cinco trabajos encadenados:
 
 ```
-validate  →  deploy  →  smoke  →  (rollback, solo si algo falló)
+validate  →  capacidad  →  deploy  →  smoke  →  (rollback, solo si algo falló)
 ```
 
-[`.github/workflows/deploy-observability.yml`](../.github/workflows/deploy-observability.yml)
-— Grafana, Prometheus, cAdvisor y las sondas, en un único trabajo.
+### `observability-control.yml` — Grafana a demanda
 
-Antes eran un solo workflow, con la observabilidad como un quinto trabajo al
-final. Se separaron porque cualquier cambio en `observability/**` (un panel
-de Grafana, el exportador `phy_sim_exporter.py`) disparaba el pipeline
-completo del core — `validate`+`deploy`+`smoke`, ~15 minutos — sin ninguna
-necesidad de tocar el 5G core para nada.
+[`.github/workflows/observability-control.yml`](../.github/workflows/observability-control.yml)
+enciende o apaga Grafana, muestra el estado, o hace una copia de Prometheus. No
+recrea contenedores ni toca el entorno. Sustituye al antiguo
+`deploy-observability.yml`, que ya no existe.
+
+Prometheus y el pushgateway no son cosa de este workflow: arrancan con la pila en
+`deploy.yml`. Lo que hace la pila y por qué está escalonada está en
+[09 — Arranque seguro](09-arranque-seguro.md).
 
 ### `validate` — sin tocar nada de lo que está corriendo
 
-Tres comprobaciones estáticas:
+Cuatro comprobaciones estáticas:
 
 1. `ci/preflight.sh` — las 13 condiciones del entorno
-2. `docker compose config --quiet` — sintaxis del compose
-3. `ci/check-plmn.py` — coherencia de los tres números
+2. `docker compose --env-file .env.example config --quiet` — sintaxis del compose, con los perfiles `ran`, `compresion`, `obs` y `grafana` (no `obs-extra` ni `probes`)
+3. `ci/check-plmn.py` — coherencia de los tres números (PLMN, TAC, S-NSSAI)
+4. `python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py` — pruebas del compresor
 
 Si algo falla aquí, **el despliegue no llega a empezar**. Es deliberado: es mucho
 más barato fallar en la validación que a mitad del arranque.
 
-### `deploy` — por etapas
+### `capacidad` — sincronizar y comprobar el host
 
-Y las etapas importan:
+1. `sudo -n lab5g.sh sync` copia a `/opt/lab5g` solo los archivos versionados
+   (`git ls-files`). Ese directorio no lo borra el checkout del runner.
+2. Compara `deploy/lab5g.sh`, `lab5g-stack.sh`, `lab5g-backup.sh` y las unidades
+   de `/opt/lab5g/deploy` con las copias instaladas en `/usr/local/sbin/` y
+   `/etc/systemd/system/`. Si difieren, emite un `::warning::`. Se corrige
+   ejecutando `deploy/bootstrap-runner.sh` en el LXC.
+3. `sudo -n lab5g.sh check` comprueba RAM, swap, carga, I/O, disco, `gtp5g`,
+   SCTP y `/dev/net/tun`.
+
+El código de salida decide: `0` continúa, `2` (solo avisos) continúa con una
+advertencia visible, cualquier otro valor aborta. Los criterios están en
+[09 §4](09-arranque-seguro.md#4-compuertas-y-umbrales).
+
+### `deploy` — arranque por etapas
 
 ```
-1. Detener 'obs'+'probes' si estaban corriendo
-2. Generar .env a partir del secreto
-3. Reaplicar las reglas de red del host
-4. docker compose pull
-5. mongodb, con --wait --wait-timeout 600     ← espera de verdad
-6. El plano de control
-7. ci/wait-ready.sh
-8. ci/provision-subscriber.sh
-9. El perfil 'ran'
+1. Guardar el secreto de Grafana en /etc/lab5g/lab5g.env   (lab5g.sh env-set)
+2. Reaplicar las reglas de red del host                    (lab5g-netrules.sh)
+3. Reiniciar los servicios cuya configuración o compresion/ cambió
+4. Arranque escalonado: lab5g.sh start                     (hasta 60 min)
+5. Marcar el sha desplegado                                (lab5g.sh marcar-desplegado)
+6. ci/wait-ready.sh                                        (hasta 15 min)
+7. ci/provision-subscriber.sh                              (hasta 10 min)
 ```
 
-El paso 5 es el que se añadió después de un fallo real: arrancar los 16
-servicios de golpe hacía que MongoDB compitiera por disco justo con los
-servicios que esperaban su chequeo de salud. Ahora cada etapa imprime un `ps`,
-así que un fallo dice qué quedó arriba y qué no.
+El paso 3 mira `git diff` entre una base y el commit nuevo, solo en `config/`,
+`ueransim/` y `compresion/`. Para cada fichero cambiado reinicia el servicio afectado, uno a
+uno, con `lab5g.sh stop <svc>` y `lab5g.sh start <svc>`. Un `start` a secas no
+recrea un contenedor cuyo YAML montado cambió, porque el bind-mount no entra en
+el hash del servicio. La base es `github.event.before` en un push. En dispatch, o
+si ese valor no es válido, es el último sha desplegado con éxito
+(`lab5g.sh ultimo-desplegado`, guardado en `/var/lib/lab5g/desplegado`). Para
+`compresion/*` reinicia `cmp-dn` y luego `cmp-ue`, en ese orden, porque el código
+se monta `:ro` y su hash no cambia. Si no hay base válida, no reinicia nada y avisa.
+Tras el arranque, el workflow marca el sha con `lab5g.sh marcar-desplegado`. Un cambio en `nrf` o `ue` obliga a reiniciar también a sus
+dependientes; eso lo reordena la recuperación de `lab5g-stack` por hora de
+arranque, no este paso.
 
-**El paso 1 se añadió tras la ejecución `34793481927`**: quedaron 9
-contenedores de `obs`+`probes` corriendo de una sesión manual anterior y el
-load average del host (4 núcleos / 3.8 GB) llegó a 11.99 durante el smoke
-test. Esa carga tan alta *no* resultó ser la causa del fallo de esa corrida
-en concreto — el verdadero motivo era un bug de `pipefail` en
-`ci/smoke-ue.sh` (ver la sección 7, "el mismo bug de `pipefail`, dos veces")
-— pero sigue siendo un riesgo real para los pasos funcionales del smoke
-(registro NAS, sesión PDU, throughput), así que el paso se queda: `deploy`
-detiene `obs`+`probes` incondicionalmente antes de tocar nada, sin importar
-de dónde vinieran.
+El paso 4 es el único que arranca contenedores, y lo hace `lab5g-stack` **de uno
+en uno**, con compuertas de carga. No hay `docker compose pull` global ni `up`
+sueltos. Un `up` solo descarga las imágenes que falten al crear cada contenedor.
 
-**La observabilidad no se levanta aquí.** Vive en su propio workflow,
-[`deploy-observability.yml`](../.github/workflows/deploy-observability.yml) —
-ver la sección 2.
+El job tiene un tope de 90 minutos. Un arranque en frío tarda 20–30 minutos. Ver
+[09 §3](09-arranque-seguro.md#3-el-arranque-por-etapas).
 
 ### `smoke` — la validación end-to-end
 
-Ejecuta `ci/smoke-ue.sh`. Si falla, recoge el diagnóstico y lo sube como
-artefacto de la ejecución, con 7 días de retención.
+Ejecuta `ci/smoke-ue.sh`. Si falla, recoge el diagnóstico con
+`ci/collect-logs.sh` y lo sube como artefacto de la ejecución, con 7 días de
+retención.
 
-### `rollback` — solo si algo falló
+### `rollback` — solo si `deploy` o `smoke` fallaron
 
-Para la RAN y las sondas, y **deja el núcleo en pie** para que puedas
-inspeccionarlo. No hace un `down`: perder el estado justo cuando falla sería lo
-contrario de lo útil.
+Solo corre si `deploy` o `smoke` fallaron (`needs.deploy` o `needs.smoke` con
+resultado `failure`). Si todo va bien, no se ejecuta.
+
+Para el RAN y la compresión **por nombre**:
+
+```bash
+lab5g.sh stop gnb ue dn-iperf cmp-gen cmp-ue cmp-dn envio envio-eco
+```
+
+Deja el **núcleo y la observabilidad en pie** para que puedas inspeccionarlos. No
+hace un `down`: perder el estado justo cuando falla sería lo contrario de lo útil.
+
+Los servicios parados así quedan anotados como parados a mano. La recuperación
+automática no los revive hasta que alguien ejecute `lab5g.sh start`.
 
 ---
 
@@ -130,7 +158,7 @@ runner** en tu repositorio, y sigue las instrucciones que muestra esa página.
 
 ### Las etiquetas
 
-El workflow pide tres etiquetas concretas:
+Los dos workflows piden tres etiquetas concretas:
 
 ```yaml
 runs-on: [ self-hosted, lxc, free5gc ]
@@ -154,24 +182,54 @@ sudo ./svc.sh install deploy && sudo ./svc.sh start
 
 ## 4. Preparar los permisos
 
-El runner corre sin privilegios, pero necesita aplicar reglas de iptables. La
-solución es un sudoers acotado a exactamente tres comandos:
+Desde el checkout del repositorio, como root dentro del LXC:
 
 ```bash
 sudo bash deploy/bootstrap-runner.sh
 ```
 
-Ese script:
+El script es idempotente. Hace lo siguiente:
 
-- Instala `lab5g-netrules.sh` en `/usr/local/sbin/`
-- Instala y habilita el servicio de systemd
-- Instala [`deploy/sudoers-lab5g-deploy`](../deploy/sudoers-lab5g-deploy), que
-  permite **solo** `lab5g-netrules.sh`, `iptables` e `ip`, sin contraseña
-- Instala `python3-yaml`
-- **Valida el sudoers con `visudo -cf` antes de escribirlo**
+- Instala `lab5g-netrules.sh` y su servicio, y los habilita.
+- Valida y después instala [`deploy/sudoers-lab5g-deploy`](../deploy/sudoers-lab5g-deploy)
+  con `visudo -cf` antes de escribirlo. Un fichero mal formado dejaría el sistema
+  sin `sudo`, y recuperarlo requiere consola física.
+- Crea `/etc/lab5g/lab5g.env` desde `.env.example` si no existe. Si ya existe, no
+  lo toca. Avisa de que `GRAFANA_ADMIN_PASSWORD` tiene el valor de ejemplo.
+- Crea `/opt/lab5g`, `/var/lib/lab5g` y `/var/backups/lab5g`.
+- Instala `lab5g.sh`, `lab5g-stack.sh` y `lab5g-backup.sh` en `/usr/local/sbin/`,
+  y las unidades `lab5g-stack.service`, `lab5g-backup.service` y
+  `lab5g-backup.timer`. Las **habilita pero no las arranca**.
+- Instala `python3-yaml`, que necesita `ci/check-plmn.py`.
 
-Ese último punto no es paranoia: un fichero de sudoers mal formado deja el
-sistema entero sin `sudo`, y recuperarlo requiere consola física.
+Después, el primer arranque lo decide el operador o el pipeline:
+
+```bash
+sudo /usr/local/sbin/lab5g.sh sync && sudo /usr/local/sbin/lab5g.sh start
+sudo systemctl start lab5g-stack
+```
+
+`lab5g.sh start` arranca la pila, pero **no la vigila**. El bucle de recuperación
+es el servicio `lab5g-stack`, que bootstrap habilita sin arrancar. Hay que
+arrancarlo con `systemctl start lab5g-stack`, o tras el próximo reinicio del LXC.
+Ver [09 §2](09-arranque-seguro.md#2-las-piezas).
+
+### Qué permite el sudoers
+
+El runner corre como `deploy` y solo tiene `sudo -n` sin contraseña para estos
+comandos:
+
+| Comando | Para qué lo usa el pipeline |
+|---|---|
+| `lab5g-netrules.sh`, `iptables`, `ip` | Reglas de red de la LAN y comprobaciones de `preflight` |
+| `lab5g.sh sync` | Copiar el código a `/opt/lab5g` |
+| `lab5g.sh check` | Comprobación de capacidad |
+| `lab5g.sh start` y `lab5g.sh start <nombres>` | Arranque escalonado. Los nombres se validan contra una lista cerrada |
+| `lab5g.sh stop` y `lab5g.sh stop <nombres>` | Parada total y rollback |
+| `lab5g.sh status`, `grafana up`, `grafana down`, `backup` | Gestión desde `observability-control` |
+| `lab5g.sh env-set GRAFANA_ADMIN_PASSWORD` | Secreto de Grafana, con el valor por stdin |
+
+`restore` no está en el sudoers. Solo lo ejecuta root a mano.
 
 ---
 
@@ -183,15 +241,14 @@ En **Settings → Secrets and variables → Actions**, crea:
 |---|---|
 | `GRAFANA_ADMIN_PASSWORD` | La contraseña de admin de Grafana |
 
-El workflow genera el `.env` en cada ejecución a partir de `.env.example` más
-ese secreto.
+El job `deploy` escribe el secreto en `/etc/lab5g/lab5g.env` con
+`lab5g.sh env-set`. El valor entra por stdin y nunca por argumento, así que no
+aparece en `ps` ni en el log. El paso no usa `set -x`. `env-set` rechaza valores con comilla simple (`'`) o que
+terminen en barra invertida, ni los de varias líneas: compose no los lee de forma fiable.
 
-> **Ojo con un detalle nada obvio:** `actions/checkout` ejecuta `git clean -ffdx`,
-> que borra el `.env` por no estar trackeado. Como el job de `smoke` hace su
-> propio checkout, el `.env` que creó `deploy` desaparece — y sin él las
-> variables de imagen quedan vacías y `docker compose exec` apunta a servicios
-> equivocados. Por eso el job de smoke lo regenera. Si añades un job nuevo que
-> use compose, tendrá que hacer lo mismo.
+Ya no se genera ningún `.env` en cada job. El entorno vive fuera del checkout, y
+`actions/checkout` ejecuta `git clean -ffdx` sin tocarlo. Por eso el job `smoke`
+no tiene que regenerar nada.
 
 ---
 
@@ -199,23 +256,22 @@ ese secreto.
 
 ### Automático
 
-**`deploy.yml`** (núcleo + RAN) — un push a `master` que toque:
+**`deploy.yml`** (pila completa) — un push a `master` que toque:
 
 ```
-config/**  ueransim/**  docker-compose.yaml  .github/workflows/deploy.yml
+config/**  ueransim/**  compresion/**  deploy/**  ci/**
+docker-compose.yaml  .github/workflows/deploy.yml
 ```
 
-**`deploy-observability.yml`** — un push a `master` que toque:
+**`observability-control.yml`** — un push a `master` que toque:
 
 ```
-observability/**  docker-compose.yaml  .github/workflows/deploy-observability.yml
+observability/**  .github/workflows/observability-control.yml
 ```
 
-`docker-compose.yaml` dispara los dos porque ahí viven definidos tanto el
-core como los servicios de `obs`/`probes` en un mismo archivo — no hay forma
-de filtrar por rutas dentro del mismo fichero, así que a veces se disparará
-un workflow que en realidad no necesitaba correr. Es un falso positivo
-barato (unos segundos de `validate`/checkout), no un problema real.
+En un push, este workflow solo sincroniza los archivos a `/opt/lab5g` y recarga
+Prometheus (`/-/reload`). Solo lo hace desde `master`. Grafana relee
+`provisioning/dashboards` cada 30 s, así que no hace falta recrear nada.
 
 ### A mano
 
@@ -229,29 +285,42 @@ barato (unos segundos de `validate`/checkout), no un problema real.
 gh workflow run deploy.yml --repo J4F3ET/lab-free5gc -f skip_smoke=true
 ```
 
-`deploy-observability.yml` no tiene inputs — solo levanta `obs`+`probes`:
+`observability-control.yml` tiene un input `accion` con cuatro valores:
+
+| `accion` | Qué hace |
+|---|---|
+| `grafana-up` | Enciende Grafana (`lab5g.sh grafana up`) |
+| `grafana-down` | Apaga Grafana (`lab5g.sh grafana down`) |
+| `estado` | Muestra el estado de la pila (`lab5g.sh status`) |
+| `backup` | Copia de Prometheus (`lab5g.sh backup`) |
+
+Antes de ejecutar la acción, este workflow sincroniza el código, para que Grafana
+vea los dashboards del commit actual. Las acciones que modifican (`grafana-up`,
+`grafana-down`, `backup`) se rechazan si el workflow no corre sobre `master`.
+`estado` es de solo lectura y corre desde cualquier rama.
 
 ```bash
-gh workflow run deploy-observability.yml --repo J4F3ET/lab-free5gc
+gh workflow run observability-control.yml --repo J4F3ET/lab-free5gc -f accion=grafana-up
 ```
 
 ### Pararlo del todo
 
-Si el servidor está caído o en mantenimiento, conviene desactivar los
-workflows para que un merge no dispare un despliegue contra una máquina que
-no está:
+Si el servidor está caído o en mantenimiento, conviene desactivar los workflows
+para que un merge no dispare un despliegue contra una máquina que no está:
 
 ```bash
 gh workflow disable deploy.yml --repo J4F3ET/lab-free5gc
-gh workflow disable deploy-observability.yml --repo J4F3ET/lab-free5gc
+gh workflow disable observability-control.yml --repo J4F3ET/lab-free5gc
 ```
 
 ```bash
 gh workflow enable deploy.yml --repo J4F3ET/lab-free5gc
-gh workflow enable deploy-observability.yml --repo J4F3ET/lab-free5gc
+gh workflow enable observability-control.yml --repo J4F3ET/lab-free5gc
 ```
 
-### Concurrencia
+---
+
+## 7. Concurrencia
 
 ```yaml
 concurrency:
@@ -263,19 +332,15 @@ Nunca dos despliegues a la vez sobre el mismo LXC, y **sin cancelar el que ya
 está corriendo**: interrumpir un despliegue a mitad deja el laboratorio en un
 estado peor que dejarlo terminar.
 
-**Los dos workflows usan el mismo `group: lab5g-deploy`** — el grupo de
+**Los dos workflows usan el mismo `group: lab5g-deploy`**. El grupo de
 concurrencia de GitHub Actions es global al repositorio, no por archivo de
-workflow. Si `deploy.yml` está corriendo `deploy`+`smoke` y en ese momento se
-dispara `deploy-observability.yml` (por un push a `observability/**` o a
-mano), GitHub Actions lo deja en cola en vez de dejarlo arrancar Grafana y
-compañía en paralelo sobre el mismo host de 4 núcleos. Es la pieza que hace
-segura la separación en dos workflows: sin este grupo compartido, sería
-posible que ambos corrieran a la vez y se repitiera el fallo por inanición
-de CPU/IO de la ejecución `34793481927`.
+workflow. Si `deploy.yml` está corriendo y se dispara `observability-control.yml`
+(por un push a `observability/**` o a mano), GitHub Actions lo deja en cola en
+vez de ejecutarlo en paralelo sobre el mismo host de 4 núcleos.
 
 ---
 
-## 7. Los cinco fallos que ya nos pasaron
+## 8. Los cinco fallos que ya nos pasaron
 
 Están documentados porque son los que te encontrarás tú también.
 
@@ -317,8 +382,6 @@ con 0.
 La lección: **un bug de `pipefail` en un patrón reutilizable no se arregla
 una vez — se busca en todo el repositorio.** `grep -rn 'logs.*|.*grep' ci/`
 antes de dar por cerrado un hallazgo así.
-
-### El workflow no se disparaba nunca
 
 ### El workflow no se disparaba nunca
 
