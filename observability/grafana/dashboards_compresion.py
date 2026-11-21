@@ -52,8 +52,45 @@ class Lienzo:
         self.y += h
 
 
-def q(expr, ref="A", leyenda="", tabla=False):
-    t = {"refId": ref, "expr": expr, "instant": True, "datasource": DS}
+def recordar(expr, ventana="30d"):
+    """Envuelve cada selector lab5g_* en last_over_time(sel[30d]). Una consulta instantánea solo mira 5 min
+    atrás y las lab5g_cmp_eval_* se publican una vez: sin esto el panel dice «No data» aunque el dato exista.
+    No toca los selectores que ya llevan rango [..] ni el texto entre comillas."""
+    salida, i, n = [], 0, len(expr)
+    while i < n:
+        c = expr[i]
+        if c in "\"'`":                       # literal de texto: se copia tal cual
+            j = i + 1
+            while j < n and expr[j] != c:
+                j += 2 if (expr[j] == "\\" and c != "`") else 1
+            salida.append(expr[i:j + 1]); i = j + 1
+        elif c.isalpha() or c in "_:":
+            j = i
+            while j < n and (expr[j].isalnum() or expr[j] in "_:"):
+                j += 1
+            nombre = expr[i:j]
+            if not nombre.startswith("lab5g_"):
+                salida.append(nombre); i = j; continue
+            k = j
+            if k < n and expr[k] == "{":        # llaves: respeta comillas y \" dentro
+                k += 1
+                while k < n and expr[k] != "}":
+                    if expr[k] in "\"'":
+                        q_ = expr[k]; k += 1
+                        while k < n and expr[k] != q_:
+                            k += 2 if expr[k] == "\\" else 1
+                    k += 1
+                k += 1
+            sel = expr[i:k]
+            salida.append(sel if (k < n and expr[k] == "[") else f"last_over_time({sel}[{ventana}])")
+            i = k
+        else:
+            salida.append(c); i += 1
+    return "".join(salida)
+
+
+def q(expr, ref="A", leyenda="", tabla=False, instante=True):
+    t = {"refId": ref, "expr": recordar(expr) if instante else expr, "instant": instante, "datasource": DS}
     if leyenda:
         t["legendFormat"] = leyenda
     if tabla:
@@ -154,7 +191,7 @@ def variable(nombre, etiqueta, metrica_info, clave, defecto, desc):
     """Menú cuyo valor es la etiqueta `clave` (lo que usan las consultas) y cuyo texto visible es
     la etiqueta `texto` de la métrica *_info que publica informacion.py. Así el menú dice
     "05 · ROHC + DEFLATE con diccionario" y no "deflate_dict"; un algoritmo nuevo trae su texto."""
-    consulta = f"query_result({metrica_info})"
+    consulta = f"query_result({recordar(metrica_info)})"
     return {"name": nombre, "label": etiqueta, "description": desc, "type": "query", "datasource": DS,
             "query": {"query": consulta, "refId": "v"}, "definition": consulta,
             "regex": f'/{clave}="(?<value>[^"]+)".*texto="(?<text>[^"]+)"/', "refresh": 2,
@@ -500,7 +537,7 @@ NOTA_VIVO = " Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compre
 
 def serie(titulo, desc, consultas, unidad, por_dia=False):
     p = {"type": "timeseries", "title": titulo, "description": desc,
-         "targets": [q(e, chr(65 + i), l) for i, (e, l) in enumerate(consultas)]}
+         "targets": [q(e, chr(65 + i), l, instante=False) for i, (e, l) in enumerate(consultas)]}
     for t in p["targets"]:
         t["instant"] = False; t["range"] = True
     custom = {"fillOpacity": 10}

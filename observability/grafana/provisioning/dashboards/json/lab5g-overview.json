@@ -164,7 +164,7 @@
     {
       "type": "timeseries",
       "title": "CPU por contenedor del lab",
-      "description": "cadvisor, con metric_relabel_configs que deja solo los contenedores del lab para bajar cardinalidad.",
+      "description": "Sin datos: cAdvisor fue retirado y ya no hay fuente de CPU por contenedor. Se deja el panel como recordatorio.",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
@@ -182,68 +182,62 @@
     {
       "type": "timeseries",
       "title": "Memoria por contenedor del lab",
+      "description": "Memoria (MB) de cada contenedor. La publica el servicio lab5g-stack al pushgateway (job lab5g_stack) como lab5g_ct_mem_mb.",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (name) (container_memory_working_set_bytes{name!=\"\"})",
-          "legendFormat": "{{name}}"
+          "expr": "lab5g_ct_mem_mb",
+          "legendFormat": "{{servicio}}"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "defaults": { "unit": "decmbytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
         "overrides": []
       }
     },
     {
       "type": "timeseries",
-      "title": "Espera de I/O del LXC",
-      "description": "Panel deliberado: en este host el I/O es el cuello de botella real. Un iowait alto explica arranques lentos, healthchecks que expiran y falsos fallos de PFCP o NGAP que parecen de configuracion.",
+      "title": "Presion de I/O del host (%)",
+      "description": "Panel deliberado: en este host el I/O es el cuello de botella real. Eje izquierdo: presion de I/O (%), lab5g_host_io_presion_pct; una presion alta explica arranques lentos, healthchecks que expiran y falsos fallos de PFCP o NGAP. Eje derecho: carga del host a 1 min (lab5g_host_load1). Lo publica lab5g-stack cada 30 s.",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 28 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(rate(node_cpu_seconds_total{mode=\"iowait\"}[5m]))",
-          "legendFormat": "iowait"
+          "expr": "lab5g_host_io_presion_pct",
+          "legendFormat": "presion de I/O"
         },
         {
           "refId": "B",
-          "expr": "avg(rate(node_cpu_seconds_total{mode=\"system\"}[5m]))",
-          "legendFormat": "system"
-        },
-        {
-          "refId": "C",
-          "expr": "avg(rate(node_cpu_seconds_total{mode=\"user\"}[5m]))",
-          "legendFormat": "user"
+          "expr": "lab5g_host_load1",
+          "legendFormat": "carga 1 min"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 1, "fillOpacity": 8, "stacking": { "mode": "normal" } } },
-        "overrides": []
+        "defaults": { "unit": "percent", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "carga 1 min" },
+            "properties": [ { "id": "unit", "value": "none" }, { "id": "custom.axisPlacement", "value": "right" } ] }
+        ]
       }
     },
     {
       "type": "timeseries",
-      "title": "Memoria y swap del LXC",
-      "description": "El swap en uso es la senal temprana de que el host esta sobrecomprometido: precede a los arranques lentos y a los timeouts.",
+      "title": "Memoria disponible del host",
+      "description": "Memoria disponible (MB), lab5g_host_mem_disponible_mb. Si baja mucho precede a los arranques lentos y a los timeouts. El swap ya no se publica, por eso se quito esa serie.",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 28 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "refId": "A",
-          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
-          "legendFormat": "en uso"
-        },
-        {
-          "refId": "B",
-          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
-          "legendFormat": "swap en uso"
+          "expr": "lab5g_host_mem_disponible_mb",
+          "legendFormat": "disponible"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
+        "defaults": { "unit": "decmbytes", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
         "overrides": []
       }
     },
@@ -324,7 +318,7 @@
       "description": "lab5g_info_entropy_bits_per_symbol. H(f) = sum(P_k * -log2(P_k)), segun la distribucion Zipf de cada slice (K simbolos, sesgo). Bonus de Teoria de la Informacion sobre el enunciado de parametros de red.",
       "gridPos": { "h": 7, "w": 6, "x": 12, "y": 50 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "lab5g_info_entropy_bits_per_symbol", "legendFormat": "{{slice}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "last_over_time(lab5g_info_entropy_bits_per_symbol[30d])", "legendFormat": "{{slice}}", "instant": true } ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": { "defaults": { "decimals": 3 }, "overrides": [] }
     },
@@ -334,7 +328,7 @@
       "description": "lab5g_info_required_rate_mbps. Tasa de informacion de la fuente de cada slice, en las mismas unidades que la capacidad de canal C para poder comparar R <= C.",
       "gridPos": { "h": 7, "w": 6, "x": 18, "y": 50 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "lab5g_info_required_rate_mbps", "legendFormat": "{{slice}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "last_over_time(lab5g_info_required_rate_mbps[30d])", "legendFormat": "{{slice}}", "instant": true } ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": { "defaults": { "unit": "Mbits", "decimals": 2 }, "overrides": [] }
     },
@@ -345,8 +339,8 @@
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 57 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "refId": "A", "expr": "lab5g_phy_antenna_gain_tx_dbi{slice=\"eMBB\"}", "legendFormat": "Tx (estacion base)", "instant": true },
-        { "refId": "B", "expr": "lab5g_phy_antenna_gain_rx_dbi{slice=\"eMBB\"}", "legendFormat": "Rx (UE)", "instant": true }
+        { "refId": "A", "expr": "last_over_time(lab5g_phy_antenna_gain_tx_dbi{slice=\"eMBB\"}[30d])", "legendFormat": "Tx (estacion base)", "instant": true },
+        { "refId": "B", "expr": "last_over_time(lab5g_phy_antenna_gain_rx_dbi{slice=\"eMBB\"}[30d])", "legendFormat": "Rx (UE)", "instant": true }
       ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": { "defaults": {}, "overrides": [] }
@@ -357,7 +351,7 @@
       "description": "lab5g_phy_bandwidth_mhz, segun el escenario activo en ESCENARIOS_CANAL (nominal=20 MHz, banda_estrecha=5 MHz, mmwave_n258=100 MHz).",
       "gridPos": { "h": 6, "w": 6, "x": 6, "y": 57 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "lab5g_phy_bandwidth_mhz{slice=\"eMBB\"}", "legendFormat": "{{escenario}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "last_over_time(lab5g_phy_bandwidth_mhz{slice=\"eMBB\"}[30d])", "legendFormat": "{{escenario}}", "instant": true } ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": { "defaults": { "unit": "MHz" }, "overrides": [] }
     },
@@ -367,7 +361,7 @@
       "description": "lab5g_phy_frequency_mhz. Banda 3GPP TS 38.101-1 asociada al escenario activo (n1=2100 MHz, n78=3500 MHz, n258=26000 MHz mmWave).",
       "gridPos": { "h": 6, "w": 6, "x": 12, "y": 57 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "lab5g_phy_frequency_mhz{slice=\"eMBB\"}", "legendFormat": "{{band}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "last_over_time(lab5g_phy_frequency_mhz{slice=\"eMBB\"}[30d])", "legendFormat": "{{band}}", "instant": true } ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": { "defaults": { "unit": "MHz" }, "overrides": [] }
     },
@@ -377,7 +371,7 @@
       "description": "lab5g_info_meets_shannon_criterion, por slice. 1 = la tasa de informacion requerida por la fuente cabe en la capacidad teorica del canal (comunicacion sin perdida).",
       "gridPos": { "h": 6, "w": 6, "x": 18, "y": 57 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "lab5g_info_meets_shannon_criterion", "legendFormat": "{{slice}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "last_over_time(lab5g_info_meets_shannon_criterion[30d])", "legendFormat": "{{slice}}", "instant": true } ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "background", "textMode": "auto", "orientation": "auto" },
       "fieldConfig": {
         "defaults": {

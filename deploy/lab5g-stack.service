@@ -1,0 +1,26 @@
+[Unit]
+Description=Pila del lab 5G: arranque escalonado y recuperacion cuidadosa
+# Los contenedores tienen 'restart: "no"': este servicio es el unico que los
+# arranca y los repone. Sin el, tras un reinicio del host no sube nada.
+After=docker.service lab5g-netrules.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/lab5g-stack.sh run
+# Apagado ordenado e inverso; crea /run/lab5g/parado para frenar la recuperacion.
+ExecStop=/usr/local/sbin/lab5g.sh stop
+Restart=on-failure
+RestartSec=30
+# El arranque en frio puede tardar 20-30 min a proposito.
+TimeoutStartSec=0
+# 14 etapas x hasta 30 s de 'stop -t' + margen.
+TimeoutStopSec=900
+# Prioridad baja: que el propio arranque no compita con los contenedores
+# que ya estan sirviendo.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

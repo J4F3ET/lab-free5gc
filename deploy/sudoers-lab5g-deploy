@@ -1,10 +1,11 @@
 # /etc/sudoers.d/lab5g-deploy
 #
 # El runner de GitHub Actions corre como el usuario 'deploy'. El pipeline
-# necesita privilegios en tres puntos concretos:
+# necesita privilegios en cuatro grupos de acciones:
 #   - aplicar las reglas DOCKER-USER que publican el lab en la LAN
 #   - las comprobaciones de iptables/netdev de ci/preflight.sh
 #   - la captura de estado de red de ci/collect-logs.sh
+#   - el CLI del lab (lab5g.sh: sync, arranque, copias, entorno; ver mas abajo)
 #
 # Sin esto, el paso de netrules falla en silencio y el lab queda
 # inalcanzable desde la LAN sin ningun error visible en CI.
@@ -20,3 +21,25 @@
 deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g-netrules.sh
 deploy ALL=(root) NOPASSWD: /sbin/iptables
 deploy ALL=(root) NOPASSWD: /sbin/ip
+
+# CLI del lab (arranque escalonado, sync, copias). Sin argumentos el comando
+# se permite con CUALQUIER argumento en sudoers, asi que cada subcomando se
+# lista con sus argumentos exactos; solo 'start' y 'stop' admiten nombres de
+# servicio libres (el script los valida contra una lista cerrada).
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh sync
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh check
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh check --estricto
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh status
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh backup
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh grafana up
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh grafana down
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh start
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh start *
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh stop
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh stop *
+# env-set: la clave se valida contra .env.example y el valor viaja por stdin.
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh env-set GRAFANA_ADMIN_PASSWORD
+# Sha desplegado: 'ultimo-desplegado' exacto; 'marcar-desplegado' con un solo
+# argumento que el script valida (^[0-9a-f]{7,40}$).
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh ultimo-desplegado
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/lab5g.sh marcar-desplegado *

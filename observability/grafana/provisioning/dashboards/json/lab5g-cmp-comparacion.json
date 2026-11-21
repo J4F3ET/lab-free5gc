@@ -27,10 +27,10 @@
      "uid": "prometheus"
     },
     "query": {
-     "query": "query_result(lab5g_cmp_eval_clase_info)",
+     "query": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
      "refId": "v"
     },
-    "definition": "query_result(lab5g_cmp_eval_clase_info)",
+    "definition": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
     "regex": "/clase=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
@@ -85,7 +85,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_algoritmo_info",
+     "expr": "last_over_time(lab5g_cmp_eval_algoritmo_info[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -200,7 +200,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo, clase) (lab5g_cmp_eval_ahorro_pct{clase!=\"todas\"})",
+     "expr": "sum by (algoritmo, clase) (last_over_time(lab5g_cmp_eval_ahorro_pct{clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -286,7 +286,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"}) - sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"}[30d])) - sum by (algoritmo) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -385,7 +385,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perfecto\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -395,7 +395,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -474,7 +474,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo, clase) (lab5g_cmp_eval_info_entregada_pct{clase!=\"todas\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo, clase) (last_over_time(lab5g_cmp_eval_info_entregada_pct{clase!=\"todas\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -560,7 +560,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -570,7 +570,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_entregada_pct{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_entregada_pct{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -687,7 +687,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_mal_reconstruidos_pct{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -786,7 +786,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_comprimir_us{clase=\"$clase\"}) + sum by (algoritmo) (lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_comprimir_us{clase=\"$clase\"}[30d])) + sum by (algoritmo) (last_over_time(lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -796,7 +796,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -924,7 +924,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -934,7 +934,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_razon{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_razon{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -944,7 +944,7 @@
     },
     {
      "refId": "C",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -954,7 +954,7 @@
     },
     {
      "refId": "D",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -964,7 +964,7 @@
     },
     {
      "refId": "E",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perfecto\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -974,7 +974,7 @@
     },
     {
      "refId": "F",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -984,7 +984,7 @@
     },
     {
      "refId": "G",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_entregada_pct{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_entregada_pct{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -994,7 +994,7 @@
     },
     {
      "refId": "H",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_mal_reconstruidos_pct{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1004,7 +1004,7 @@
     },
     {
      "refId": "I",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_comprimir_us{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_comprimir_us{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1014,7 +1014,7 @@
     },
     {
      "refId": "J",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1024,7 +1024,7 @@
     },
     {
      "refId": "K",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"}) - sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (algoritmo) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"}[30d])) - sum by (algoritmo) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1110,7 +1110,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_bytes_por_paquete{canal=\"perfecto\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_bytes_por_paquete{canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1120,7 +1120,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1233,7 +1233,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1243,7 +1243,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perdida_1pct\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_info_entregada_pct{canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1322,7 +1322,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perfecto\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perfecto\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1332,7 +1332,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perdida_1pct\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_dentro_tolerancia_pct{canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1411,7 +1411,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"temp\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"temp\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1421,7 +1421,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"hum\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"hum\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1431,7 +1431,7 @@
     },
     {
      "refId": "C",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"bat\"})",
+     "expr": "sum by (metodo) (last_over_time(lab5g_cmp_eval_td_error_max{canal=\"perfecto\",campo=\"bat\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1686,7 +1686,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (contexto, codec) (label_join(lab5g_cmp_bandido_media{lado=\"ue\"}, \"contexto\", \" / \", \"tam\", \"ent\"))",
+     "expr": "sum by (contexto, codec) (label_join(last_over_time(lab5g_cmp_bandido_media{lado=\"ue\"}[30d]), \"contexto\", \" / \", \"tam\", \"ent\"))",
      "instant": true,
      "datasource": {
       "type": "prometheus",

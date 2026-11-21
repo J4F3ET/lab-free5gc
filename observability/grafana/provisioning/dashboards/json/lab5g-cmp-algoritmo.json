@@ -27,10 +27,10 @@
      "uid": "prometheus"
     },
     "query": {
-     "query": "query_result(lab5g_cmp_eval_algoritmo_info)",
+     "query": "query_result(last_over_time(lab5g_cmp_eval_algoritmo_info[30d]))",
      "refId": "v"
     },
-    "definition": "query_result(lab5g_cmp_eval_algoritmo_info)",
+    "definition": "query_result(last_over_time(lab5g_cmp_eval_algoritmo_info[30d]))",
     "regex": "/algoritmo=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
@@ -52,10 +52,10 @@
      "uid": "prometheus"
     },
     "query": {
-     "query": "query_result(lab5g_cmp_eval_clase_info)",
+     "query": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
      "refId": "v"
     },
-    "definition": "query_result(lab5g_cmp_eval_clase_info)",
+    "definition": "query_result(last_over_time(lab5g_cmp_eval_clase_info[30d]))",
     "regex": "/clase=\"(?<value>[^\"]+)\".*texto=\"(?<text>[^\"]+)\"/",
     "refresh": 2,
     "sort": 1,
@@ -110,7 +110,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_ultima_corrida_segundos * 1000",
+     "expr": "last_over_time(lab5g_cmp_eval_ultima_corrida_segundos[30d]) * 1000",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -165,7 +165,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_algoritmo_info{algoritmo=\"$algoritmo\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_algoritmo_info{algoritmo=\"$algoritmo\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -218,7 +218,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_clase_info{clase=\"$clase\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_clase_info{clase=\"$clase\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -284,7 +284,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -340,7 +340,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -408,7 +408,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_bytes{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -464,7 +464,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}) - sum(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"})",
+     "expr": "sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])) - sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -520,7 +520,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase=\"$clase\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase=\"$clase\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -584,7 +584,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"comprimido\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -652,7 +652,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}) - sum(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "expr": "sum(last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",etapa=\"original\"}[30d])) - sum(last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -716,7 +716,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -772,7 +772,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_info_entregada_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_info_entregada_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -836,7 +836,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}",
+     "expr": "last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase=\"$clase\",canal=\"perdida_1pct\"}[30d])",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -912,7 +912,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (clase) (lab5g_cmp_eval_comprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"}) + sum by (clase) (lab5g_cmp_eval_descomprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_comprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d])) + sum by (clase) (last_over_time(lab5g_cmp_eval_descomprimir_us{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -922,7 +922,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (clase) (lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1050,7 +1050,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"original\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"original\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1060,7 +1060,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (clase) (lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"comprimido\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_entropia_bits_por_byte{algoritmo=\"$algoritmo\",etapa=\"comprimido\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1070,7 +1070,7 @@
     },
     {
      "refId": "C",
-     "expr": "sum by (clase) (lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_info_mutua_bits_por_byte{algoritmo=\"$algoritmo\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1150,7 +1150,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (clase) (lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_ahorro_pct{algoritmo=\"$algoritmo\",clase!=\"todas\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -1160,7 +1160,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (clase) (lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase!=\"todas\",canal=\"perdida_1pct\"})",
+     "expr": "sum by (clase) (last_over_time(lab5g_cmp_eval_mal_reconstruidos_pct{algoritmo=\"$algoritmo\",clase!=\"todas\",canal=\"perdida_1pct\"}[30d]))",
      "instant": true,
      "datasource": {
       "type": "prometheus",

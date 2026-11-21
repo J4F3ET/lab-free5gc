@@ -1,0 +1,10 @@
+[Unit]
+Description=Copia de seguridad de Prometheus del lab 5G
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lab5g-backup.sh
+# Con disco mecanico: que la copia nunca compita con el 5G por el I/O.
+Nice=15
+IOSchedulingClass=idle
