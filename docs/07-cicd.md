@@ -100,12 +100,16 @@ advertencia visible, cualquier otro valor aborta. Los criterios están en
 7. ci/provision-subscriber.sh                              (hasta 10 min)
 ```
 
-El paso 3 mira `git diff` entre una base y el commit nuevo, solo en `config/`
-y `ueransim/`. Para cada fichero cambiado reinicia el servicio afectado, uno a
+El paso 3 mira `git diff` entre una base y el commit nuevo, solo en `config/`,
+`ueransim/` y `compresion/`. Para cada fichero cambiado reinicia el servicio afectado, uno a
 uno, con `lab5g.sh stop <svc>` y `lab5g.sh start <svc>`. Un `start` a secas no
 recrea un contenedor cuyo YAML montado cambió, porque el bind-mount no entra en
-el hash del servicio. Si no hay commit previo válido (dispatch o push inicial) no
-reinicia nada y avisa. Un cambio en `nrf` o `ue` obliga a reiniciar también a sus
+el hash del servicio. La base es `github.event.before` en un push. En dispatch, o
+si ese valor no es válido, es el último sha desplegado con éxito
+(`lab5g.sh ultimo-desplegado`, guardado en `/var/lib/lab5g/desplegado`). Para
+`compresion/*` reinicia `cmp-dn` y luego `cmp-ue`, en ese orden, porque el código
+se monta `:ro` y su hash no cambia. Si no hay base válida, no reinicia nada y avisa.
+Tras el arranque, el workflow marca el sha con `lab5g.sh marcar-desplegado`. Un cambio en `nrf` o `ue` obliga a reiniciar también a sus
 dependientes; eso lo reordena la recuperación de `lab5g-stack` por hora de
 arranque, no este paso.
 
