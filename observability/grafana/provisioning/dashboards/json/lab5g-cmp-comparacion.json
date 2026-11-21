@@ -64,7 +64,7 @@
    "title": "Cómo leer este tablero",
    "options": {
     "mode": "markdown",
-    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte.\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan estado por flujo arrastran la pérdida a los paquetes siguientes).\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo.\n\nCada barra es un algoritmo. `sin_compresion` es la referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete. La tabla de la derecha dice qué es cada uno."
+    "content": "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete **original** (O), el **comprimido** (C) y el **recuperado** (R), y la **información mutua** I(O;R) entre el original y lo recuperado.\n\n- **H** = entropía de orden 0, en bits por byte (de 0 a 8).\n- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes perdidos baja; **H(O) − I(O;R)** es la información que el receptor ya no tiene.\n- Cada gráfica explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde.\n\nDatos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver `compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no series en el tiempo.\n\nCada algoritmo es una barra, una fila o un punto. `sin_compresion` es la referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete. La tabla de la derecha dice qué es cada uno. Los mapas de calor muestran todas las clases a la vez; el resto, la clase del menú."
    },
    "id": 1,
    "gridPos": {
@@ -81,7 +81,7 @@
   {
    "type": "table",
    "title": "Qué es cada algoritmo",
-   "description": "El id es el nombre que sale en las barras de este tablero.",
+   "description": "El id es el nombre que sale en las gráficas de este tablero.",
    "targets": [
     {
      "refId": "A",
@@ -112,7 +112,7 @@
       },
       "renameByName": {
        "texto": "Algoritmo",
-       "algoritmo": "Id en las barras",
+       "algoritmo": "Id en las gráficas",
        "descripcion": "Qué hace"
       }
      }
@@ -158,7 +158,7 @@
      {
       "matcher": {
        "id": "byName",
-       "options": "Id en las barras"
+       "options": "Id en las gráficas"
       },
       "properties": [
        {
@@ -194,13 +194,99 @@
    }
   },
   {
-   "type": "barchart",
-   "title": "Ahorro de bytes",
-   "description": "",
+   "type": "table",
+   "title": "Ahorro por algoritmo y clase (mapa de calor)",
+   "description": "**Significado:** Dónde sirve cada algoritmo.\n\n**Cómo funciona:** cada celda = 100 · (1 − bytes C / bytes O) de ese algoritmo en esa clase. Color de rojo (0 %) a verde (80 %).\n\n**Eje X:** clase de tráfico (columnas).\n\n**Eje Y:** algoritmo (filas).\n\n**A qué responde:** ¿Qué algoritmo conviene para cada tipo de tráfico? Una columna toda roja = tráfico que nadie comprime (cifrado, voz, video): ahí lo correcto es no comprimir.",
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo, clase) (lab5g_cmp_eval_ahorro_pct{clase!=\"todas\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "groupingToMatrix",
+     "options": {
+      "columnField": "clase",
+      "rowField": "algoritmo",
+      "valueField": "Value",
+      "emptyValue": "null"
+     }
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 1,
+     "min": 0,
+     "max": 80,
+     "color": {
+      "mode": "continuous-RdYlGr"
+     },
+     "custom": {
+      "align": "center",
+      "minWidth": 55,
+      "cellOptions": {
+       "type": "color-background",
+       "mode": "basic"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byType",
+       "options": "string"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "auto"
+        }
+       },
+       {
+        "id": "custom.minWidth",
+        "value": 110
+       },
+       {
+        "id": "custom.align",
+        "value": "left"
+       }
+      ]
+     }
+    ]
+   },
+   "id": 4,
+   "gridPos": {
+    "h": 10,
+    "w": 14,
+    "x": 0,
+    "y": 11
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Redundancia que sacó: H(C) − H(O)",
+   "description": "**Significado:** Cuánto se acercó lo comprimido a ser ruido: la redundancia que el algoritmo eliminó.\n\n**Cómo funciona:** H(C) − H(O), con H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b. 0 = no comprimió nada; el máximo posible es 8 − H(O).\n\n**Eje X:** bits por byte (desde 0).\n\n**Eje Y:** algoritmo, de más a menos.\n\n**A qué responde:** ¿Cuánta redundancia saca cada algoritmo? Más largo = deja los bytes más «aleatorios», o sea más comprimidos.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"}) - sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"})",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -213,6 +299,17 @@
     {
      "id": "merge",
      "options": {}
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Value",
+        "desc": true
+       }
+      ]
+     }
     },
     {
      "id": "organize",
@@ -226,8 +323,8 @@
    ],
    "options": {
     "xField": "algoritmo",
-    "orientation": "auto",
-    "showValue": "auto",
+    "orientation": "horizontal",
+    "showValue": "always",
     "groupWidth": 0.7,
     "barWidth": 0.9,
     "legend": {
@@ -239,12 +336,12 @@
      "mode": "multi",
      "sort": "none"
     },
-    "xTickLabelRotation": -30
+    "xTickLabelRotation": 0
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
-     "decimals": 2,
+     "unit": "none",
+     "decimals": 3,
      "color": {
       "mode": "palette-classic"
      },
@@ -257,101 +354,11 @@
     },
     "overrides": []
    },
-   "id": 4,
-   "gridPos": {
-    "h": 9,
-    "w": 12,
-    "x": 0,
-    "y": 11
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   }
-  },
-  {
-   "type": "barchart",
-   "title": "Entropía: original vs comprimido",
-   "description": "Un buen compresor sube H(C) hacia 8 bits por byte. El eje va de 7 a 8 bits/byte para que se vean las diferencias; en una clase con entropía menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.",
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"})",
-     "instant": true,
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "format": "table"
-    },
-    {
-     "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"comprimido\"})",
-     "instant": true,
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "format": "table"
-    }
-   ],
-   "transformations": [
-    {
-     "id": "merge",
-     "options": {}
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true
-      },
-      "renameByName": {
-       "Value #A": "H(O)",
-       "Value #B": "H(C)"
-      }
-     }
-    }
-   ],
-   "options": {
-    "xField": "algoritmo",
-    "orientation": "auto",
-    "showValue": "always",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
-    "legend": {
-     "showLegend": true,
-     "displayMode": "list",
-     "placement": "bottom"
-    },
-    "tooltip": {
-     "mode": "multi",
-     "sort": "none"
-    },
-    "xTickLabelRotation": -30
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "none",
-     "decimals": 2,
-     "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 7,
-      "axisSoftMax": 8
-     }
-    },
-    "overrides": []
-   },
    "id": 5,
    "gridPos": {
-    "h": 9,
-    "w": 12,
-    "x": 12,
+    "h": 10,
+    "w": 10,
+    "x": 14,
     "y": 11
    },
    "datasource": {
@@ -368,13 +375,13 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 20
+    "y": 21
    }
   },
   {
    "type": "barchart",
    "title": "I(O;R): canal perfecto vs 1 % de pérdida",
-   "description": "Bits por byte del original que llegan al receptor. El eje va de 7 a 8 bits/byte para que se vean las diferencias; en una clase con entropía menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.",
+   "description": "**Significado:** Información del original que llega al receptor, sin y con pérdida de paquetes.\n\n**Cómo funciona:** I(O;R) = H(O) + H(R) − H(O,R), comparando byte a byte el original O con el recuperado R; un byte que no llegó cuenta como el símbolo «borrado». Si R = O, da I(O;R) = H(O). Con pérdida, el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos). Información perdida = H(O) − I(O;R): la distancia entre las dos barras.\n\n**Eje X:** algoritmo.\n\n**Eje Y:** bits por byte del original. El eje empieza en 7 bits por byte para que se vean las diferencias; en una clase con entropía menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.\n\n**A qué responde:** ¿Qué algoritmo conserva la información cuando la red pierde paquetes? Con canal perfecto todas las barras son iguales (todos son sin pérdida); con pérdida, la más baja es la que más información pierde.",
    "targets": [
     {
      "refId": "A",
@@ -418,7 +425,7 @@
    "options": {
     "xField": "algoritmo",
     "orientation": "auto",
-    "showValue": "always",
+    "showValue": "auto",
     "groupWidth": 0.7,
     "barWidth": 0.9,
     "legend": {
@@ -443,18 +450,17 @@
       "fillOpacity": 80,
       "lineWidth": 1,
       "gradientMode": "none",
-      "axisSoftMin": 7,
-      "axisSoftMax": 8
+      "axisSoftMin": 7
      }
     },
     "overrides": []
    },
    "id": 7,
    "gridPos": {
-    "h": 9,
+    "h": 10,
     "w": 12,
     "x": 0,
-    "y": 21
+    "y": 22
    },
    "datasource": {
     "type": "prometheus",
@@ -462,12 +468,108 @@
    }
   },
   {
-   "type": "barchart",
-   "title": "Información entregada con 1 % de pérdida",
-   "description": "I(O;R) / H(O).",
+   "type": "table",
+   "title": "Información entregada por algoritmo y clase (mapa de calor)",
+   "description": "**Significado:** Qué fracción de la información llega, para cada algoritmo en cada clase, con pérdida de paquetes.\n\n**Cómo funciona:** cada celda = 100 · I(O;R) / H(O), con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos). Color de rojo (95 %) a verde (100 %).\n\n**Eje X:** clase de tráfico (columnas).\n\n**Eje Y:** algoritmo (filas).\n\n**A qué responde:** ¿Dónde agrega daño cada algoritmo? Lo esperable es ~99 % (lo que borra el canal); una celda más roja es daño del algoritmo en esa clase.",
    "targets": [
     {
      "refId": "A",
+     "expr": "sum by (algoritmo, clase) (lab5g_cmp_eval_info_entregada_pct{clase!=\"todas\",canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "groupingToMatrix",
+     "options": {
+      "columnField": "clase",
+      "rowField": "algoritmo",
+      "valueField": "Value",
+      "emptyValue": "null"
+     }
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "min": 95,
+     "max": 100,
+     "color": {
+      "mode": "continuous-RdYlGr"
+     },
+     "custom": {
+      "align": "center",
+      "minWidth": 55,
+      "cellOptions": {
+       "type": "color-background",
+       "mode": "basic"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byType",
+       "options": "string"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "auto"
+        }
+       },
+       {
+        "id": "custom.minWidth",
+        "value": 110
+       },
+       {
+        "id": "custom.align",
+        "value": "left"
+       }
+      ]
+     }
+    ]
+   },
+   "id": 8,
+   "gridPos": {
+    "h": 10,
+    "w": 12,
+    "x": 12,
+    "y": 22
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "xychart",
+   "title": "Ahorro contra información entregada (dispersión)",
+   "description": "**Significado:** El compromiso entre ahorrar bytes y no perder información. Cada punto es un algoritmo.\n\n**Cómo funciona:** x = 100 · (1 − bytes C / bytes O); y = 100 · I(O;R) / H(O) con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** ahorro % (más a la derecha = ahorra más).\n\n**Eje Y:** información entregada % (más arriba = pierde menos).\n\n**A qué responde:** ¿Cuál ahorra más sin perder información? Los mejores quedan arriba a la derecha. Al tocar un punto sale de qué algoritmo es.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
      "expr": "sum by (algoritmo) (lab5g_cmp_eval_info_entregada_pct{clase=\"$clase\",canal=\"perdida_1pct\"})",
      "instant": true,
      "datasource": {
@@ -488,49 +590,90 @@
       "excludeByName": {
        "Time": true
       },
-      "renameByName": {}
+      "indexByName": {
+       "algoritmo": 0,
+       "Value #A": 1,
+       "Value #B": 2
+      },
+      "renameByName": {
+       "Value #A": "Ahorro %",
+       "Value #B": "Información entregada %",
+       "algoritmo": "Algoritmo"
+      }
      }
     }
    ],
    "options": {
-    "xField": "algoritmo",
-    "orientation": "auto",
-    "showValue": "auto",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
+    "mapping": "auto",
+    "series": [
+     {}
+    ],
     "legend": {
      "showLegend": false,
      "displayMode": "list",
      "placement": "bottom"
     },
     "tooltip": {
-     "mode": "multi",
+     "mode": "single",
      "sort": "none"
-    },
-    "xTickLabelRotation": -30
+    }
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
-     "decimals": 2,
      "color": {
-      "mode": "palette-classic"
+      "mode": "fixed",
+      "fixedColor": "green"
      },
      "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 85
+      "show": "points",
+      "pointSize": {
+       "fixed": 12
+      },
+      "pointShape": "circle",
+      "axisPlacement": "auto"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Ahorro %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Información entregada %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "custom.axisSoftMin",
+        "value": 95
+       },
+       {
+        "id": "custom.axisSoftMax",
+        "value": 100
+       }
+      ]
+     }
+    ]
    },
-   "id": 8,
+   "id": 9,
    "gridPos": {
-    "h": 9,
-    "w": 6,
-    "x": 12,
-    "y": 21
+    "h": 10,
+    "w": 14,
+    "x": 0,
+    "y": 32
    },
    "datasource": {
     "type": "prometheus",
@@ -540,7 +683,7 @@
   {
    "type": "barchart",
    "title": "Paquetes que llegan mal (1 % de pérdida)",
-   "description": "",
+   "description": "**Significado:** Confiabilidad: de los paquetes que llegan, cuántos salen distintos del original.\n\n**Cómo funciona:** 100 · recibidos distintos del original / recibidos, con el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos).\n\n**Eje X:** % de los paquetes recibidos.\n\n**Eje Y:** algoritmo, de más a menos.\n\n**A qué responde:** ¿Qué algoritmo convierte una pérdida en varios paquetes dañados?",
    "targets": [
     {
      "refId": "A",
@@ -559,6 +702,17 @@
      "options": {}
     },
     {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Value",
+        "desc": true
+       }
+      ]
+     }
+    },
+    {
      "id": "organize",
      "options": {
       "excludeByName": {
@@ -570,8 +724,8 @@
    ],
    "options": {
     "xField": "algoritmo",
-    "orientation": "auto",
-    "showValue": "auto",
+    "orientation": "horizontal",
+    "showValue": "always",
     "groupWidth": 0.7,
     "barWidth": 0.9,
     "legend": {
@@ -583,7 +737,7 @@
      "mode": "multi",
      "sort": "none"
     },
-    "xTickLabelRotation": -30
+    "xTickLabelRotation": 0
    },
    "fieldConfig": {
     "defaults": {
@@ -601,12 +755,12 @@
     },
     "overrides": []
    },
-   "id": 9,
+   "id": 10,
    "gridPos": {
-    "h": 9,
-    "w": 6,
-    "x": 18,
-    "y": 21
+    "h": 10,
+    "w": 10,
+    "x": 14,
+    "y": 32
    },
    "datasource": {
     "type": "prometheus",
@@ -616,23 +770,23 @@
   {
    "type": "row",
    "title": "Velocidad de procesamiento",
-   "id": 10,
+   "id": 11,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 30
+    "y": 42
    }
   },
   {
-   "type": "barchart",
-   "title": "Comprimir y descomprimir (µs por paquete, escala log)",
-   "description": "Python puro, en la máquina donde se corrió.",
+   "type": "xychart",
+   "title": "Ahorro contra tiempo de CPU (dispersión)",
+   "description": "**Significado:** Lo que cuesta en CPU cada punto de ahorro. Cada punto es un algoritmo.\n\n**Cómo funciona:** x = µs de comprimir + µs de descomprimir por paquete (Python puro, en la máquina de la evaluación); y = 100 · (1 − bytes C / bytes O).\n\n**Eje X:** microsegundos por paquete, en escala logarítmica (cada marca es 10 veces la anterior).\n\n**Eje Y:** ahorro %.\n\n**A qué responde:** ¿Cuál es rápido y además ahorra? Los útiles quedan arriba a la izquierda; abajo a la derecha están los lentos que ahorran poco. Al tocar un punto sale de qué algoritmo es.",
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_comprimir_us{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (lab5g_cmp_eval_comprimir_us{clase=\"$clase\"}) + sum by (algoritmo) (lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"})",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -642,7 +796,7 @@
     },
     {
      "refId": "B",
-     "expr": "sum by (algoritmo) (lab5g_cmp_eval_descomprimir_us{clase=\"$clase\"})",
+     "expr": "sum by (algoritmo) (lab5g_cmp_eval_ahorro_pct{clase=\"$clase\"})",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -662,56 +816,89 @@
       "excludeByName": {
        "Time": true
       },
+      "indexByName": {
+       "algoritmo": 0,
+       "Value #A": 1,
+       "Value #B": 2
+      },
       "renameByName": {
-       "Value #A": "comprimir",
-       "Value #B": "descomprimir"
+       "Value #A": "µs por paquete",
+       "Value #B": "Ahorro %",
+       "algoritmo": "Algoritmo"
       }
      }
     }
    ],
    "options": {
-    "xField": "algoritmo",
-    "orientation": "auto",
-    "showValue": "auto",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
+    "mapping": "auto",
+    "series": [
+     {}
+    ],
     "legend": {
-     "showLegend": true,
+     "showLegend": false,
      "displayMode": "list",
      "placement": "bottom"
     },
     "tooltip": {
-     "mode": "multi",
+     "mode": "single",
      "sort": "none"
-    },
-    "xTickLabelRotation": -30
+    }
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "µs",
-     "decimals": 1,
      "color": {
-      "mode": "palette-classic"
+      "mode": "fixed",
+      "fixedColor": "green"
      },
      "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 0,
-      "scaleDistribution": {
-       "type": "log",
-       "log": 10
-      }
+      "show": "points",
+      "pointSize": {
+       "fixed": 12
+      },
+      "pointShape": "circle",
+      "axisPlacement": "auto"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "µs por paquete"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "µs"
+       },
+       {
+        "id": "custom.scaleDistribution",
+        "value": {
+         "type": "log",
+         "log": 10
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Ahorro %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       }
+      ]
+     }
+    ]
    },
-   "id": 11,
+   "id": 12,
    "gridPos": {
-    "h": 9,
+    "h": 10,
     "w": 24,
     "x": 0,
-    "y": 31
+    "y": 43
    },
    "datasource": {
     "type": "prometheus",
@@ -721,19 +908,19 @@
   {
    "type": "row",
    "title": "Resumen",
-   "id": 12,
+   "id": 13,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 40
+    "y": 53
    }
   },
   {
    "type": "table",
    "title": "Todos los algoritmos",
-   "description": "Ordenable por cualquier columna.",
+   "description": "**Significado:** Todas las medidas de la clase elegida, un algoritmo por fila.\n\n**Cómo funciona:** las fórmulas de cada columna están en la ⓘ de las gráficas de arriba. La última columna es la información perdida con 1 % de pérdida: H(O) − I(O;R).\n\n**Eje X:** las columnas (se ordena tocando el encabezado).\n\n**Eje Y:** un algoritmo por fila.\n\n**A qué responde:** ¿Cómo se compara cada algoritmo en todo a la vez?",
    "targets": [
     {
      "refId": "A",
@@ -834,6 +1021,16 @@
       "uid": "prometheus"
      },
      "format": "table"
+    },
+    {
+     "refId": "K",
+     "expr": "sum by (algoritmo) (lab5g_cmp_eval_entropia_bits_por_byte{clase=\"$clase\",etapa=\"original\"}) - sum by (algoritmo) (lab5g_cmp_eval_info_mutua_bits_por_byte{clase=\"$clase\",canal=\"perdida_1pct\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
     }
    ],
    "transformations": [
@@ -858,7 +1055,8 @@
        "Value #G": "Info. entregada %",
        "Value #H": "Llegan mal %",
        "Value #I": "Comprimir µs",
-       "Value #J": "Descomprimir µs"
+       "Value #J": "Descomprimir µs",
+       "Value #K": "H(O) − I(O;R) perdida"
       }
      }
     }
@@ -881,12 +1079,12 @@
     },
     "overrides": []
    },
-   "id": 13,
+   "id": 14,
    "gridPos": {
     "h": 10,
     "w": 24,
     "x": 0,
-    "y": 41
+    "y": 54
    },
    "datasource": {
     "type": "prometheus",
@@ -896,23 +1094,33 @@
   {
    "type": "row",
    "title": "Tasa–distorsión (IoT, compresión con pérdida)",
-   "id": 14,
+   "id": 15,
    "collapsed": false,
    "gridPos": {
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 51
+    "y": 64
    }
   },
   {
-   "type": "barchart",
-   "title": "Ahorro de bytes por método",
-   "description": "Solo paquetes iot_json. «predictivo ×e»: PredictivoIoT con los pasos de cuantización × e (×0 ≈ sin pérdida). zstd_dict y deflate_flujo: los mejores sin pérdida, como referencia.",
+   "type": "xychart",
+   "title": "Curva tasa–distorsión: bytes contra información entregada",
+   "description": "**Significado:** El compromiso de la compresión con pérdida: cuántos bytes cuesta cada lectura IoT y cuánta información de sus valores llega. Cada punto es un método.\n\n**Cómo funciona:** x = bytes de todos los marcos / paquetes (cabecera ROHC + id del códec + carga; el original IP/UDP/JSON mide ~120 B); y = 100 · I(X;Y) / H(X) con canal perfecto, X = lectura original, Y = recibida, media de temp, hum y bat. método: «predictivo ×e» = PredictivoIoT con los pasos de cuantización multiplicados por e (×0 ≈ sin pérdida); zstd_dict y deflate_flujo = los mejores sin pérdida, como referencia.\n\n**Eje X:** bytes por paquete (más a la izquierda = más barato).\n\n**Eje Y:** información entregada % (más arriba = menos distorsión).\n\n**A qué responde:** ¿Cuánta información se cede por cada byte ahorrado? Los sin pérdida quedan arriba, en 100 %; el predictivo se corre a la izquierda y baja a medida que crece el paso. Al tocar un punto sale el método.",
    "targets": [
     {
      "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_ahorro_pct{canal=\"perfecto\"})",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_bytes_por_paquete{canal=\"perfecto\"})",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (metodo) (lab5g_cmp_eval_td_info_entregada_pct{canal=\"perfecto\"})",
      "instant": true,
      "datasource": {
       "type": "prometheus",
@@ -932,49 +1140,86 @@
       "excludeByName": {
        "Time": true
       },
-      "renameByName": {}
+      "indexByName": {
+       "metodo": 0,
+       "Value #A": 1,
+       "Value #B": 2
+      },
+      "renameByName": {
+       "Value #A": "Bytes por paquete",
+       "Value #B": "Información entregada %",
+       "metodo": "Método"
+      }
      }
     }
    ],
    "options": {
-    "xField": "metodo",
-    "orientation": "auto",
-    "showValue": "auto",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
+    "mapping": "auto",
+    "series": [
+     {}
+    ],
     "legend": {
      "showLegend": false,
      "displayMode": "list",
      "placement": "bottom"
     },
     "tooltip": {
-     "mode": "multi",
+     "mode": "single",
      "sort": "none"
-    },
-    "xTickLabelRotation": -30
+    }
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
-     "decimals": 1,
      "color": {
-      "mode": "palette-classic"
+      "mode": "fixed",
+      "fixedColor": "green"
      },
      "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 0
+      "show": "points",
+      "pointSize": {
+       "fixed": 12
+      },
+      "pointShape": "circle",
+      "axisPlacement": "auto"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Bytes por paquete"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "decbytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Información entregada %"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "custom.axisSoftMax",
+        "value": 100
+       }
+      ]
+     }
+    ]
    },
-   "id": 15,
+   "id": 16,
    "gridPos": {
     "h": 9,
     "w": 8,
     "x": 0,
-    "y": 52
+    "y": 65
    },
    "datasource": {
     "type": "prometheus",
@@ -984,7 +1229,7 @@
   {
    "type": "barchart",
    "title": "Información entregada I(X;Y)/H(X)",
-   "description": "Media de temp, hum y bat, sobre los valores (no los bytes). Con pérdida baja aun con canal perfecto: es la información que se decide no mandar.",
+   "description": "**Significado:** Información mutua entre la lectura original y la recibida, sobre los VALORES de temp, hum y bat (no los bytes).\n\n**Cómo funciona:** 100 · I(X;Y) / H(X), X = lectura original, Y = lectura recibida; media de los tres campos.\n\n**Eje X:** método: «predictivo ×e» = PredictivoIoT con los pasos de cuantización multiplicados por e (×0 ≈ sin pérdida); zstd_dict y deflate_flujo = los mejores sin pérdida, como referencia.\n\n**Eje Y:** %.\n\n**A qué responde:** ¿Cuánta información se decide no mandar? Con pérdida baja aun con canal perfecto: es el precio del ahorro.",
    "targets": [
     {
      "refId": "A",
@@ -1058,12 +1303,12 @@
     },
     "overrides": []
    },
-   "id": 16,
+   "id": 17,
    "gridPos": {
     "h": 9,
     "w": 8,
     "x": 8,
-    "y": 52
+    "y": 65
    },
    "datasource": {
     "type": "prometheus",
@@ -1073,7 +1318,7 @@
   {
    "type": "barchart",
    "title": "Dentro de tolerancia (error ≤ paso/2)",
-   "description": "% de paquetes recibidos con todos los campos dentro de la tolerancia. Con pérdida, tras un delta perdido el receptor predice mal hasta el siguiente marco completo (cada 16).",
+   "description": "**Significado:** Paquetes recibidos con todas sus medidas dentro del error permitido.\n\n**Cómo funciona:** 100 · paquetes con |original − recibido| ≤ paso/2 en temp, hum y bat / recibidos.\n\n**Eje X:** método: «predictivo ×e» = PredictivoIoT con los pasos de cuantización multiplicados por e (×0 ≈ sin pérdida); zstd_dict y deflate_flujo = los mejores sin pérdida, como referencia.\n\n**Eje Y:** %.\n\n**A qué responde:** ¿Se cumple el error prometido? Tras un delta perdido el receptor predice mal hasta el siguiente marco completo (cada 16 paquetes).",
    "targets": [
     {
      "refId": "A",
@@ -1147,12 +1392,12 @@
     },
     "overrides": []
    },
-   "id": 17,
+   "id": 18,
    "gridPos": {
     "h": 9,
     "w": 8,
     "x": 16,
-    "y": 52
+    "y": 65
    },
    "datasource": {
     "type": "prometheus",
@@ -1162,7 +1407,7 @@
   {
    "type": "barchart",
    "title": "Error máximo por campo (canal perfecto)",
-   "description": "Error absoluto máximo de cada medida.",
+   "description": "**Significado:** El peor error de cada medida.\n\n**Cómo funciona:** max |original − recibido| de temp, hum y bat.\n\n**Eje X:** método: «predictivo ×e» = PredictivoIoT con los pasos de cuantización multiplicados por e (×0 ≈ sin pérdida); zstd_dict y deflate_flujo = los mejores sin pérdida, como referencia.\n\n**Eje Y:** unidades de cada medida (°C, %, V).\n\n**A qué responde:** ¿El error queda en paso/2? Es la distorsión que se acepta a cambio de bytes.",
    "targets": [
     {
      "refId": "A",
@@ -1247,88 +1492,12 @@
     },
     "overrides": []
    },
-   "id": 18,
-   "gridPos": {
-    "h": 9,
-    "w": 12,
-    "x": 0,
-    "y": 61
-   },
-   "datasource": {
-    "type": "prometheus",
-    "uid": "prometheus"
-   }
-  },
-  {
-   "type": "barchart",
-   "title": "Bytes por paquete transmitidos",
-   "description": "Marco completo por el túnel (cabecera ROHC + códec + carga); el paquete original IP/UDP/JSON mide ~120 B.",
-   "targets": [
-    {
-     "refId": "A",
-     "expr": "sum by (metodo) (lab5g_cmp_eval_td_bytes_por_paquete{canal=\"perfecto\"})",
-     "instant": true,
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "format": "table"
-    }
-   ],
-   "transformations": [
-    {
-     "id": "merge",
-     "options": {}
-    },
-    {
-     "id": "organize",
-     "options": {
-      "excludeByName": {
-       "Time": true
-      },
-      "renameByName": {}
-     }
-    }
-   ],
-   "options": {
-    "xField": "metodo",
-    "orientation": "auto",
-    "showValue": "auto",
-    "groupWidth": 0.7,
-    "barWidth": 0.9,
-    "legend": {
-     "showLegend": false,
-     "displayMode": "list",
-     "placement": "bottom"
-    },
-    "tooltip": {
-     "mode": "multi",
-     "sort": "none"
-    },
-    "xTickLabelRotation": -30
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "decbytes",
-     "decimals": 1,
-     "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "fillOpacity": 80,
-      "lineWidth": 1,
-      "gradientMode": "none",
-      "axisSoftMin": 0
-     }
-    },
-    "overrides": []
-   },
    "id": 19,
    "gridPos": {
     "h": 9,
-    "w": 12,
-    "x": 12,
-    "y": 61
+    "w": 24,
+    "x": 0,
+    "y": 74
    },
    "datasource": {
     "type": "prometheus",
@@ -1344,13 +1513,13 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 70
+    "y": 83
    }
   },
   {
    "type": "timeseries",
-   "description": "Lo que publica shim.py cada 10 s. Solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.",
    "title": "Subida: bytes originales vs bytes en el túnel",
+   "description": "**Significado:** Tráfico que entra al compresor y tráfico que sale comprimido, en la red real. Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** tasa de cada contador en ventanas de 2 min: rate(bytes[2m]).\n\n**Eje X:** hora.\n\n**Eje Y:** bytes por segundo.\n\n**A qué responde:** ¿Cuánto tráfico pasa y cuánto se reduce en este momento? La distancia entre las líneas es lo ahorrado.",
    "targets": [
     {
      "refId": "A",
@@ -1389,7 +1558,7 @@
     "h": 8,
     "w": 12,
     "x": 0,
-    "y": 71
+    "y": 84
    },
    "datasource": {
     "type": "prometheus",
@@ -1398,8 +1567,8 @@
   },
   {
    "type": "timeseries",
-   "description": "Lo que publica shim.py cada 10 s. Solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.",
    "title": "Ahorro en vivo (subida)",
+   "description": "**Significado:** Ahorro acumulado desde que arrancó el compresor. Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** 100 · (1 − bytes en el túnel / bytes originales), con los contadores acumulados.\n\n**Eje X:** hora.\n\n**Eje Y:** %.\n\n**A qué responde:** ¿Cuánto está ahorrando la red real, con el tráfico que de verdad pasa?",
    "targets": [
     {
      "refId": "A",
@@ -1427,7 +1596,7 @@
     "h": 8,
     "w": 6,
     "x": 12,
-    "y": 71
+    "y": 84
    },
    "datasource": {
     "type": "prometheus",
@@ -1436,8 +1605,8 @@
   },
   {
    "type": "timeseries",
-   "description": "Lo que publica shim.py cada 10 s. Solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.",
    "title": "Errores de descompresión",
+   "description": "**Significado:** Marcos que el receptor no pudo descomprimir. Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** contador acumulado de cada lado.\n\n**Eje X:** hora.\n\n**Eje Y:** número de errores.\n\n**A qué responde:** ¿El compresor está dañando tráfico? Un salto suele coincidir con un corte de la red.",
    "targets": [
     {
      "refId": "A",
@@ -1465,7 +1634,7 @@
     "h": 8,
     "w": 6,
     "x": 18,
-    "y": 71
+    "y": 84
    },
    "datasource": {
     "type": "prometheus",
@@ -1474,8 +1643,8 @@
   },
   {
    "type": "timeseries",
-   "description": "Lo que publica shim.py cada 10 s. Solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.",
    "title": "Qué algoritmo elige el bandido (paquetes por segundo)",
+   "description": "**Significado:** Con qué códec sale cada paquete. Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** tasa de paquetes por códec en ventanas de 2 min: rate(paquetes{codec}[2m]).\n\n**Eje X:** hora.\n\n**Eje Y:** paquetes por segundo, una línea por códec.\n\n**A qué responde:** ¿Qué decide el bandido según el tráfico? Voz, video y HTTPS salen con «ninguno»; texto y JSON, comprimidos.",
    "targets": [
     {
      "refId": "A",
@@ -1500,10 +1669,137 @@
    },
    "id": 24,
    "gridPos": {
-    "h": 8,
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 92
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Lo que aprendió el bandido: recompensa media por contexto y brazo",
+   "description": "**Significado:** Lo que el bandido cree que rinde cada códec (brazo) en cada tipo de paquete (contexto). Qué optimiza: ahorrar bytes sin gastar CPU en vano. Brazos: ninguno, zstd_dict, deflate_flujo y predictivo_audio (este último solo gana con audio PCM sin comprimir). Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** recompensa de un paquete r = ahorro − 0,01 si comprime (0 si es «ninguno»), con ahorro = (bytes que entran − bytes que salen) / bytes que entran. Celda = media reciente S/N, donde S y N se multiplican por γ = 0,999 en cada paquete. El bandido manda el brazo de mayor media + 0,02 · √(ln ΣN / N).\n\n**Eje X:** brazo (columnas).\n\n**Eje Y:** contexto (filas) = tamaño de la carga (chico < 64 B, mediano 64-511 B, grande ≥ 512 B) / entropía de sus primeros 256 B (baja < 0,75, media 0,75-0,9, alta ≥ 0,9).\n\n**A qué responde:** ¿Por qué el bandido elige lo que elige? En cada fila gana la celda más verde. Negativo = comprimir ahí cuesta más de lo que ahorra (tráfico cifrado).",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (contexto, codec) (label_join(lab5g_cmp_bandido_media{lado=\"ue\"}, \"contexto\", \" / \", \"tam\", \"ent\"))",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "groupingToMatrix",
+     "options": {
+      "columnField": "codec",
+      "rowField": "contexto",
+      "valueField": "Value",
+      "emptyValue": "null"
+     }
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 3,
+     "min": -0.05,
+     "max": 0.8,
+     "color": {
+      "mode": "continuous-RdYlGr"
+     },
+     "custom": {
+      "align": "center",
+      "minWidth": 55,
+      "cellOptions": {
+       "type": "color-background",
+       "mode": "basic"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byType",
+       "options": "string"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "auto"
+        }
+       },
+       {
+        "id": "custom.minWidth",
+        "value": 110
+       },
+       {
+        "id": "custom.align",
+        "value": "left"
+       }
+      ]
+     }
+    ]
+   },
+   "id": 25,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 92
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Retroalimentación diaria: ahorro de cada algoritmo con el tráfico real",
+   "description": "**Significado:** Cuánto ahorró (o habría ahorrado) cada algoritmo con el tráfico real de cada día. Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0.\n\n**Cómo funciona:** 1 de cada 100 paquetes reales se comprime además con todos los códecs rápidos, sin mandarlo (medición «sombra», bandido.py). Cada hora: 100 · (1 − Δ bytes de ese algoritmo / Δ bytes originales), con Δ = lo de las 24 h anteriores a ese momento. Las primeras horas son pocos paquetes y saltan. «bandido_ucb» = lo que de verdad se mandó; «mejor» = el mejor códec de cada paquete (techo). Bytes de carga, sin cabeceras.\n\n**Eje X:** tiempo, los últimos 15 días; cada punto resume las 24 h anteriores.\n\n**Eje Y:** ahorro %, una línea por algoritmo.\n\n**A qué responde:** ¿Cómo le fue a cada algoritmo cada día, y qué tan cerca del techo estuvo el bandido? Si el orden de las líneas cambia, cambió el tráfico.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "100 * (1 - sum by (codec) (increase(lab5g_cmp_sombra_bytes{lado=\"ue\",codec!=\"original\"}[1d])) / scalar(sum(increase(lab5g_cmp_sombra_bytes{lado=\"ue\",codec=\"original\"}[1d]))))",
+     "instant": false,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{codec}}",
+     "range": true,
+     "interval": "1h"
+    }
+   ],
+   "interval": "1h",
+   "timeFrom": "15d",
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "id": 26,
+   "gridPos": {
+    "h": 9,
     "w": 24,
     "x": 0,
-    "y": 79
+    "y": 101
    },
    "datasource": {
     "type": "prometheus",

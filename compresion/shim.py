@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
-from bandido import EmisorAdaptativo
+from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
 PUERTO = int(os.environ.get("PUERTO", "7700"))
@@ -74,6 +74,7 @@ class Metricas:
         self.lado = lado
         self.c = {"orig_tx": 0, "marco_tx": 0, "orig_rx": 0, "marco_rx": 0, "errores": 0}
         self.codec = {n: 0 for n in [*CODECS.values(), *CODECS_CON_PERDIDA.values()]}
+        self.emisor = None   # el EmisorAdaptativo de este lado: de ahí salen las métricas del bandido
 
     def texto(self) -> str:
         l = f'lado="{self.lado}"'
@@ -81,7 +82,7 @@ class Metricas:
                     for k, v in self.c.items() if k != "errores")
         s += f"lab5g_cmp_errores{{{l}}} {self.c['errores']}\n"
         s += "".join(f'lab5g_cmp_paquetes{{{l},codec="{n}"}} {v}\n' for n, v in self.codec.items())
-        return s
+        return s + (texto_bandido(self.emisor, l) if self.emisor is not None else "")
 
     def publicar(self) -> None:
         url = os.environ.get("PUSHGATEWAY")
@@ -152,15 +153,22 @@ def main() -> None:
     # VELOCIDAD_ENLACE_BPS: si se define, el bandido se premia por latencia sabiendo esa velocidad
     # (p. ej. 1000000 si el enlace se limitó a 1 Mbps con tc). Sin definir: premio por ahorro.
     vel = os.environ.get("VELOCIDAD_ENLACE_BPS")
+    # SOMBRA_CADA: 1 de cada N paquetes se mide además con todos los códecs rápidos, sin mandarlo
+    # (ver bandido.py). 0 la apaga. Por defecto 100: unos pocos µs más por paquete en promedio.
     # PERDIDA_IOT: activa la compresión con pérdida acotada para la telemetría JSON. "1" = pasos
     # por defecto (temp ±0,025, hum ±0,25, bat ±0,0025); "2" = el doble; o "temp=0.1,hum=1".
     # Sin definir (o vacío): todo sin pérdida. Basta con definirla en el lado que envía.
     perdida = os.environ.get("PERDIDA_IOT") or None
     pasos = pasos_desde_texto(perdida) if perdida else None
     emisor = EmisorAdaptativo(modelo, reinicio_flujo=int(os.environ.get("REINICIO_FLUJO", "16")),
-                              velocidad_bps=float(vel) if vel else None, perdida_iot=pasos)
+                              velocidad_bps=float(vel) if vel else None, perdida_iot=pasos,
+                              sombra_cada=int(os.environ.get("SOMBRA_CADA", SOMBRA_CADA)),
+                              # RAFAGA: paquetes seguidos que se sostiene deflate_flujo en un flujo (bandido.py).
+                              # 0 = decidir en cada paquete. Sin definir: RAFAGA_RED.
+                              rafaga=int(os.environ.get("RAFAGA") or RAFAGA_RED))
     rx = Descompresor(modelo)
     met = Metricas(lado)
+    met.emisor = emisor
     servir_contadores(met, int(os.environ.get("PUERTO_CONTADORES", "7701")))
     ultimo_pub = ultimo_ka = 0.0
     print(f"[cmp-{lado}] listo: cmp0 ↔ UDP {PUERTO}" + (f" → {par[0]}" if par else "")

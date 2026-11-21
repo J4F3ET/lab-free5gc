@@ -416,6 +416,79 @@ por `tailscale funnel`. Un envío a la vez. El archivo vive solo en memoria y se
 terminar. Los contadores son de todo el túnel: si a la vez corre el generador de tráfico, se
 mezcla con él.
 
+### 4.10 Datos reales de terceros: telemetría del Intel Lab y capturas `.pcap`
+
+El tráfico de prueba de §4.1–4.8 lo genera `trafico.py`. Para no depender solo de datos propios
+hay dos reproductores que mandan datos públicos **paquete a paquete** por el túnel, como lo haría
+la aplicación real. Corren con `docker exec` dentro de `cmp-ue` (la carpeta `compresion/` está
+montada en `/cmp`): **no reinician ni cambian el compresor**. Cada uno tiene además un modo
+`comparar` que pasa esos mismos paquetes por los 9 algoritmos en el PC.
+
+- [`reproducir_iot.py`](../compresion/reproducir_iot.py): sensores del
+  [Intel Berkeley Research Lab](https://db.csail.mit.edu/labdata/labdata.html) (`data.txt.gz`,
+  54 sensores, una lectura cada 31 s, 2004). Lee el `.gz` tal cual, descarta lo físicamente
+  imposible (21 % del archivo, sobre todo temperaturas de 100+ °C con la batería agotada) y las
+  lecturas repetidas, y manda cada lectura como un JSON de la clase iot_json, con un puerto de
+  origen por sensor:
+  `{"dev":"intel-22","ts":1077929956,"seq":3,"temp":19.6356,"hum":37.0246,"luz":82.8,"bat":2.65143}`.
+- [`reproducir_pcap.py`](../compresion/reproducir_pcap.py): cualquier captura `.pcap`/`.pcapng`
+  (Wireshark SampleCaptures, Netresec, CIC…). Toma la carga TCP/UDP de cada paquete, en orden, y
+  la manda como UDP al sumidero 5004; el kernel del UE pone cabeceras nuevas. Omite ACK puros y
+  fragmentos y parte las cargas de más de 1300 B (MTU del túnel).
+
+```bash
+python compresion/reproducir_iot.py recortar data.txt.gz --sensores 3 --lecturas 2000 --salida intel.txt.gz
+python compresion/reproducir_iot.py comparar intel.txt.gz          # → resultados/intel_iot.md
+# copiar el recorte a compresion/datos_externos/ del servidor, y:
+docker exec cmp-ue python3 /cmp/reproducir_iot.py enviar /cmp/datos_externos/intel.txt.gz --pps 20
+python compresion/reproducir_pcap.py resumen captura.pcap
+docker exec cmp-ue python3 /cmp/reproducir_pcap.py enviar /cmp/datos_externos/captura.pcap --pps 50
+```
+
+**Resultado con 6000 lecturas reales de 3 sensores** (8 nov 2026):
+
+| | ahorro | llegan mal con 1 % de pérdida |
+|---|---:|---:|
+| `deflate_flujo` (sin pérdida) | 77,3 % | 7,3 % |
+| `zstd_dict` (sin pérdida) | 36,3 % | 0 % |
+| bandido UCB (sin pérdida) | 77,3 % | 8,2 % |
+| `predictivo_iot` ×0 (en la práctica sin pérdida) | 81,7 % | 0 % dañados |
+| `predictivo_iot` ×1 (±0,025 °C, ±0,25 %, ±0,0025 V) | 84,1 % | 0 % dañados |
+| **en la red real** (bandido, por el túnel) | **77,26 %** | 0 errores |
+
+En la red el compresor del UE recibió 766.706 bytes IP y mandó 174.344, contra 174.332 que
+predijo la comparación local: el bandido eligió `deflate_flujo` en 5993 de 6000 paquetes (Grafana,
+fila «En vivo»). Con datos reales `predictivo_iot` le gana a DEFLATE por flujo en ahorro **y** en
+robustez, porque cada lectura perdida solo afecta hasta el siguiente marco clave.
+
+Los datos reales destaparon un error: con 6 campos numéricos el marco clave de `predictivo_iot`
+salía 4 B más grande que el JSON, el `Compresor` lo mandaba sin comprimir **sin guardar el
+esquema**, y todos los paquetes volvían a intentar ser clave (ahorro 25 % en vez de 84 %). Se
+corrigió en `Compresor.empaquetar` (el marco clave de `predictivo_iot` se acepta aunque no
+achique) con su prueba. Los compresores del servidor siguen con la versión anterior hasta su
+próximo reinicio; mientras `PERDIDA_IOT` esté vacío no se usa ese camino.
+
+**Resultado con una captura real** (`smallFlows.pcap` de los ejemplos públicos de
+[tcpreplay](https://tcpreplay.appneta.com/wiki/captures.html), 9,4 MB, 8 nov 2026): 12.832
+paquetes con carga en 999 flujos (61 % de los paquetes HTTP, 32 % TLS, y DNS, SSDP, NetBIOS, SMB, SNMP, DHCP).
+Detalle por servicio en [`resultados/smallflows.md`](../compresion/resultados/smallflows.md).
+
+| | ahorro | llegan mal con 1 % de pérdida |
+|---|---:|---:|
+| `solo_rohc` | 2,9 % | 1,5 % |
+| `deflate` | 21,2 % | 1,5 % |
+| `deflate_flujo` | 29,1 % | 3,5 % |
+| bandido UCB (en el PC, arranca sin experiencia) | 22,8 % | 1,8 % |
+| **en la red real** (bandido del UE, por el túnel) | **29,47 %** | 0 errores |
+
+En la red entraron 8.790.371 bytes IP, exactamente los que cuenta la comparación local, y salieron
+6.200.049. El bandido del UE mandó 8067 paquetes sin comprimir (sobre todo TLS: ya va cifrado,
+H ≈ 8 bits/byte, ningún algoritmo lo achica), 4613 con `deflate_flujo` (HTTP, SSDP, SMB…) y 152
+con `zstd_dict`. Le fue mejor que el bandido local porque ya traía aprendido, de horas de tráfico,
+qué conviene a cada clase; el local lo descubre durante la misma captura. Con tráfico real de
+internet el techo lo pone el cifrado: casi un tercio de los bytes es TLS y ahí el ahorro es ~3 %
+(solo cabeceras).
+
 ## 5. Implementación en el lab
 
 ```

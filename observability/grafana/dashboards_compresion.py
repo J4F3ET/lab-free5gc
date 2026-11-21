@@ -6,11 +6,15 @@
                            comprimido, recuperado e información mutua.
   · lab5g-cmp-comparacion: todos los algoritmos lado a lado, más el bandido en vivo.
 
+Cada gráfica explica en su «i» (descripción del panel), siempre con el mismo formato:
+Significado · Cómo funciona (la fórmula) · Eje X · Eje Y · A qué responde. Ver ctx().
+
 Los algoritmos salen de la etiqueta `algoritmo` de las métricas, así que uno nuevo registrado
 en compresion/compresores.py aparece solo, sin tocar este archivo. El texto de los menús y las
 descripciones vienen de lab5g_cmp_eval_algoritmo_info y lab5g_cmp_eval_clase_info (el título y
 la descripción de cada clase Codec, más los de informacion.TEXTOS). Los datos los publica
-`compresion/evaluar.py informacion --publicar http://10.100.205.14:9091`.
+`compresion/evaluar.py informacion --publicar http://10.100.205.14:9091`. Los del bandido en vivo
+los publica shim.py (bandido.texto_bandido).
 """
 import json, sys
 from pathlib import Path
@@ -18,6 +22,14 @@ from pathlib import Path
 DS = {"type": "prometheus", "uid": "prometheus"}
 SALIDA = Path(sys.argv[1])
 M = "lab5g_cmp_eval_"
+
+
+def ctx(significado, como, eje_x, eje_y, responde):
+    """La descripción de cada gráfica, siempre en este formato. Para un número suelto, eje_x=None."""
+    if eje_x is None:
+        eje_x = "no aplica: es un solo número."
+    return (f"**Significado:** {significado}\n\n**Cómo funciona:** {como}\n\n**Eje X:** {eje_x}\n\n"
+            f"**Eje Y:** {eje_y}\n\n**A qué responde:** {responde}")
 
 
 class Lienzo:
@@ -59,23 +71,78 @@ def stat(titulo, desc, expr, unidad="none", dec=2, umbrales=None, color="value")
                             "overrides": []}}
 
 
-def barras(titulo, desc, consultas, unidad="none", dec=2, log=False, x="algoritmo", nombres=None):
-    """Bar chart con consultas instantáneas en formato tabla, unidas por `x`."""
+def barras(titulo, desc, consultas, unidad="none", dec=2, log=False, x="algoritmo", nombres=None, ordenar=False):
+    """Bar chart con consultas instantáneas en formato tabla, unidas por `x`.
+    ordenar=True (una sola magnitud): barras horizontales de mayor a menor, con su número. Se leen
+    como un ranking y los nombres no quedan girados en el celular."""
+    tr = [{"id": "merge", "options": {}}]
+    if ordenar:
+        tr.append({"id": "sortBy", "options": {"sort": [{"field": "Value", "desc": True}]}})
+    tr.append({"id": "organize", "options": {"excludeByName": {"Time": True}, "renameByName": nombres or {}}})
     p = {"type": "barchart", "title": titulo, "description": desc,
          "targets": [q(e, chr(65 + i), tabla=True) for i, e in enumerate(consultas)],
-         "transformations": [{"id": "merge", "options": {}},
-                             {"id": "organize", "options": {"excludeByName": {"Time": True},
-                                                            "renameByName": nombres or {}}}],
-         "options": {"xField": x, "orientation": "auto", "showValue": "auto", "groupWidth": 0.7,
+         "transformations": tr,
+         "options": {"xField": x, "orientation": "horizontal" if ordenar else "auto",
+                     "showValue": "always" if ordenar else "auto", "groupWidth": 0.7,
                      "barWidth": 0.9, "legend": {"showLegend": len(consultas) > 1, "displayMode": "list",
                                                  "placement": "bottom"},
-                     "tooltip": {"mode": "multi", "sort": "none"}, "xTickLabelRotation": -30},
+                     "tooltip": {"mode": "multi", "sort": "none"}, "xTickLabelRotation": 0 if ordenar else -30},
          "fieldConfig": {"defaults": {"unit": unidad, "decimals": dec, "color": {"mode": "palette-classic"},
                                       "custom": {"fillOpacity": 80, "lineWidth": 1, "gradientMode": "none",
                                                  "axisSoftMin": 0}},
                          "overrides": []}}
     if log:
         p["fieldConfig"]["defaults"]["custom"]["scaleDistribution"] = {"type": "log", "log": 10}
+    return p
+
+
+def calor(titulo, desc, expr, fila, columna, unidad="percent", dec=1, minimo=0, maximo=100,
+          colores="continuous-RdYlGr"):
+    """Mapa de calor como tabla: una fila por `fila`, una columna por `columna`, y cada celda
+    pintada según su valor. Se lee en el celular y deja ver el número exacto de cada celda."""
+    return {"type": "table", "title": titulo, "description": desc, "targets": [q(expr, tabla=True)],
+            "transformations": [{"id": "groupingToMatrix", "options": {
+                "columnField": columna, "rowField": fila, "valueField": "Value", "emptyValue": "null"}}],
+            "options": {"showHeader": True, "cellHeight": "sm"},
+            "fieldConfig": {"defaults": {"unit": unidad, "decimals": dec, "min": minimo, "max": maximo,
+                                         "color": {"mode": colores},
+                                         "custom": {"align": "center", "minWidth": 55,
+                                                    "cellOptions": {"type": "color-background", "mode": "basic"}}},
+                            "overrides": [{"matcher": {"id": "byType", "options": "string"},
+                                           "properties": [{"id": "custom.cellOptions", "value": {"type": "auto"}},
+                                                          {"id": "custom.minWidth", "value": 110},
+                                                          {"id": "custom.align", "value": "left"}]}]}}
+
+
+def dispersion(titulo, desc, consulta_x, consulta_y, nombre_x, nombre_y, unidad_x, unidad_y, log_x=False,
+               y_min=None, y_max=None, etiqueta="algoritmo", nombre_etiqueta="Algoritmo"):
+    """Un punto por algoritmo: x = consulta_x, y = consulta_y, todos en una sola serie. Al tocar un
+    punto, el globo dice de qué algoritmo es (Grafana no escribe el nombre junto al punto).
+    Se probó separar una serie por algoritmo (partitionByValues) para tener colores en la leyenda:
+    en Grafana 13 con modo auto dibujaba solo el primero y en modo manual no dibujaba nada."""
+    p = {"type": "xychart", "title": titulo, "description": desc,
+         "targets": [q(consulta_x, "A", tabla=True), q(consulta_y, "B", tabla=True)],
+         "transformations": [{"id": "merge", "options": {}},
+                             {"id": "organize", "options": {"excludeByName": {"Time": True},
+                                                            "indexByName": {etiqueta: 0, "Value #A": 1, "Value #B": 2},
+                                                            "renameByName": {"Value #A": nombre_x, "Value #B": nombre_y,
+                                                                             etiqueta: nombre_etiqueta}}}],
+         "options": {"mapping": "auto", "series": [{}],
+                     "legend": {"showLegend": False, "displayMode": "list", "placement": "bottom"},
+                     "tooltip": {"mode": "single", "sort": "none"}},
+         "fieldConfig": {"defaults": {"color": {"mode": "fixed", "fixedColor": "green"},
+                                      "custom": {"show": "points", "pointSize": {"fixed": 12}, "pointShape": "circle",
+                                                 "axisPlacement": "auto"}},
+                         "overrides": [{"matcher": {"id": "byName", "options": nombre_x},
+                                        "properties": [{"id": "unit", "value": unidad_x}]},
+                                       {"matcher": {"id": "byName", "options": nombre_y},
+                                        "properties": [{"id": "unit", "value": unidad_y}]}]}}
+    for clave, valor in (("custom.axisSoftMin", y_min), ("custom.axisSoftMax", y_max)):
+        if valor is not None:
+            p["fieldConfig"]["overrides"][1]["properties"].append({"id": clave, "value": valor})
+    if log_x:
+        p["fieldConfig"]["overrides"][0]["properties"].append(
+            {"id": "custom.scaleDistribution", "value": {"type": "log", "log": 10}})
     return p
 
 
@@ -106,21 +173,21 @@ def descripcion(titulo, expr, leyenda):
 
 
 def tabla_algoritmos():
-    """Qué es cada algoritmo: id (como sale en las barras), título y descripción."""
+    """Qué es cada algoritmo: id (como sale en las gráficas), título y descripción."""
     return {"type": "table", "title": "Qué es cada algoritmo",
-            "description": "El id es el nombre que sale en las barras de este tablero.",
+            "description": "El id es el nombre que sale en las gráficas de este tablero.",
             "targets": [q(f"{M}algoritmo_info", tabla=True)],
             "transformations": [{"id": "organize", "options": {
                 "excludeByName": {"Time": True, "Value": True, "__name__": True, "instance": True, "job": True},
                 "indexByName": {"texto": 0, "algoritmo": 1, "descripcion": 2},
-                "renameByName": {"texto": "Algoritmo", "algoritmo": "Id en las barras", "descripcion": "Qué hace"}}},
+                "renameByName": {"texto": "Algoritmo", "algoritmo": "Id en las gráficas", "descripcion": "Qué hace"}}},
                 {"id": "sortBy", "options": {"sort": [{"field": "Algoritmo"}]}}],
             "options": {"showHeader": True, "cellHeight": "md"},
             "fieldConfig": {"defaults": {"custom": {"align": "left", "cellOptions": {"type": "auto", "wrapText": True}}},
                             "overrides": [
                                 {"matcher": {"id": "byName", "options": "Algoritmo"},
                                  "properties": [{"id": "custom.width", "value": 330}]},
-                                {"matcher": {"id": "byName", "options": "Id en las barras"},
+                                {"matcher": {"id": "byName", "options": "Id en las gráficas"},
                                  "properties": [{"id": "custom.width", "value": 170}]}]}}
 
 
@@ -134,15 +201,20 @@ def tablero(uid, titulo, desc, lienzo, variables):
             "panels": lienzo.paneles}
 
 
+# Fórmulas que se repiten en los textos.
+F_H = "H = − Σ p(b) · log2 p(b), sumando sobre los 256 valores posibles de un byte; p(b) = qué fracción de los bytes vale b."
+F_I = ("I(O;R) = H(O) + H(R) − H(O,R), comparando byte a byte el original O con el recuperado R; un byte que no "
+       "llegó cuenta como el símbolo «borrado». Si R = O, da I(O;R) = H(O).")
+F_PERD = "el canal pierde 1 de cada 100 paquetes al azar (semilla fija, la misma para todos los algoritmos)."
 SEL = 'algoritmo="$algoritmo",clase="$clase"'
 EXPLICA = (
     "**Qué es esto.** El punto (c) del Lab 3 aplicado a la red 5G: para cada algoritmo, el paquete "
-    "**original**, el **comprimido** y el **recuperado**, y la **información mutua** I(O;R) entre el "
-    "original y lo recuperado.\n\n"
-    "- **H** = entropía de orden 0, en bits por byte.\n"
+    "**original** (O), el **comprimido** (C) y el **recuperado** (R), y la **información mutua** I(O;R) "
+    "entre el original y lo recuperado.\n\n"
+    "- **H** = entropía de orden 0, en bits por byte (de 0 a 8).\n"
     "- **I(O;R)** con canal perfecto = H(O) en todo algoritmo sin pérdida. Con 1 % de paquetes "
-    "perdidos baja: lo que baje de más del ~99 % es daño que agrega el algoritmo (los que guardan "
-    "estado por flujo arrastran la pérdida a los paquetes siguientes).\n\n"
+    "perdidos baja; **H(O) − I(O;R)** es la información que el receptor ya no tiene.\n"
+    "- Cada gráfica explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde.\n\n"
     "Datos: `python3 evaluar.py informacion --publicar http://10.100.205.14:9091` (ver "
     "`compresion/informacion.py` y `docs/08-compresion-paquetes.md`). Son de la última corrida, no "
     "series en el tiempo.")
@@ -150,53 +222,121 @@ EXPLICA = (
 # ═══════════════════════════ 1. por algoritmo ═══════════════════════════
 L = Lienzo()
 L.poner([(texto("Cómo leer este tablero", EXPLICA), 16),
-         (stat("Última evaluación", "Cuándo se publicaron estos datos.",
+         (stat("Última evaluación", ctx("Cuándo se publicaron los datos de este tablero.",
+                                        "Hora en que terminó `evaluar.py informacion`.", None, "tiempo transcurrido.",
+                                        "¿Estos números son de hoy o de una corrida vieja?"),
                f"{M}ultima_corrida_segundos * 1000", "dateTimeFromNow", 0), 8)], 6)
 L.poner([(descripcion("Qué hace este algoritmo", f'{M}algoritmo_info{{algoritmo="$algoritmo"}}', "{{descripcion}}"),
           16),
          (descripcion("Clase de tráfico", f'{M}clase_info{{clase="$clase"}}', "{{texto}}"), 8)], 4)
 L.fila("Original")
-L.poner([(stat("H(O) — entropía del original", "Bits de información por byte del paquete original.",
+L.poner([(stat("H(O) — entropía del original", ctx(
+                "Cuánta información trae cada byte del paquete original.", F_H, None,
+                "bits por byte, de 0 (todos los bytes iguales) a 8 (bytes al azar).",
+                "¿Qué tan comprimible es este tráfico? Cerca de 8 (cifrado, voz, video) casi no se puede comprimir."),
                f'{M}entropia_bits_por_byte{{{SEL},etapa="original"}}', "none", 3), 12),
-         (stat("Bytes originales", "Total de bytes de los paquetes originales.",
+         (stat("Bytes originales", ctx("Tamaño total de los paquetes originales evaluados.",
+                                       "Suma de los largos de todos los paquetes de la clase elegida.", None, "bytes.",
+                                       "¿Sobre cuántos datos se midió? Es el 100 % contra el que se calcula el ahorro."),
                f'{M}bytes{{{SEL},etapa="original"}}', "decbytes", 1), 12)], 5)
 L.fila("Comprimido")
-L.poner([(stat("Bytes comprimidos", "", f'{M}bytes{{{SEL},etapa="comprimido"}}', "decbytes", 1), 6),
-         (stat("Razón de compresión", "Bytes originales / bytes comprimidos.", f'{M}razon{{{SEL}}}', "none", 3), 6),
-         (stat("Ahorro", "Porcentaje de bytes ahorrados.", f'{M}ahorro_pct{{{SEL}}}', "percent", 2,
+L.poner([(stat("Bytes comprimidos", ctx("Lo que de verdad viaja por la red.",
+                                        "Suma de los largos de los marcos: cabecera comprimida + id del códec + carga comprimida.",
+                                        None, "bytes.", "¿Cuántos bytes ocupa el tráfico después de comprimir?"),
+               f'{M}bytes{{{SEL},etapa="comprimido"}}', "decbytes", 1), 6),
+         (stat("Redundancia que sacó: H(C) − H(O)", ctx(
+                "Cuánta redundancia por byte le quitó el algoritmo al tráfico.",
+                "H(C) − H(O), las dos con " + F_H + " Si es positiva, C se parece más a ruido que O: se sacó "
+                "redundancia. Si es negativa, el algoritmo agregó estructura (cabeceras, marcos) sin achicar.",
+                None, "bits por byte (0 = no cambió nada).",
+                "¿Cuánta redundancia sacó? Junto con el ahorro dice si achicó quitando redundancia o solo cabeceras."),
+               f'sum({M}entropia_bits_por_byte{{{SEL},etapa="comprimido"}}) - '
+               f'sum({M}entropia_bits_por_byte{{{SEL},etapa="original"}})', "none", 3), 6),
+         (stat("Ahorro", ctx("Porcentaje de bytes que ya no viajan.", "ahorro = 100 · (1 − bytes C / bytes O).",
+                             None, "% (0 = nada; rojo < 1 %, verde ≥ 15 %).", "¿Vale la pena comprimir esta clase con este algoritmo?"),
+               f'{M}ahorro_pct{{{SEL}}}', "percent", 2,
                {"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "yellow", "value": 1},
                                               {"color": "green", "value": 15}]}), 6),
-         (stat("H(C) — entropía del comprimido", "Cerca de 8 = bytes casi aleatorios: el compresor ya "
-               "sacó la redundancia.", f'{M}entropia_bits_por_byte{{{SEL},etapa="comprimido"}}', "none", 3), 6)], 5)
+         (stat("H(C) — entropía del comprimido", ctx(
+                "Qué tan parecido a ruido quedó lo comprimido.", F_H + " Aquí sobre los bytes de C.", None,
+                "bits por byte, de 0 a 8.",
+                "¿Queda redundancia por sacar? Cerca de 8 = el compresor ya sacó casi todo lo que se podía."),
+               f'{M}entropia_bits_por_byte{{{SEL},etapa="comprimido"}}', "none", 3), 6)], 5)
 L.fila("Recuperado e información mutua")
 pct = {"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "yellow", "value": 97},
                                      {"color": "green", "value": 99}]}
-L.poner([(stat("I(O;R) — canal perfecto", "Información mutua original–recuperado, bits por byte.",
-               f'{M}info_mutua_bits_por_byte{{{SEL},canal="perfecto"}}', "none", 3), 6),
-         (stat("I(O;R) — 1 % de pérdida", "", f'{M}info_mutua_bits_por_byte{{{SEL},canal="perdida_1pct"}}',
-               "none", 3), 6),
-         (stat("Información entregada — 1 % de pérdida", "I(O;R) / H(O). Con canal perfecto es 100 %.",
+L.poner([(stat("Información perdida: H(O) − I(O;R)", ctx(
+                "Lo que el receptor ya no puede saber del original cuando la red pierde 1 % de los paquetes.",
+                "H(O|R) = H(O) − I(O;R), con H(O) = " + F_H + " I(O;R) = " + F_I + " Aquí " + F_PERD
+                + " Con canal perfecto da 0 en todos los algoritmos sin pérdida, porque C es invertible: I(O;C) = H(O).",
+                None, "bits por byte del original (0 = no se perdió nada; verde < 0,1, rojo ≥ 0,3).",
+                "¿Cuánta información se pierde de verdad? Comparar con «sin_compresion» dice cuánto pone el canal y "
+                "cuánto agrega el algoritmo."),
+               f'sum({M}entropia_bits_por_byte{{{SEL},etapa="original"}}) - '
+               f'sum({M}info_mutua_bits_por_byte{{{SEL},canal="perdida_1pct"}})', "none", 3,
+               {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "yellow", "value": 0.1},
+                                              {"color": "red", "value": 0.3}]}, "background"), 6),
+         (stat("I(O;R) — 1 % de pérdida", ctx(
+                "Información del original que llega cuando la red pierde paquetes.", F_I + " Aquí " + F_PERD, None,
+                "bits por byte del original.",
+                "¿Cuánta información sobrevive a una red que pierde paquetes? La diferencia con H(O) es la información "
+                "perdida, H(O) − I(O;R)."),
+               f'{M}info_mutua_bits_por_byte{{{SEL},canal="perdida_1pct"}}', "none", 3), 6),
+         (stat("Información entregada — 1 % de pérdida", ctx(
+                "Fracción de la información del original que llega.", "100 · I(O;R) / H(O), con " + F_PERD, None,
+                "% (verde ≥ 99 %, amarillo ≥ 97 %, rojo menos).",
+                "¿El algoritmo agrega daño a la pérdida del canal? Si el canal pierde 1 %, lo esperable es ~99 %; "
+                "menos es daño del algoritmo."),
                f'{M}info_entregada_pct{{{SEL},canal="perdida_1pct"}}', "percent", 2, pct, "background"), 6),
-         (stat("Paquetes que llegan mal — 1 % de pérdida", "Confiabilidad: % de los que llegan pero salen "
-               "distintos del original.", f'{M}mal_reconstruidos_pct{{{SEL},canal="perdida_1pct"}}', "percent", 2,
+         (stat("Paquetes que llegan mal — 1 % de pérdida", ctx(
+                "Confiabilidad: paquetes que llegan pero salen distintos del original.",
+                "100 · (recibidos que no son idénticos al original) / recibidos, con " + F_PERD, None,
+                "% de los paquetes recibidos (verde < 0,5 %, rojo ≥ 2 %).",
+                "¿Una pérdida arrastra a otros paquetes? Pasa en los algoritmos que recuerdan los paquetes anteriores "
+                "del flujo."),
+               f'{M}mal_reconstruidos_pct{{{SEL},canal="perdida_1pct"}}', "percent", 2,
                {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "yellow", "value": 0.5},
                                               {"color": "red", "value": 2}]}, "background"), 6)], 5)
 L.fila("Velocidad")
-L.poner([(stat("Comprimir", "Microsegundos por paquete (Python puro).", f'{M}comprimir_us{{{SEL}}}', "µs", 1), 12),
-         (stat("Descomprimir", "", f'{M}descomprimir_us{{{SEL}}}', "µs", 1), 12)], 5)
+L.poner([(dispersion("Ahorro contra tiempo de CPU, por clase (dispersión)", ctx(
+                      "Para el algoritmo elegido: en qué clase de tráfico gasta más CPU y si ese gasto le rinde en "
+                      "ahorro. Cada punto es una clase; no depende del menú de clase.",
+                      "x = µs de comprimir + µs de descomprimir por paquete (tiempo total / paquetes, Python puro, en la "
+                      "máquina de la evaluación); y = 100 · (1 − bytes C / bytes O).",
+                      "microsegundos por paquete, en escala logarítmica (cada marca es 10 veces la anterior).",
+                      "ahorro %.",
+                      "¿Dónde le conviene a este algoritmo trabajar? Arriba a la izquierda: rápido y ahorra. Abajo a la "
+                      "derecha: caro y no ahorra. Al tocar un punto sale de qué clase es."),
+                     f'sum by (clase) ({M}comprimir_us{{algoritmo="$algoritmo",clase!="todas"}}) + '
+                     f'sum by (clase) ({M}descomprimir_us{{algoritmo="$algoritmo",clase!="todas"}})',
+                     f'sum by (clase) ({M}ahorro_pct{{algoritmo="$algoritmo",clase!="todas"}})',
+                     "µs por paquete", "Ahorro %", "µs", "percent", log_x=True,
+                     etiqueta="clase", nombre_etiqueta="Clase"), 24)], 9)
 L.fila("Este algoritmo en cada clase de tráfico")
-L.poner([(barras("Entropía por etapa", "H del original, del comprimido y del recuperado con pérdida.",
+L.poner([(barras("Entropía e información mutua por clase", ctx(
+                  "Para el algoritmo elegido: cuánta información trae cada clase, qué tan comprimido queda y cuánta llega "
+                  "con pérdida.",
+                  "H(O) y H(C) con " + F_H + " I(O;R) con " + F_I, "clase de tráfico.", "bits por byte, de 0 a 8.",
+                  "¿En qué clases comprime (H(C) por encima de H(O)) y en cuáles pierde información (I(O;R) por debajo "
+                  "de H(O))?"),
                  [f'sum by (clase) ({M}entropia_bits_por_byte{{algoritmo="$algoritmo",etapa="original"}})',
                   f'sum by (clase) ({M}entropia_bits_por_byte{{algoritmo="$algoritmo",etapa="comprimido"}})',
                   f'sum by (clase) ({M}info_mutua_bits_por_byte{{algoritmo="$algoritmo",canal="perdida_1pct"}})'],
                  "none", 2, x="clase",
                  nombres={"Value #A": "H(O) original", "Value #B": "H(C) comprimido",
                           "Value #C": "I(O;R) con 1 % de pérdida"}), 12),
-         (barras("Ahorro y daño por clase", "",
-                 [f'sum by (clase) ({M}ahorro_pct{{algoritmo="$algoritmo"}})',
-                  f'sum by (clase) ({M}mal_reconstruidos_pct{{algoritmo="$algoritmo",canal="perdida_1pct"}})'],
-                 "percent", 2, x="clase", nombres={"Value #A": "ahorro %", "Value #B": "llegan mal % (1 % pérdida)"}),
-          12)], 9)
+         (dispersion("Ahorro contra daño por clase (dispersión)", ctx(
+                      "Para el algoritmo elegido: si ahorrar más en una clase se paga con más paquetes dañados. Cada "
+                      "punto es una clase de tráfico.",
+                      "x = 100 · (1 − bytes C / bytes O); y = 100 · recibidos distintos del original / recibidos, con "
+                      + F_PERD,
+                      "ahorro % (más a la derecha = ahorra más).", "paquetes que llegan mal % (más abajo = más confiable).",
+                      "¿En qué clase conviene este algoritmo (abajo a la derecha) y en cuál es arriesgado (arriba)? Al "
+                      "tocar un punto sale de qué clase es."),
+                     f'sum by (clase) ({M}ahorro_pct{{algoritmo="$algoritmo",clase!="todas"}})',
+                     f'sum by (clase) ({M}mal_reconstruidos_pct{{algoritmo="$algoritmo",clase!="todas",canal="perdida_1pct"}})',
+                     "Ahorro %", "Llegan mal %", "percent", "percent", y_min=0,
+                     etiqueta="clase", nombre_etiqueta="Clase"), 12)], 9)
 var_alg = variable("algoritmo", "Algoritmo", f"{M}algoritmo_info", "algoritmo", "bandido_ucb",
                    "Qué algoritmo de compresión mostrar. La descripción sale en el panel de arriba.")
 var_clase = variable("clase", "Clase de tráfico", f"{M}clase_info", "clase", "todas",
@@ -207,45 +347,79 @@ d1 = tablero("lab5g-cmp-algoritmo", "lab5g · Compresión — por algoritmo",
 # ═══════════════════════════ 2. comparación ═══════════════════════════
 L = Lienzo()
 C = 'clase="$clase"'
-L.poner([(texto("Cómo leer este tablero", EXPLICA + "\n\nCada barra es un algoritmo. `sin_compresion` es la "
-                "referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete. La tabla de la derecha "
-                "dice qué es cada uno."), 10),
+TODAS_NO = 'clase!="todas"'
+L.poner([(texto("Cómo leer este tablero", EXPLICA + "\n\nCada algoritmo es una barra, una fila o un punto. "
+                "`sin_compresion` es la referencia; `bandido_ucb` es la IA que elige el algoritmo por paquete. La "
+                "tabla de la derecha dice qué es cada uno. Los mapas de calor muestran todas las clases a la vez; "
+                "el resto, la clase del menú."), 10),
          (tabla_algoritmos(), 14)], 10)
 L.fila("Tasa de compresión")
-L.poner([(barras("Ahorro de bytes", "", [f'sum by (algoritmo) ({M}ahorro_pct{{{C}}})'], "percent"), 12),
-         (barras("Entropía: original vs comprimido", "Un buen compresor sube H(C) hacia 8 bits por byte.",
-                 [f'sum by (algoritmo) ({M}entropia_bits_por_byte{{{C},etapa="original"}})',
-                  f'sum by (algoritmo) ({M}entropia_bits_por_byte{{{C},etapa="comprimido"}})'], "none", 2,
-                 nombres={"Value #A": "H(O)", "Value #B": "H(C)"}), 12)], 9)
-# Entropía e I(O;R) viven entre ~7 y 8 bits/byte en la mezcla: con el eje desde 0 la diferencia
-# que importa (p. ej. 7,50 vs 7,34 con pérdida) no se ve. Mínimo suave: baja solo si un dato es menor.
-EJE7 = (" El eje va de 7 a 8 bits/byte para que se vean las diferencias; en una clase con entropía "
-        "menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.")
-
-
-def eje_desde_7(p):
-    p["fieldConfig"]["defaults"]["custom"]["axisSoftMin"] = 7
-    p["fieldConfig"]["defaults"]["custom"]["axisSoftMax"] = 8  # tope teórico; deja sitio a los números
-    p["options"]["showValue"] = "always"
-    p["description"] += EJE7
-
-
-eje_desde_7(L.paneles[-1])
+L.poner([(calor("Ahorro por algoritmo y clase (mapa de calor)", ctx(
+                 "Dónde sirve cada algoritmo.",
+                 "cada celda = 100 · (1 − bytes C / bytes O) de ese algoritmo en esa clase. Color de rojo (0 %) a "
+                 "verde (80 %).",
+                 "clase de tráfico (columnas).", "algoritmo (filas).",
+                 "¿Qué algoritmo conviene para cada tipo de tráfico? Una columna toda roja = tráfico que nadie comprime "
+                 "(cifrado, voz, video): ahí lo correcto es no comprimir."),
+                 f"sum by (algoritmo, clase) ({M}ahorro_pct{{{TODAS_NO}}})", "algoritmo", "clase", maximo=80), 14),
+         (barras("Redundancia que sacó: H(C) − H(O)", ctx(
+                  "Cuánto se acercó lo comprimido a ser ruido: la redundancia que el algoritmo eliminó.",
+                  "H(C) − H(O), con " + F_H + " 0 = no comprimió nada; el máximo posible es 8 − H(O).",
+                  "bits por byte (desde 0).", "algoritmo, de más a menos.",
+                  "¿Cuánta redundancia saca cada algoritmo? Más largo = deja los bytes más «aleatorios», o sea más "
+                  "comprimidos."),
+                 [f'sum by (algoritmo) ({M}entropia_bits_por_byte{{{C},etapa="comprimido"}}) - '
+                  f'sum by (algoritmo) ({M}entropia_bits_por_byte{{{C},etapa="original"}})'], "none", 3, ordenar=True), 10)], 10)
 L.fila("Información mutua y confiabilidad")
-L.poner([(barras("I(O;R): canal perfecto vs 1 % de pérdida", "Bits por byte del original que llegan al receptor.",
-                 [f'sum by (algoritmo) ({M}info_mutua_bits_por_byte{{{C},canal="perfecto"}})',
-                  f'sum by (algoritmo) ({M}info_mutua_bits_por_byte{{{C},canal="perdida_1pct"}})'], "none", 3,
-                 nombres={"Value #A": "perfecto", "Value #B": "1 % de pérdida"}), 12),
-         (barras("Información entregada con 1 % de pérdida", "I(O;R) / H(O).",
-                 [f'sum by (algoritmo) ({M}info_entregada_pct{{{C},canal="perdida_1pct"}})'], "percent", 2), 6),
-         (barras("Paquetes que llegan mal (1 % de pérdida)", "",
-                 [f'sum by (algoritmo) ({M}mal_reconstruidos_pct{{{C},canal="perdida_1pct"}})'], "percent", 2), 6)], 9)
-eje_desde_7(L.paneles[-3])
-L.paneles[-2]["fieldConfig"]["defaults"]["custom"]["axisSoftMin"] = 85
+EJE7 = (" El eje empieza en 7 bits por byte para que se vean las diferencias; en una clase con entropía "
+        "menor (URLLC, IoT, texto) baja hasta el menor valor: lee el número de cada barra.")
+im = barras("I(O;R): canal perfecto vs 1 % de pérdida", ctx(
+                "Información del original que llega al receptor, sin y con pérdida de paquetes.",
+                F_I + " Con pérdida, " + F_PERD + " Información perdida = H(O) − I(O;R): la distancia entre las dos barras.",
+                "algoritmo.", "bits por byte del original." + EJE7,
+                "¿Qué algoritmo conserva la información cuando la red pierde paquetes? Con canal perfecto todas las "
+                "barras son iguales (todos son sin pérdida); con pérdida, la más baja es la que más información pierde."),
+            [f'sum by (algoritmo) ({M}info_mutua_bits_por_byte{{{C},canal="perfecto"}})',
+             f'sum by (algoritmo) ({M}info_mutua_bits_por_byte{{{C},canal="perdida_1pct"}})'], "none", 3,
+            nombres={"Value #A": "perfecto", "Value #B": "1 % de pérdida"})
+im["fieldConfig"]["defaults"]["custom"]["axisSoftMin"] = 7
+L.poner([(im, 12),
+         (calor("Información entregada por algoritmo y clase (mapa de calor)", ctx(
+                 "Qué fracción de la información llega, para cada algoritmo en cada clase, con pérdida de paquetes.",
+                 "cada celda = 100 · I(O;R) / H(O), con " + F_PERD + " Color de rojo (95 %) a verde (100 %).",
+                 "clase de tráfico (columnas).", "algoritmo (filas).",
+                 "¿Dónde agrega daño cada algoritmo? Lo esperable es ~99 % (lo que borra el canal); una celda más roja "
+                 "es daño del algoritmo en esa clase."),
+                 f'sum by (algoritmo, clase) ({M}info_entregada_pct{{{TODAS_NO},canal="perdida_1pct"}})',
+                 "algoritmo", "clase", dec=2, minimo=95, maximo=100), 12)], 10)
+L.poner([(dispersion("Ahorro contra información entregada (dispersión)", ctx(
+                      "El compromiso entre ahorrar bytes y no perder información. Cada punto es un algoritmo.",
+                      "x = 100 · (1 − bytes C / bytes O); y = 100 · I(O;R) / H(O) con " + F_PERD,
+                      "ahorro % (más a la derecha = ahorra más).", "información entregada % (más arriba = pierde menos).",
+                      "¿Cuál ahorra más sin perder información? Los mejores quedan arriba a la derecha. Al tocar un "
+                      "punto sale de qué algoritmo es."),
+                      f'sum by (algoritmo) ({M}ahorro_pct{{{C}}})',
+                      f'sum by (algoritmo) ({M}info_entregada_pct{{{C},canal="perdida_1pct"}})',
+                      "Ahorro %", "Información entregada %", "percent", "percent", y_min=95, y_max=100), 14),
+         (barras("Paquetes que llegan mal (1 % de pérdida)", ctx(
+                  "Confiabilidad: de los paquetes que llegan, cuántos salen distintos del original.",
+                  "100 · recibidos distintos del original / recibidos, con " + F_PERD,
+                  "% de los paquetes recibidos.", "algoritmo, de más a menos.",
+                  "¿Qué algoritmo convierte una pérdida en varios paquetes dañados?"),
+                 [f'sum by (algoritmo) ({M}mal_reconstruidos_pct{{{C},canal="perdida_1pct"}})'], "percent", 2,
+                 ordenar=True), 10)], 10)
 L.fila("Velocidad de procesamiento")
-L.poner([(barras("Comprimir y descomprimir (µs por paquete, escala log)", "Python puro, en la máquina donde se corrió.",
-                 [f'sum by (algoritmo) ({M}comprimir_us{{{C}}})', f'sum by (algoritmo) ({M}descomprimir_us{{{C}}})'],
-                 "µs", 1, log=True, nombres={"Value #A": "comprimir", "Value #B": "descomprimir"}), 24)], 9)
+L.poner([(dispersion("Ahorro contra tiempo de CPU (dispersión)", ctx(
+                      "Lo que cuesta en CPU cada punto de ahorro. Cada punto es un algoritmo.",
+                      "x = µs de comprimir + µs de descomprimir por paquete (Python puro, en la máquina de la "
+                      "evaluación); y = 100 · (1 − bytes C / bytes O).",
+                      "microsegundos por paquete, en escala logarítmica (cada marca es 10 veces la anterior).",
+                      "ahorro %.",
+                      "¿Cuál es rápido y además ahorra? Los útiles quedan arriba a la izquierda; abajo a la derecha están "
+                      "los lentos que ahorran poco. Al tocar un punto sale de qué algoritmo es."),
+                      f'sum by (algoritmo) ({M}comprimir_us{{{C}}}) + sum by (algoritmo) ({M}descomprimir_us{{{C}}})',
+                      f'sum by (algoritmo) ({M}ahorro_pct{{{C}}})',
+                      "µs por paquete", "Ahorro %", "µs", "percent", log_x=True), 24)], 10)
 L.fila("Resumen")
 cols = [("ahorro_pct", "", "Ahorro %"), ("razon", "", "Razón"),
         ("entropia_bits_por_byte", ',etapa="original"', "H(O)"),
@@ -255,57 +429,141 @@ cols = [("ahorro_pct", "", "Ahorro %"), ("razon", "", "Razón"),
         ("info_entregada_pct", ',canal="perdida_1pct"', "Info. entregada %"),
         ("mal_reconstruidos_pct", ',canal="perdida_1pct"', "Llegan mal %"),
         ("comprimir_us", "", "Comprimir µs"), ("descomprimir_us", "", "Descomprimir µs")]
-tabla = {"type": "table", "title": "Todos los algoritmos", "description": "Ordenable por cualquier columna.",
-         "targets": [q(f'sum by (algoritmo) ({M}{m}{{{C}{f}}})', chr(65 + i), tabla=True)
-                     for i, (m, f, _) in enumerate(cols)],
+consultas = [f'sum by (algoritmo) ({M}{m}{{{C}{f}}})' for m, f, _ in cols]
+# Información perdida H(O) − I(O;R): no se publica, se calcula aquí.
+consultas.append(f'sum by (algoritmo) ({M}entropia_bits_por_byte{{{C},etapa="original"}}) - '
+                 f'sum by (algoritmo) ({M}info_mutua_bits_por_byte{{{C},canal="perdida_1pct"}})')
+nombres = [n for _, _, n in cols] + ["H(O) − I(O;R) perdida"]
+tabla = {"type": "table", "title": "Todos los algoritmos", "description": ctx(
+            "Todas las medidas de la clase elegida, un algoritmo por fila.",
+            "las fórmulas de cada columna están en la ⓘ de las gráficas de arriba. La última columna es la información "
+            "perdida con 1 % de pérdida: H(O) − I(O;R).",
+            "las columnas (se ordena tocando el encabezado).", "un algoritmo por fila.",
+            "¿Cómo se compara cada algoritmo en todo a la vez?"),
+         "targets": [q(e, chr(65 + i), tabla=True) for i, e in enumerate(consultas)],
          "transformations": [{"id": "merge", "options": {}},
                              {"id": "organize", "options": {
                                  "excludeByName": {"Time": True},
                                  "renameByName": dict({"algoritmo": "Algoritmo"},
-                                                      **{f"Value #{chr(65 + i)}": n for i, (_, _, n) in enumerate(cols)})}}],
+                                                      **{f"Value #{chr(65 + i)}": n for i, n in enumerate(nombres)})}}],
          "options": {"showHeader": True, "sortBy": [{"displayName": "Ahorro %", "desc": True}]},
          "fieldConfig": {"defaults": {"decimals": 3, "custom": {"align": "auto"}}, "overrides": []}}
 L.poner([(tabla, 24)], 10)
 # Con pérdida: no depende de $clase (solo la telemetría iot_json). x = método (predictivo ×escala o un sin pérdida).
 TD = M + "td_"
+METODO = ("método: «predictivo ×e» = PredictivoIoT con los pasos de cuantización multiplicados por e (×0 ≈ sin "
+          "pérdida); zstd_dict y deflate_flujo = los mejores sin pérdida, como referencia.")
 L.fila("Tasa–distorsión (IoT, compresión con pérdida)")
-L.poner([(barras("Ahorro de bytes por método", "Solo paquetes iot_json. «predictivo ×e»: PredictivoIoT con los pasos "
-                 "de cuantización × e (×0 ≈ sin pérdida). zstd_dict y deflate_flujo: los mejores sin pérdida, como "
-                 "referencia.", [f'sum by (metodo) ({TD}ahorro_pct{{canal="perfecto"}})'], "percent", 1, x="metodo"), 8),
-         (barras("Información entregada I(X;Y)/H(X)", "Media de temp, hum y bat, sobre los valores (no los bytes). "
-                 "Con pérdida baja aun con canal perfecto: es la información que se decide no mandar.",
+L.poner([(dispersion("Curva tasa–distorsión: bytes contra información entregada", ctx(
+                      "El compromiso de la compresión con pérdida: cuántos bytes cuesta cada lectura IoT y cuánta "
+                      "información de sus valores llega. Cada punto es un método.",
+                      "x = bytes de todos los marcos / paquetes (cabecera ROHC + id del códec + carga; el original "
+                      "IP/UDP/JSON mide ~120 B); y = 100 · I(X;Y) / H(X) con canal perfecto, X = lectura original, "
+                      "Y = recibida, media de temp, hum y bat. " + METODO,
+                      "bytes por paquete (más a la izquierda = más barato).",
+                      "información entregada % (más arriba = menos distorsión).",
+                      "¿Cuánta información se cede por cada byte ahorrado? Los sin pérdida quedan arriba, en 100 %; el "
+                      "predictivo se corre a la izquierda y baja a medida que crece el paso. Al tocar un punto sale el "
+                      "método."),
+                     f'sum by (metodo) ({TD}bytes_por_paquete{{canal="perfecto"}})',
+                     f'sum by (metodo) ({TD}info_entregada_pct{{canal="perfecto"}})',
+                     "Bytes por paquete", "Información entregada %", "decbytes", "percent", y_max=100,
+                     etiqueta="metodo", nombre_etiqueta="Método"), 8),
+         (barras("Información entregada I(X;Y)/H(X)", ctx(
+                  "Información mutua entre la lectura original y la recibida, sobre los VALORES de temp, hum y bat "
+                  "(no los bytes).",
+                  "100 · I(X;Y) / H(X), X = lectura original, Y = lectura recibida; media de los tres campos.",
+                  METODO, "%.",
+                  "¿Cuánta información se decide no mandar? Con pérdida baja aun con canal perfecto: es el precio del "
+                  "ahorro."),
                  [f'sum by (metodo) ({TD}info_entregada_pct{{canal="perfecto"}})',
                   f'sum by (metodo) ({TD}info_entregada_pct{{canal="perdida_1pct"}})'], "percent", 1, x="metodo",
                  nombres={"Value #A": "perfecto", "Value #B": "1 % de pérdida"}), 8),
-         (barras("Dentro de tolerancia (error ≤ paso/2)", "% de paquetes recibidos con todos los campos dentro de la "
-                 "tolerancia. Con pérdida, tras un delta perdido el receptor predice mal hasta el siguiente marco "
-                 "completo (cada 16).",
+         (barras("Dentro de tolerancia (error ≤ paso/2)", ctx(
+                  "Paquetes recibidos con todas sus medidas dentro del error permitido.",
+                  "100 · paquetes con |original − recibido| ≤ paso/2 en temp, hum y bat / recibidos.",
+                  METODO, "%.",
+                  "¿Se cumple el error prometido? Tras un delta perdido el receptor predice mal hasta el siguiente "
+                  "marco completo (cada 16 paquetes)."),
                  [f'sum by (metodo) ({TD}dentro_tolerancia_pct{{canal="perfecto"}})',
                   f'sum by (metodo) ({TD}dentro_tolerancia_pct{{canal="perdida_1pct"}})'], "percent", 1, x="metodo",
                  nombres={"Value #A": "perfecto", "Value #B": "1 % de pérdida"}), 8)], 9)
-L.poner([(barras("Error máximo por campo (canal perfecto)", "Error absoluto máximo de cada medida.",
+L.poner([(barras("Error máximo por campo (canal perfecto)", ctx(
+                  "El peor error de cada medida.", "max |original − recibido| de temp, hum y bat.", METODO,
+                  "unidades de cada medida (°C, %, V).",
+                  "¿El error queda en paso/2? Es la distorsión que se acepta a cambio de bytes."),
                  [f'sum by (metodo) ({TD}error_max{{canal="perfecto",campo="{k}"}})' for k in ("temp", "hum", "bat")],
-                 "none", 3, x="metodo", nombres={"Value #A": "temp °C", "Value #B": "hum %", "Value #C": "bat V"}), 12),
-         (barras("Bytes por paquete transmitidos", "Marco completo por el túnel (cabecera ROHC + códec + carga); el paquete original IP/UDP/JSON mide ~120 B.",
-                 [f'sum by (metodo) ({TD}bytes_por_paquete{{canal="perfecto"}})'], "decbytes", 1, x="metodo"), 12)], 9)
+                 "none", 3, x="metodo", nombres={"Value #A": "temp °C", "Value #B": "hum %", "Value #C": "bat V"}), 24)], 9)
 L.fila("En vivo: el bandido en la red 5G (cmp-ue / cmp-dn)")
-viv = {"type": "timeseries", "description": "Lo que publica shim.py cada 10 s. Solo hay datos con el perfil "
-       "'compresion' arriba y tráfico por cmp0."}
-def serie(titulo, consultas, unidad):
-    p = dict(viv, title=titulo, targets=[q(e, chr(65 + i), l) for i, (e, l) in enumerate(consultas)])
+NOTA_VIVO = " Lo publica shim.py cada 10 s; solo hay datos con el perfil 'compresion' arriba y tráfico por cmp0."
+
+
+def serie(titulo, desc, consultas, unidad, por_dia=False):
+    p = {"type": "timeseries", "title": titulo, "description": desc,
+         "targets": [q(e, chr(65 + i), l) for i, (e, l) in enumerate(consultas)]}
     for t in p["targets"]:
         t["instant"] = False; t["range"] = True
-    p["fieldConfig"] = {"defaults": {"unit": unidad, "custom": {"fillOpacity": 10}}, "overrides": []}
+    custom = {"fillOpacity": 10}
+    if por_dia:
+        # Un punto por hora con la ventana [1d]: cada punto es el resumen de las 24 h anteriores.
+        # Con paso 1d Grafana evalúa solo a medianoche y no hay nada hasta el primer día completo.
+        p["interval"] = "1h"; p["timeFrom"] = "15d"
+        for t in p["targets"]:
+            t["interval"] = "1h"
+    p["fieldConfig"] = {"defaults": {"unit": unidad, "custom": custom}, "overrides": []}
     return p
-L.poner([(serie("Subida: bytes originales vs bytes en el túnel", [
-            ('rate(lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="orig"}[2m])', "original"),
-            ('rate(lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="marco"}[2m])', "comprimido")], "Bps"), 12),
-         (serie("Ahorro en vivo (subida)", [
-            ('100 * (1 - lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="marco"} / ignoring(tipo) '
-             'lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="orig"})', "acumulado")], "percent"), 6),
-         (serie("Errores de descompresión", [('lab5g_cmp_errores', "{{lado}}")], "none"), 6)], 8)
-L.poner([(serie("Qué algoritmo elige el bandido (paquetes por segundo)", [
-            ('rate(lab5g_cmp_paquetes{lado="ue"}[2m])', "{{codec}}")], "pps"), 24)], 8)
+
+
+L.poner([(serie("Subida: bytes originales vs bytes en el túnel", ctx(
+                 "Tráfico que entra al compresor y tráfico que sale comprimido, en la red real." + NOTA_VIVO,
+                 "tasa de cada contador en ventanas de 2 min: rate(bytes[2m]).", "hora.", "bytes por segundo.",
+                 "¿Cuánto tráfico pasa y cuánto se reduce en este momento? La distancia entre las líneas es lo ahorrado."),
+                [('rate(lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="orig"}[2m])', "original"),
+                 ('rate(lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="marco"}[2m])', "comprimido")], "Bps"), 12),
+         (serie("Ahorro en vivo (subida)", ctx(
+                 "Ahorro acumulado desde que arrancó el compresor." + NOTA_VIVO,
+                 "100 · (1 − bytes en el túnel / bytes originales), con los contadores acumulados.", "hora.", "%.",
+                 "¿Cuánto está ahorrando la red real, con el tráfico que de verdad pasa?"),
+                [('100 * (1 - lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="marco"} / ignoring(tipo) '
+                  'lab5g_cmp_bytes{lado="ue",sentido="tx",tipo="orig"})', "acumulado")], "percent"), 6),
+         (serie("Errores de descompresión", ctx(
+                 "Marcos que el receptor no pudo descomprimir." + NOTA_VIVO,
+                 "contador acumulado de cada lado.", "hora.", "número de errores.",
+                 "¿El compresor está dañando tráfico? Un salto suele coincidir con un corte de la red."),
+                [('lab5g_cmp_errores', "{{lado}}")], "none"), 6)], 8)
+L.poner([(serie("Qué algoritmo elige el bandido (paquetes por segundo)", ctx(
+                 "Con qué códec sale cada paquete." + NOTA_VIVO,
+                 "tasa de paquetes por códec en ventanas de 2 min: rate(paquetes{codec}[2m]).", "hora.",
+                 "paquetes por segundo, una línea por códec.",
+                 "¿Qué decide el bandido según el tráfico? Voz, video y HTTPS salen con «ninguno»; texto y JSON, "
+                 "comprimidos."),
+                [('rate(lab5g_cmp_paquetes{lado="ue"}[2m])', "{{codec}}")], "pps"), 12),
+         (calor("Lo que aprendió el bandido: recompensa media por contexto y brazo", ctx(
+                 "Lo que el bandido cree que rinde cada códec (brazo) en cada tipo de paquete (contexto). Qué optimiza: "
+                 "ahorrar bytes sin gastar CPU en vano. Brazos: ninguno, zstd_dict, deflate_flujo y predictivo_audio "
+                 "(este último solo gana con audio PCM sin comprimir)." + NOTA_VIVO,
+                 "recompensa de un paquete r = ahorro − 0,01 si comprime (0 si es «ninguno»), con ahorro = (bytes que "
+                 "entran − bytes que salen) / bytes que entran. Celda = media reciente S/N, donde S y N se multiplican "
+                 "por γ = 0,999 en cada paquete. El bandido manda el brazo de mayor media + 0,02 · √(ln ΣN / N).",
+                 "brazo (columnas).",
+                 "contexto (filas) = tamaño de la carga (chico < 64 B, mediano 64-511 B, grande ≥ 512 B) / entropía de "
+                 "sus primeros 256 B (baja < 0,75, media 0,75-0,9, alta ≥ 0,9).",
+                 "¿Por qué el bandido elige lo que elige? En cada fila gana la celda más verde. Negativo = comprimir ahí "
+                 "cuesta más de lo que ahorra (tráfico cifrado)."),
+                 'sum by (contexto, codec) (label_join(lab5g_cmp_bandido_media{lado="ue"}, "contexto", " / ", "tam", "ent"))',
+                 "contexto", "codec", "none", 3, -0.05, 0.8), 12)], 9)
+L.poner([(serie("Retroalimentación diaria: ahorro de cada algoritmo con el tráfico real", ctx(
+                 "Cuánto ahorró (o habría ahorrado) cada algoritmo con el tráfico real de cada día." + NOTA_VIVO,
+                 "1 de cada 100 paquetes reales se comprime además con todos los códecs rápidos, sin mandarlo "
+                 "(medición «sombra», bandido.py). Cada hora: 100 · (1 − Δ bytes de ese algoritmo / Δ bytes originales), "
+                 "con Δ = lo de las 24 h anteriores a ese momento. Las primeras horas son pocos paquetes y saltan. «bandido_ucb» = lo que de verdad se mandó; «mejor» = el mejor códec de cada "
+                 "paquete (techo). Bytes de carga, sin cabeceras.",
+                 "tiempo, los últimos 15 días; cada punto resume las 24 h anteriores.", "ahorro %, una línea por algoritmo.",
+                 "¿Cómo le fue a cada algoritmo cada día, y qué tan cerca del techo estuvo el bandido? Si el orden de "
+                 "las líneas cambia, cambió el tráfico."),
+                [('100 * (1 - sum by (codec) (increase(lab5g_cmp_sombra_bytes{lado="ue",codec!="original"}[1d])) / '
+                  'scalar(sum(increase(lab5g_cmp_sombra_bytes{lado="ue",codec="original"}[1d]))))', "{{codec}}")],
+                "percent", por_dia=True), 24)], 9)
 d2 = tablero("lab5g-cmp-comparacion", "lab5g · Compresión — comparación de algoritmos",
              "Tasa, información mutua, confiabilidad y velocidad de todos los algoritmos.", L, [var_clase])
 

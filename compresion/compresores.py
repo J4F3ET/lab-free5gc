@@ -32,8 +32,10 @@ extremos, igual que la tabla de Huffman estática de HPACK en HTTP/2.
 """
 from __future__ import annotations
 
-import base64, heapq, json, struct, zlib
+import base64, heapq, json, re, struct, sys, zlib
+from array import array
 from collections import OrderedDict
+from itertools import accumulate
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -345,6 +347,7 @@ class Codec:
     titulo: str = ""       # nombre corto y legible (menú de Grafana)
     descripcion: str = ""  # qué hace, en una o dos frases (panel de Grafana)
     con_perdida = False    # True: el receptor recibe una versión aproximada (ver PredictivoIoT)
+    lento = False          # True: Python puro, milisegundos por paquete; la medición sombra lo salta
 
     def __init__(self, modelo: "Modelo", **opciones):
         self.modelo = modelo
@@ -401,6 +404,8 @@ class HuffmanEstatico(Codec):
     titulo = "Huffman estático"
     descripcion = ("Huffman con una tabla fija entrenada antes con tráfico (como HPACK en HTTP/2). "
                    "No manda la tabla en cada paquete.")
+
+    lento = True
 
     def comprimir(self, carga, clave):
         acc, nb = self.modelo.huff.codificar(list(carga) + [FIN])
@@ -499,6 +504,8 @@ class TicPorPaquete(Codec):
     descripcion = ("El códec del Lab 3 aplicado a cada paquete: Huffman adaptativo con k = 8 o 16 bits y "
                    "la tabla dentro del paquete. Se deja para comparar: en paquetes casi no ahorra.")
 
+    lento = True
+
     def comprimir(self, carga, clave):
         return tic_codificar(carga), None
 
@@ -531,6 +538,133 @@ class ZstdDiccionario(Codec):
 
 if ZSTD:
     registrar(ZstdDiccionario)
+
+
+# ═══════════════════════════ sin pérdida: predictivo para audio PCM ═══════════════════════════
+PREDICTIVO_AUDIO = 8
+
+
+def _diferenciar(x: list[int], m: int) -> list[int]:
+    """Deja los m primeros como están y resta el anterior al resto (un orden más de predicción)."""
+    return x[:m] + [b - a for a, b in zip(x[m - 1:], x[m:])]
+
+
+def _integrar(y: list[int], m: int) -> list[int]:
+    """Inversa de _diferenciar."""
+    return y[:m - 1] + list(accumulate(y[m - 1:]))
+
+
+@registrar
+class PredictivoAudio(Codec):
+    """Predicción lineal fija + código Rice, como FLAC (modo «fixed»), paquete a paquete.
+
+    Lee la carga como muestras PCM de 16 bits little-endian (lo que va en un WAV o en RTP L16).
+    Predice cada muestra con las anteriores (orden 1: x[n−1]; orden 2: 2x[n−1] − x[n−2]; orden 3:
+    3x[n−1] − 3x[n−2] + x[n−3]) y manda solo el error, que en audio es mucho más chico que la
+    muestra. El error va en código Rice con el k que menos bits da. Sin estado: cada paquete se
+    decodifica solo, así que una pérdida no se arrastra.
+
+    Si la carga no es audio, la salida no achica y el Compresor la manda con NINGUNO: el bandido
+    aprende solo dónde sirve.
+
+    Formato: [orden(bits 0-1) | desfase(bit 2) | cola(bit 3)] [k] [byte suelto inicial si desfase]
+             [byte suelto final si cola] [orden × int16 de arranque] [errores en Rice, relleno con 0]
+    El desfase es para cuando el segmento TCP corta una muestra a la mitad: se prueba empezar en
+    el byte 0 o en el 1 y se queda el que da errores más chicos."""
+    id, nombre = PREDICTIVO_AUDIO, "predictivo_audio"
+    titulo = "Predictivo para audio (tipo FLAC)"
+    descripcion = ("Predice cada muestra de audio con las anteriores y manda solo el error, en código Rice, "
+                   "como FLAC. Sin pérdida y sin estado. Si la carga no es audio, no achica.")
+
+    @staticmethod
+    def _muestras(b: bytes) -> list[int]:
+        a = array("h", b)
+        if sys.byteorder != "little":
+            a.byteswap()
+        return a.tolist()
+
+    # Tablas por k (hasta 12 bits): parte baja del código Rice como texto "1xxxx" y su inversa.
+    _COD: dict[int, list[str]] = {}
+    _DEC: dict[int, tuple] = {}
+
+    @classmethod
+    def _tabla_cod(cls, k):
+        t = cls._COD.get(k)
+        if t is None:
+            t = cls._COD[k] = ["1" + format(i, f"0{k}b") if k else "1" for i in range(1 << k)]
+        return t
+
+    @classmethod
+    def _tabla_dec(cls, k):
+        t = cls._DEC.get(k)
+        if t is None:
+            patron = re.compile(f"(0*)1([01]{{{k}}})" if k else "(0*)1()")
+            inv = {format(i, f"0{k}b"): i for i in range(1 << k)} if 0 < k <= 12 else None
+            t = cls._DEC[k] = (patron, inv)
+        return t
+
+    def comprimir(self, carga, clave):
+        if len(carga) < 16:
+            return carga, None
+        # Desfase y orden se eligen mirando solo las primeras 128 muestras: es lo caro de probar.
+        mejor = None
+        for desfase in (0, 1):
+            pre = carga[desfase:desfase + 256]
+            r = self._muestras(pre[:len(pre) & ~1])
+            for orden in (1, 2, 3):
+                r = _diferenciar(r, orden)
+                costo = sum(map(abs, r[orden:]))
+                if mejor is None or costo < mejor[0]:
+                    mejor = (costo, desfase, orden)
+        _, desfase, orden = mejor
+        cuerpo = carga[desfase:]
+        cola = len(cuerpo) & 1
+        x = r = self._muestras(cuerpo[:len(cuerpo) - cola])
+        for m in range(1, orden + 1):
+            r = _diferenciar(r, m)
+        u = [(e << 1) if e >= 0 else ((-e << 1) - 1) for e in r[orden:]]  # zigzag: 0,−1,1,… -> 0,1,2,…
+        n = len(u) or 1
+        # k óptimo de Rice para errores con distribución geométrica: ≈ log2(media · ln 2)
+        k = max(0, (sum(u) * 693 // (1000 * n)).bit_length())
+        k = min(k, 15)
+        if n * (k + 1) + sum(v >> k for v in u) >= 8 * (len(carga) - 2 * orden - 4):
+            return carga, None  # no achicaría (no es audio): ni se arma, el Compresor manda NINGUNO
+        m = (1 << k) - 1
+        if k <= 12:
+            t = self._tabla_cod(k)
+            bits = "".join(["0" * (v >> k) + t[v & m] for v in u])
+        else:
+            bits = "".join(["0" * (v >> k) + "1" + format(v & m, f"0{k}b") for v in u])
+        bits += "0" * (-len(bits) % 8)
+        cab = bytes([orden | desfase << 2 | cola << 3, k])
+        sueltos = (carga[:1] if desfase else b"") + (carga[-1:] if cola else b"")
+        arranque = struct.pack(f"<{orden}h", *x[:orden])  # muestras tal cual: caben en int16
+        return cab + sueltos + arranque + (int(bits, 2).to_bytes(len(bits) // 8, "big") if bits else b""), None
+
+    def descomprimir(self, datos):
+        orden, desfase, cola, k = datos[0] & 3, datos[0] >> 2 & 1, datos[0] >> 3 & 1, datos[1]
+        p = 2
+        ini = datos[p:p + desfase]; p += desfase
+        fin = datos[p:p + cola]; p += cola
+        r = list(struct.unpack_from(f"<{orden}h", datos, p)); p += 2 * orden
+        for m in range(1, orden + 1):  # el arranque de los errores sale de las muestras de arranque
+            r = _diferenciar(r, m)
+        cuerpo = datos[p:]
+        s = format(int.from_bytes(cuerpo, "big"), f"0{8 * len(cuerpo)}b") if cuerpo else ""
+        patron, inv = self._tabla_dec(k)
+        if inv is not None:
+            u = [(len(q) << k) | inv[b] for q, b in patron.findall(s)]
+        elif k:
+            u = [(len(q) << k) | int(b, 2) for q, b in patron.findall(s)]
+        else:
+            u = [len(q) for q, _ in patron.findall(s)]
+        r += [(v >> 1) if not v & 1 else -((v + 1) >> 1) for v in u]
+        for m in (3, 2, 1)[3 - orden:]:
+            r = _integrar(r, m)
+        a = array("h", r)
+        if sys.byteorder != "little":
+            a.byteswap()
+        return ini + a.tobytes() + fin
 
 
 # ═══════════════════════════ con pérdida: predictivo para telemetría ═══════════════════════════
@@ -1026,7 +1160,12 @@ class Compresor:
             codec = forzado
         hc, pref, carga = self.separar(pkt)
         datos, confirmar = self.probar(codec, carga, clave_flujo(pkt))
-        if codec != NINGUNO and len(datos) >= len(carga):
+        # Si comprimir no achica, va sin comprimir. Excepto el marco clave de predictivo_iot: con
+        # muchos campos numéricos (5 B de paso por campo) puede salir unos bytes más grande que el
+        # JSON, pero sin él el flujo nunca guarda su esquema y TODOS los paquetes vuelven a ser
+        # clave; los deltas que siguen (~8 B) lo pagan con creces. Lo destapó la telemetría real
+        # del Intel Lab (reproducir_iot.py): 6 campos numéricos, clave de 100 B contra 96 B de JSON.
+        if codec not in (NINGUNO, PREDICTIVO_IOT) and len(datos) >= len(carga):
             codec, datos, confirmar = NINGUNO, carga, None
         if confirmar:
             confirmar()
