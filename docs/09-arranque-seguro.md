@@ -20,6 +20,8 @@ la [sección 9](#9-comandos-de-todos-los-días).
 - [10. Qué hacer si el host se satura](#10-qué-hacer-si-el-host-se-satura)
 - [11. Primera migración desde la versión anterior](#11-primera-migración-desde-la-versión-anterior)
 - [12. Pendientes y cosas por confirmar](#12-pendientes-y-cosas-por-confirmar)
+- [13. Bugs que solo salieron con Docker real](#13-bugs-que-solo-salieron-con-docker-real)
+- [14. No probado todavía](#14-no-probado-todavía)
 
 ---
 
@@ -48,7 +50,11 @@ La solución tiene tres partes:
    lo que se cae.
 3. **Compuertas de carga.** Solo se arranca algo cuando el host está tranquilo.
 
-Tardar 20–30 minutos en un arranque en frío es lo esperado. Congelar el host, no.
+Medido el 21 de noviembre: arranque en frío de **18.5 min (1112 s)** hasta tener
+los 20 servicios arriba, tras encender el LXC; apagado limpio de **254 s**; pico de
+carga de **7.1** solo en los primeros 30 s (arranque de Docker); carga entre **0.6 y
+3.9** durante las etapas; pico de **12.5** solo al apagar todo a la vez. Congelar el
+host, no.
 
 Línea base medida el 21 de noviembre: Docker 29.10, Compose v5.7.1 y los ficheros
 `/proc/pressure/{cpu,io,memory}` presentes dentro del LXC. El laboratorio vive en el
@@ -73,6 +79,21 @@ checkout del runner, por eso el código se despliega en `/opt/lab5g`.
 `deploy/bootstrap-runner.sh` instala todo lo anterior y **habilita** las unidades
 `lab5g-stack.service` y `lab5g-backup.timer`, pero **no las arranca**. El
 arranque lo decide el operador con `lab5g.sh start` o con el pipeline.
+
+### Configuración del host (Proxmox)
+
+Está fuera del repositorio. Sin esto, el resultado medido no se reproduce:
+
+- Contenedor 110: `pct set 110 --memory 1920 --swap 512` y
+  `pct set 110 --onboot 1 --startup order=6,up=180,down=360`.
+- El `down` de Proxmox (360 s) debe ser **mayor** que el apagado medido (254 s). Si
+  Proxmox corta antes, el apagado queda a medias. Por la misma razón,
+  `TimeoutStopSec=900` del servicio nunca llega a aplicarse en un apagado del host:
+  Proxmox corta antes.
+- zram en el host: `apt install zram-tools`, y en `/etc/default/zramswap`:
+  `ALGO=zstd`, `PERCENT=25`, `PRIORITY=100`. La primera vez, zram arrancó con los
+  valores por defecto. Los de `/etc/default` solo se aplican tras reiniciar el host.
+- `vm.swappiness=30` en `/etc/sysctl.d/99-lab5g.conf`.
 
 Para que el bucle de recuperación vigile, hay que arrancar el servicio:
 
@@ -390,7 +411,7 @@ sudo /usr/local/sbin/lab5g.sh start amf          # un servicio; sus padres de re
 ```
 
 - Sin argumentos borra las paradas manuales anteriores.
-- Un arranque en frío tarda 20–30 minutos. Para seguirlo:
+- Un arranque en frío tardó **18.5 min** (1112 s) medidos el 21 de noviembre. Para seguirlo:
   `journalctl -u lab5g-stack -f`.
 
 #### Sondas y phy-sim
@@ -417,6 +438,9 @@ sudo /usr/local/sbin/lab5g.sh stop cmp-gen cmp-ue     # solo esos
   hasta el próximo `start`. Para todo: sondas, `phy-sim`, Grafana y la pila.
 - `stop` con nombres los deja anotados como parados a mano. La recuperación no
   los toca hasta el próximo `start`.
+- Un `stop` sin argumentos tardó **254 s** en el apagado medido. Mejora futura,
+  no implementada: apagar por grupos (sondas y Grafana, compresión, RAN, NF, `upf`,
+  `mongodb`, y por último `prometheus` y `pushgateway`).
 
 ### Copia de seguridad
 
@@ -439,7 +463,7 @@ printf '%s' 'NUEVO_VALOR' | sudo /usr/local/sbin/lab5g.sh env-set GRAFANA_ADMIN_
 - `env-set` solo acepta claves que existan en `.env.example`. El valor entra por
   stdin para que no quede en el historial ni en `ps`. Rechaza valores con comilla
   simple (`'`) o que terminen en barra invertida, porque compose no los lee de forma
-  fiable.
+  fiable. Rechaza también los valores de varias líneas o con retorno de carro (CR).
 
 ### Ver el log de la pila
 
@@ -467,7 +491,7 @@ etapa atascada con la compuerta cerrada, o el host tarda en responder.
    Grafana tiene un tope de 768 MB y la compresión suma 368 MB de topes. Son topes,
    no uso real: en reposo la pila usa unos 0.3 GB.
 3. **Si sigue saturado, parar la pila entera:** `sudo /usr/local/sbin/lab5g.sh stop`.
-   Es el último recurso: el 5G se cae, y volver a arrancar cuesta 20–30 minutos.
+   Es el último recurso: el 5G se cae, y volver a arrancar cuesta unos 18.5 minutos.
 4. **No lanzar `docker compose up` a mano mientras la pila arranca.** Las órdenes
    manuales no pasan por el cerrojo `ops.lock` ni por las compuertas.
 5. **No reiniciar a mano en bucle.** La recuperación ya reintenta. Un servicio
@@ -522,6 +546,29 @@ para comprobar que aparecen solo los servicios actuales.
   cAdvisor, retirado. Sin fuente hasta que se decida una alternativa.
 - **Configuración de `webuicfg`.** `config/webuicfg.yaml` sigue en el repositorio sin
   uso. Por confirmar si se borra.
+
+---
+
+## 13. Bugs que solo salieron con Docker real
+
+- **mongod:** `--wiredTigerCacheSizeGB` tiene un mínimo de 0.25. Con 0.125 sale con
+  error 1.
+- **Docker 29:** `{{if .State.Health}}` rompe la plantilla de `inspect`. Se usa
+  `index .State "Health"`.
+- **Contenedores creados a mano:** sin etiquetas de compose, bloquean el `up` por
+  nombre. `clear_foreign` los elimina antes de crear el servicio.
+- **pids_limit:** 100 mataba a Grafana 13. Ahora son 512.
+- **env-set:** rechazaba en silencio los valores multilínea. Ahora los rechaza con un
+  error.
+
+## 14. No probado todavía
+
+- Restauración real (`lab5g.sh restore`) sobre datos vivos.
+- Reinicio completo del host Proxmox.
+- Recuperación del plano de control (caída de `amf` o `nrf`).
+- Workflows en GitHub real. Solo se han verificado en local.
+- Agotamiento de reintentos (5 reinicios en 60 min) en producción.
+- Copia al host con `pct pull`.
 
 ---
 

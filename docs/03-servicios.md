@@ -255,7 +255,7 @@ es `mongodb` y espera a su chequeo de salud.
 | Volumen | Servicio | Contiene | Si lo borras |
 |---|---|---|---|
 | `mongo-data` | `mongodb` | **Los abonados** | El teléfono deja de registrarse. Recupéralo con `ci/provision-subscriber.sh` |
-| `prom-data` | `prometheus` | Métricas, con retención de 90 días o 3 GB (lo que llegue antes) | Pierdes el histórico. Nada deja de funcionar. Hay copia diaria: ver [09 §8](09-arranque-seguro.md#8-persistencia-y-copias) |
+| `prom-data` | `prometheus` | Métricas, con retención de 90 días o 2 GB (lo que llegue antes) | Pierdes el histórico. Nada deja de funcionar. Hay copia diaria: ver [09 §8](09-arranque-seguro.md#8-persistencia-y-copias) |
 | `grafana-data` | `grafana` | Usuarios y cambios hechos a mano en los paneles | El panel provisionado vuelve solo; lo que hayas editado a mano, no. Sin copia |
 | `pushgw-data` | `pushgateway` | Las últimas métricas empujadas (archivo de persistencia, escritura cada minuto) | Las métricas de sondas y compresión se recrean en el siguiente empuje |
 

@@ -244,7 +244,7 @@ En **Settings → Secrets and variables → Actions**, crea:
 El job `deploy` escribe el secreto en `/etc/lab5g/lab5g.env` con
 `lab5g.sh env-set`. El valor entra por stdin y nunca por argumento, así que no
 aparece en `ps` ni en el log. El paso no usa `set -x`. `env-set` rechaza valores con comilla simple (`'`) o que
-terminen en barra invertida: compose no los lee de forma fiable.
+terminen en barra invertida, ni los de varias líneas: compose no los lee de forma fiable.
 
 Ya no se genera ningún `.env` en cada job. El entorno vive fuera del checkout, y
 `actions/checkout` ejecuta `git clean -ffdx` sin tocarlo. Por eso el job `smoke`

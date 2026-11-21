@@ -136,7 +136,7 @@ Ejecútalo siempre que toques un YAML. Detalles en
 | Recurso | Mínimo real | Recomendado | Por qué |
 |---|---|---|---|
 | CPU | 4 núcleos | 6+ | El UPF encapsula tráfico dentro del kernel |
-| RAM | 4 GB para el núcleo solo | 8 GB | Con todo lo que arranca la pila son 20 contenedores, con topes de memoria que suman 1.7 GB (uso real en reposo, unos 0.3 GB) |
+| RAM | 4 GB para el núcleo solo | 8 GB | Con todo lo que arranca la pila son 20 contenedores, con topes de memoria que suman 1824 MB (2592 MB con Grafana); uso real en reposo de unos 0.3 GB, y unos 0.85 GB con Grafana |
 | Disco | 20 GB | 64 GB | MongoDB, Prometheus y las imágenes de Docker |
 
 > ⚠️ **Esto no es un consejo teórico.** En un host de 4 núcleos y 3.8 GB,
@@ -327,7 +327,7 @@ no. Merece la pena ejecutarlo aunque creas que todo está bien.
 ### Paso 6 — Arrancar
 
 En el LXC el arranque lo hace la pila escalonada, que levanta un servicio cada
-vez (20–30 minutos en frío):
+vez (18.5 minutos en frío, medido el 21 de noviembre):
 
 ```bash
 sudo /usr/local/sbin/lab5g.sh start
@@ -577,8 +577,8 @@ quédate en `nucleo ran` (13) hasta que `smoke-ue.sh` pase en verde. Los
 límites de memoria por perfil están en [docs/04 §9](docs/04-operacion.md#9-vigilar-los-recursos).
 
 > ⚠️ **Al encender el LXC, la pila arranca sola, por etapas.** `lab5g-stack`
-> levanta todo lo gestionado, uno a uno, con compuertas de carga. Tarda 20–30
-> minutos y no arranca Grafana ni las sondas. Lo que hayas parado a mano **no
+> levanta todo lo gestionado, uno a uno, con compuertas de carga. Tarda unos
+> 18.5 minutos y no arranca Grafana ni las sondas. Lo que hayas parado a mano **no
 > sobrevive a un reinicio**: `/run/lab5g` se vacía. Ver
 > [docs/09](docs/09-arranque-seguro.md). Con `restart: unless-stopped`, esa misma
 > situación llevó el disco al 95 % el 2026-11-05; por eso se retiró esa política.

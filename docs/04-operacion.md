@@ -56,7 +56,7 @@ sudo /usr/local/sbin/lab5g.sh start
 
 Arranca, **de una en una y por etapas**, todo lo gestionado: observabilidad,
 núcleo, `ran` y `compresion`. No arranca Grafana, las sondas ni `phy-sim`. Tarda
-20–30 minutos en frío. Es la única forma recomendada: los servicios no tienen
+18.5 minutos en frío (medido el 21 de noviembre). Es la única forma recomendada: los servicios no tienen
 reinicio automático de Docker, así que sin la pila nadie los vigila.
 
 Para arrancar solo una parte:
@@ -75,7 +75,9 @@ sudo /usr/local/sbin/lab5g.sh start iperf-probe
 sudo /usr/local/sbin/lab5g.sh start phy-sim
 ```
 
-Detalle y criterios en [09 §3](09-arranque-seguro.md#3-el-arranque-por-etapas).
+Detalle y criterios en [09 §3](09-arranque-seguro.md#3-el-arranque-por-etapas). La
+configuración del host que lo hace posible (contenedor 110 con `--onboot` y
+`--startup`, zram y swappiness) está en [09 §2](09-arranque-seguro.md#2-las-piezas).
 
 ### Grafana
 
@@ -94,7 +96,8 @@ Si la compuerta de memoria no pasa, `grafana up` se niega y dice por qué. Ver
 sudo /usr/local/sbin/lab5g.sh stop
 ```
 
-Para todo, en orden inverso y uno a uno. Crea `/run/lab5g/parado`, que suspende
+Para todo, en orden inverso y uno a uno. Un apagado limpio medido el 21 de noviembre
+tardó 254 s. Crea `/run/lab5g/parado`, que suspende
 la recuperación hasta el próximo `start`.
 
 Para parar solo algunos servicios:
@@ -523,7 +526,7 @@ Grafana encendido el conjunto ronda **0.85 GB**.
 | `compresion` | cmp-dn 64, cmp-ue 64, envio 96, envio-eco 96, cmp-gen 48 | 5 | 368 MB |
 | `obs` | prometheus 256, pushgateway 48 | 2 | 304 MB |
 | **Siempre encendidos** (lo que arranca `lab5g.sh start`) | | **20** | **1824 MB** |
-| `grafana` (bajo demanda) | grafana 768 | 1 | 768 MB |
+| `grafana` (bajo demanda; con él la suma es 2592 MB) | grafana 768 | 1 | 768 MB |
 | `obs-extra` (bajo demanda) | phy-sim 48 | 1 | 48 MB |
 | `probes` (bajo demanda) | blackbox 48, iperf-probe 32 | 2 | 80 MB |
 
@@ -556,7 +559,7 @@ núcleos, ni siquiera SSH responde, y la única salida es la consola física.
 ### Al encender el LXC
 
 `lab5g-stack.service` arranca solo al encender el LXC y levanta la pila por
-etapas, con las mismas compuertas. Tarda 20–30 minutos. Grafana, las sondas y
+etapas, con las mismas compuertas. Tarda unos 18.5 minutos. Grafana, las sondas y
 `phy-sim` no arrancan solos.
 
 Lo que paraste a mano **no sobrevive a un reinicio**: `/run/lab5g` se vacía y la
