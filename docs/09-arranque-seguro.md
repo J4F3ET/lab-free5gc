@@ -506,7 +506,7 @@ para comprobar que aparecen solo los servicios actuales.
   99 % en el arranque en frío del 21 de noviembre; la estampida original llegó a
   105.
 - **Topes de memoria.** Son provisionales hasta medir `memory.peak` con `docker
-  stats`. Los 20 siempre encendidos suman 1696 MB de topes. La protección real del
+  stats`. Los 20 siempre encendidos suman 1824 MB de topes. La protección real del
   arranque de Grafana es la compuerta `GATE_MEM` (300 MB de `MemAvailable`), no la
   suma de topes.
 - **Página de envío desde la LAN.** Se accede a `192.168.1.50:8088`. Docker hace

@@ -235,12 +235,14 @@ get_etapa() { cat "$STATE_DIR/etapa" 2>/dev/null || echo 0; }
 # -------------------------------------------------- estado de contenedores
 declare -A ST=() ID=() SA=() HL=()
 SNAP_N=0
+# OJO (docker 29): .State es un mapa y '{{if .State.Health}}' ABORTA con "map has no entry" en los
+# contenedores sin healthcheck, dejando la instantanea vacia. Por eso se usa 'index .State "Health"'.
 # UNA sola llamada a docker inspect para todos (varias por servicio cada 30 s
 # bajo carga serian parte del problema). Los ausentes simplemente no salen.
 snapshot() {
   ST=(); ID=(); SA=(); HL=(); SNAP_N=0
   local out n s i a h
-  out=$(dk inspect -f '{{.Name}}|{{.State.Status}}|{{.Id}}|{{.State.StartedAt}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}' \
+  out=$(dk inspect -f '{{.Name}}|{{.State.Status}}|{{.Id}}|{{.State.StartedAt}}|{{with index .State "Health"}}{{.Status}}{{end}}' \
         "${ALL_NAMES[@]}" 2>/dev/null || true)
   while IFS='|' read -r n s i a h; do
     [ -n "$n" ] || continue
@@ -291,7 +293,7 @@ wait_health() {
   deadline=$(( $(now) + budget ))
   while :; do
     abort_requested && return 99
-    out=$(dk inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$svc" 2>/dev/null || echo "ausente|")
+    out=$(dk inspect -f '{{.State.Status}}|{{with index .State "Health"}}{{.Status}}{{end}}' "$svc" 2>/dev/null || echo "ausente|")
     s="${out%%|*}"; h="${out#*|}"
     case "$s" in
       exited|dead|ausente) log "FALLO: $svc esta '$s'"; return 1 ;;

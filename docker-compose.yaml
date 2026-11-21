@@ -86,15 +86,15 @@ services:
     image: mongo:${MONGO_TAG:-6.0}
     container_name: mongodb
     # medido en reposo el 21 nov; revisar con memory.peak bajo carga
-    mem_limit: 256m
-    mem_reservation: 153m
+    mem_limit: 384m
+    mem_reservation: 230m
     cpus: 1.0
     pids_limit: 300
     oom_score_adj: -300
     logging: *logging
     stop_grace_period: 20s
     restart: "no"
-    command: mongod --port 27017 --wiredTigerCacheSizeGB 0.125   # cache por defecto (256 MB) excede mem_limit 256m
+    command: mongod --port 27017 --wiredTigerCacheSizeGB 0.25   # 0.25 es el MINIMO que acepta mongod (con 0.125 sale con error 1); mem_limit 384m = cache 256 MB + overhead (medido: 110 MB en reposo)
     volumes: [ mongo-data:/data/db ]
     networks:
       sbi_net: { ipv4_address: 10.100.200.40 }
@@ -660,15 +660,15 @@ services:
 #  Topes ~2-3x lo medido en reposo el 21 nov (docker stats, poco trafico);
 #  UPF/AMF/SMF con mas margen porque crecen bajo trafico. Revisar con
 #  memory.peak bajo carga.
-#    nucleo     mongodb 256 + nrf 48 + udr 48 + udm 48 + ausf 48 + pcf 64
-#               + nssf 48 + amf 96 + smf 96 + upf 128        =  880
+#    nucleo     mongodb 384 + nrf 48 + udr 48 + udm 48 + ausf 48 + pcf 64
+#               + nssf 48 + amf 96 + smf 96 + upf 128        = 1008
 #    ran        gnb 48 + ue 64 + dn-iperf 32                 =  144
 #    compresion cmp-dn 64 + cmp-ue 64 + envio 96
 #               + envio-eco 96 (archivo de ~20 MB en RAM) + cmp-gen 48 = 368
 #    obs        prometheus 256 (WAL, snapshots) + pushgateway 48 = 304
-#    TOTAL de topes, siempre encendidos (sin grafana)         = 1696
+#    TOTAL de topes, siempre encendidos (sin grafana)         = 1824
 #  Uso REAL medido de ese conjunto: ~0.3 GB. Con Grafana (medido 524 MB,
-#  tope 768) el uso real sube a ~0.85 GB y el tope total a 2464 MB.
+#  tope 768) el uso real sube a ~0.85 GB y el tope total a 2592 MB.
 #  Los topes solo acotan el peor caso de cada contenedor; NO son una
 #  restriccion de suma. Lo que protege el arranque de Grafana (y de todo
 #  lo demas) es la compuerta de MemAvailable (GATE_MEM) de lab5g.sh.

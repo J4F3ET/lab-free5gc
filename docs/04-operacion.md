@@ -512,17 +512,17 @@ Los 24 servicios definidos son **20 siempre encendidos** (núcleo 10, `ran` 3,
 iperf-probe).
 
 Las cifras de la tabla son **topes** (`mem_limit`), no uso real. Los topes de los
-20 siempre encendidos suman **1696 MB**. El uso medido en reposo el 21 de
+20 siempre encendidos suman **1824 MB**. El uso medido en reposo el 21 de
 noviembre fue de unos **0.3 GB** para la pila. Grafana, solo, medía **524 MB**; con
 Grafana encendido el conjunto ronda **0.85 GB**.
 
 | Grupo | Servicios (tope en MB) | Contenedores | Suma de topes |
 |---|---|---|---|
-| Núcleo (sin perfil) | mongodb 256, nrf 48, udr 48, udm 48, ausf 48, pcf 64, nssf 48, amf 96, smf 96, upf 128 | 10 | 880 MB |
+| Núcleo (sin perfil) | mongodb 384, nrf 48, udr 48, udm 48, ausf 48, pcf 64, nssf 48, amf 96, smf 96, upf 128 | 10 | 1008 MB |
 | `ran` | gnb 48, ue 64, dn-iperf 32 | 3 | 144 MB |
 | `compresion` | cmp-dn 64, cmp-ue 64, envio 96, envio-eco 96, cmp-gen 48 | 5 | 368 MB |
 | `obs` | prometheus 256, pushgateway 48 | 2 | 304 MB |
-| **Siempre encendidos** (lo que arranca `lab5g.sh start`) | | **20** | **1696 MB** |
+| **Siempre encendidos** (lo que arranca `lab5g.sh start`) | | **20** | **1824 MB** |
 | `grafana` (bajo demanda) | grafana 768 | 1 | 768 MB |
 | `obs-extra` (bajo demanda) | phy-sim 48 | 1 | 48 MB |
 | `probes` (bajo demanda) | blackbox 48, iperf-probe 32 | 2 | 80 MB |
