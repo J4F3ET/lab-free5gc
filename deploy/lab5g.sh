@@ -117,7 +117,7 @@ cmd_env_set() {
   [ -n "$val" ] || die "env-set: valor vacio (pasalo por stdin)"
   # Un valor de varias lineas (p. ej. dos 'GRAFANA_ADMIN_PASSWORD=' viejos pegados) se
   # truncaba en silencio a la primera linea y dejaba una clave equivocada: se rechaza.
-  if [ ! -t 0 ] && IFS= read -r _resto; then die "env-set: el valor tiene mas de una linea"; fi
+  if [ ! -t 0 ] && { IFS= read -r _resto || [ -n "$_resto" ]; }; then die "env-set: el valor tiene mas de una linea"; fi
   case "$val" in *$'\r'*) die "env-set: el valor contiene un retorno de carro (CR)" ;; esac
   # compose-go no desescapa \' dentro de comillas simples: un valor con ' no se
   # puede guardar de forma fiable, asi que se rechaza (igual que \ al final).
