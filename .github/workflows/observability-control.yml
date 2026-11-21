@@ -1,0 +1,69 @@
+name: observability-control
+
+# Grafana es bajo demanda (perfil 'grafana'); Prometheus y pushgateway quedan
+# siempre encendidos y los gestiona 'deploy.yml'. Este workflow solo enciende
+# o apaga Grafana, consulta el estado o hace backup, y sincroniza los
+# dashboards. No toca el .env ni recrea contenedores.
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'observability/**'
+      - '.github/workflows/observability-control.yml'
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'Accion sobre la observabilidad'
+        type: choice
+        required: true
+        default: estado
+        options:
+          - grafana-up
+          - grafana-down
+          - estado
+          - backup
+
+# Mismo grupo que 'deploy.yml': nunca compiten por el host de 4 nucleos.
+concurrency:
+  group: lab5g-deploy
+  cancel-in-progress: false
+
+jobs:
+  control:
+    runs-on: [ self-hosted, lxc, free5gc ]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # sync/backup/grafana solo desde master: una rama distinta no debe
+      # tocar /opt/lab5g. 'estado' es de solo lectura y puede correr siempre.
+      - name: Exigir rama master para acciones que modifican
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.accion != 'estado' && github.ref != 'refs/heads/master' }}
+        run: |
+          echo "::error::La accion '${{ inputs.accion }}' solo se permite desde master (ref actual: ${{ github.ref }}). Relanza el workflow sobre master."
+          exit 1
+
+      # Con push solo se copian los archivos: Grafana relee
+      # 'provisioning/dashboards' cada 30 s, no hay que recrear nada.
+      - name: Sincronizar archivos versionados a /opt/lab5g
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        run: sudo -n /usr/local/sbin/lab5g.sh sync
+
+      # Prometheus no relee reglas/config solo.
+      - name: Recargar Prometheus
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        run: docker exec prometheus wget -qO- --post-data= http://localhost:9090/-/reload || true
+
+      - name: Ejecutar accion solicitada
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          ACCION: ${{ inputs.accion }}
+        run: |
+          set -euo pipefail
+          case "$ACCION" in
+            grafana-up)   sudo -n /usr/local/sbin/lab5g.sh sync; sudo -n /usr/local/sbin/lab5g.sh grafana up ;;
+            grafana-down) sudo -n /usr/local/sbin/lab5g.sh grafana down ;;
+            estado)       sudo -n /usr/local/sbin/lab5g.sh status ;;
+            backup)       sudo -n /usr/local/sbin/lab5g.sh backup ;;
+            *) echo "::error::accion desconocida: $ACCION"; exit 1 ;;
+          esac

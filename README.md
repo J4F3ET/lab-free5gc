@@ -136,15 +136,15 @@ Ejecútalo siempre que toques un YAML. Detalles en
 | Recurso | Mínimo real | Recomendado | Por qué |
 |---|---|---|---|
 | CPU | 4 núcleos | 6+ | El UPF encapsula tráfico dentro del kernel |
-| RAM | 4 GB para el núcleo solo | 8 GB | Con observabilidad son 22 contenedores |
+| RAM | 4 GB para el núcleo solo | 8 GB | Con todo lo que arranca la pila son 20 contenedores, con topes de memoria que suman 1.7 GB (uso real en reposo, unos 0.3 GB) |
 | Disco | 20 GB | 64 GB | MongoDB, Prometheus y las imágenes de Docker |
 
 > ⚠️ **Esto no es un consejo teórico.** En un host de 4 núcleos y 3.8 GB,
-> arrancar los 22 contenedores de golpe llevó la carga del sistema a **105** y
-> el servidor dejó de responder incluso a SSH. Por eso el arranque por defecto
-> son solo 10 contenedores. Lee la
-> [sección 8](#8-perfiles-arrancar-poco-o-arrancar-todo) antes de activar la
-> observabilidad.
+> arrancar los contenedores de golpe llevó la carga del sistema a **105** y
+> el servidor dejó de responder incluso a SSH. Por eso el arranque ya no lo hace
+> Docker: lo hace `lab5g-stack`, un servicio que levanta un contenedor cada vez
+> y espera a que el host esté tranquilo. Lee [docs/09](docs/09-arranque-seguro.md)
+> y la [sección 8](#8-perfiles-arrancar-poco-o-arrancar-todo).
 
 ### Software
 
@@ -286,7 +286,7 @@ docker run --rm hello-world
 
 Docker instala una regla que **descarta todo el tráfico que entra desde fuera**
 hacia sus redes internas. Es una protección razonable, pero aquí bloquea el
-acceso a Grafana y a la consola web desde tu portátil. El repositorio trae un
+acceso a Grafana y a Prometheus desde tu portátil. El repositorio trae un
 script que abre solo lo necesario:
 
 ```bash
@@ -312,7 +312,7 @@ ping 192.168.1.50
 git clone https://github.com/J4F3ET/lab-free5gc.git && cd lab-free5gc && cp .env.example .env
 ```
 
-Edita `.env` y cambia como mínimo `GRAFANA_ADMIN_PASSWORD`.
+Edita `.env` y cambia como mínimo `GRAFANA_ADMIN_PASSWORD`. En el LXC el entorno real vive en `/etc/lab5g/lab5g.env`; ver [docs/07](docs/07-cicd.md#5-el-secreto).
 
 ✅ **Comprobación** — las tres deben pasar:
 
@@ -326,23 +326,22 @@ no. Merece la pena ejecutarlo aunque creas que todo está bien.
 
 ### Paso 6 — Arrancar
 
-Por etapas, a propósito. El motivo está en la
-[sección 8](#8-perfiles-arrancar-poco-o-arrancar-todo).
+En el LXC el arranque lo hace la pila escalonada, que levanta un servicio cada
+vez (20–30 minutos en frío):
 
 ```bash
-docker compose up -d --wait --wait-timeout 600 mongodb
+sudo /usr/local/sbin/lab5g.sh start
 ```
 
+Ver [docs/09](docs/09-arranque-seguro.md). Después, espera al plano de control y
+aprovisiona el abonado, como hace el pipeline:
+
 ```bash
-docker compose up -d && bash ci/wait-ready.sh
+bash ci/wait-ready.sh
 ```
 
 ```bash
 bash ci/provision-subscriber.sh
-```
-
-```bash
-docker compose --profile ran up -d
 ```
 
 ✅ **Comprobación final:**
@@ -353,7 +352,7 @@ COMPOSE_PROFILES=ran bash ci/smoke-ue.sh
 
 Si termina en verde, tienes una red 5G funcionando.
 
-> **¿Por qué hace falta el tercer comando?** El abonado vive en MongoDB, **no en
+> **¿Por qué hace falta aprovisionar el abonado?** El abonado vive en MongoDB, **no en
 > el repositorio**. Si borras el volumen de Mongo (`docker compose down -v`), la
 > SIM desaparece y el teléfono deja de registrarse aunque todos los ficheros
 > estén perfectos. Es un fallo desconcertante la primera vez.
@@ -397,21 +396,24 @@ cosa vive en un nivel y solo en uno.
 
 ### Lo que se publica hacia tu red local
 
-Solo cuatro puertos salen del contenedor. Todo lo demás es interno y
+Solo tres puertos salen hacia la LAN. Todo lo demás es interno y
 deliberadamente inalcanzable desde fuera:
 
 | Dirección | Qué es | Perfil |
 |---|---|---|
-| `http://192.168.1.50:3000` | **Grafana** — gráficas del estado de la red | `obs` |
+| `http://192.168.1.50:3000` | **Grafana** — gráficas del estado de la red. Bajo demanda: `lab5g.sh grafana up` | `grafana` |
 | `http://192.168.1.50:9090` | **Prometheus** — las métricas en crudo | `obs` |
-| `http://192.168.1.50:8888` | **Dozzle** — los logs de todos los contenedores en el navegador | `obs` |
-| `http://192.168.1.50:5000` | **WebUI** — consola de abonados de free5GC | `tools` |
+| `http://192.168.1.50:8088` | **Página de envío** — manda un archivo por la red 5G, ida y vuelta, a través del compresor. Solo LAN y tailnet | `compresion` |
+
+> Se accede en `192.168.1.50:8088`: Docker lo redirige al contenedor `cmp-dn`. **No**
+> añadas la red de datos a `lab5g-netrules.sh`. Por verificar en el servidor. Ver
+> [docs/09 §12](docs/09-arranque-seguro.md#12-pendientes-y-cosas-por-confirmar).
 
 ---
 
 ## 6. Qué hace cada servicio del docker-compose
 
-Los 24 servicios de [`docker-compose.yaml`](docker-compose.yaml), en lenguaje
+Los 24 servicios de [`docker-compose.yaml`](docker-compose.yaml) (20 siempre encendidos y 4 bajo demanda), en lenguaje
 llano. La columna **⚠️** marca los tres servicios donde se concentran casi
 todos los fallos.
 
@@ -448,22 +450,24 @@ todos los fallos.
 | `ue` | El **teléfono**. Se enciende, busca la antena, se autentica con su clave y, si todo va bien, crea la interfaz `uesimtun0` con una IP del rango `10.60.0.0/16`. Esa interfaz **es** la prueba de que la red funciona. |
 | `dn-iperf` | El **destino**. Un servidor al que el teléfono manda tráfico para demostrar que el túnel transporta datos de verdad. Hace de "internet" del laboratorio. |
 
-### Herramientas — perfil `tools`
+### Consola de abonados (retirada)
 
-| Servicio | Qué hace, de verdad |
-|---|---|
-| `webui` | Consola web oficial de free5GC para dar de alta abonados a mano, en `:5000`. **No hace falta** para el flujo normal: `ci/provision-subscriber.sh` hace lo mismo por línea de comandos y sin arrancar un contenedor extra. |
+La consola web de free5GC (`webui`) ya no está en el compose. Dar de alta un
+abonado es `ci/provision-subscriber.sh`, por línea de comandos y sin contenedor extra.
+(`config/webuicfg.yaml` sigue en el repositorio sin uso, por confirmar si se borra.)
 
-### Observabilidad — perfil `obs`
+### Observabilidad — perfiles `obs`, `grafana` y `obs-extra`
 
-| Servicio | Qué hace, de verdad |
-|---|---|
-| `prometheus` | Pregunta cada pocos segundos "¿cómo estás?" a todos los demás y guarda las respuestas con su hora. Guarda **números**, no texto. 15 días de historia. |
-| `grafana` | Dibuja esos números. Trae tres paneles ya montados que no hay que configurar: `lab5g-overview` y los dos de compresión (ver docs/08). Aparecen solos al arrancar. Usuario `admin`, contraseña la de tu `.env`. |
-| `cadvisor` | Mide CPU, memoria y red **de cada contenedor por separado**. Responde a "¿quién se está comiendo la máquina?". |
-| `node-exporter` | Mide el contenedor LXC **completo**: CPU, RAM, disco, swap. Responde a "¿es la máquina la que va mal, y no un servicio?". |
-| `pushgateway` | Un buzón. Las pruebas que se ejecutan de vez en cuando —no de forma continua— dejan aquí su resultado para que Prometheus lo recoja después. |
-| `dozzle` | Los **logs** de todos los contenedores en una web, en vivo. Prometheus guarda números; los mensajes de texto se ven aquí. La alternativa estándar (Loki) pesa ~250 MB de RAM frente a los ~20 MB de dozzle, y en este host eso decide. |
+| Servicio | Perfil | Qué hace, de verdad |
+|---|---|---|
+| `prometheus` | `obs` | Pregunta cada pocos segundos "¿cómo estás?" a todos los demás y guarda las respuestas con su hora. Guarda **números**, no texto. Retiene 90 días o 2 GB. |
+| `grafana` | `grafana` | Dibuja esos números. Trae tres paneles ya montados que no hay que configurar: `lab5g-overview` y los dos de compresión (ver docs/08). Aparecen solos al arrancar. Usuario `admin`, contraseña la de tu `.env`. Se enciende a demanda. |
+| `pushgateway` | `obs` | Un buzón. Las pruebas que se ejecutan de vez en cuando —no de forma continua— dejan aquí su resultado para que Prometheus lo recoja después. |
+| `phy-sim` | `obs-extra` | Métricas teóricas de capa física (el agente Q-Learning del notebook del Lab 2). No mide la red del lab. |
+
+Las métricas del host y de cada servicio no las da un exportador: las publica
+`lab5g-stack` al pushgateway (`lab5g_host_*`, `lab5g_ct_mem_mb`). Ver
+[docs/09 §7](docs/09-arranque-seguro.md#7-métricas-lab5g_stack_-y-lab5g_host_).
 
 ### Sondas — perfil `probes`
 
@@ -485,7 +489,8 @@ estaría midiendo la red de Docker y no la red 5G, y el número no valdría nada
 | `iperf-probe` | Mide **velocidad**. Cada 5 minutos hace una transferencia de 10 s contra `dn-iperf` y deja el resultado en el `pushgateway`. |
 
 > ⚠️ `probes` **necesita** `ran` activo. Si el `ue` no existe, estos dos
-> contenedores no tienen dónde vivir y fallan al arrancar.
+> contenedores no tienen dónde vivir y fallan al arrancar. La pila no los
+> arranca: van con Compose (ver [docs/09 §9](docs/09-arranque-seguro.md#sondas-y-phy-sim-fuera-de-la-cli)).
 
 ### Compresión de paquetes — perfil `compresion`
 
@@ -501,9 +506,12 @@ por `uesimtun0`, el gNB, el túnel GTP-U y el UPF.
 |---|---|
 | `cmp-ue` | El **compresor**. Crea la interfaz `cmp0` (`10.99.0.1`) dentro del `ue`: lo que una aplicación mande a `10.99.0.2` sale comprimido como UDP:7700 hacia `cmp-dn`. |
 | `cmp-dn` | El **descompresor**, en `dn_net` (`10.100.204.30`). Reconstruye cada paquete byte a byte, lo entrega a su `cmp0` (`10.99.0.2`) y tiene sumideros en los puertos del tráfico de prueba. |
+| `envio` | La **página** para mandar un archivo real por la red 5G, ida y vuelta, a través del compresor. Vive en el netns de `cmp-dn`, que publica su puerto 8088. |
+| `envio-eco` | El otro extremo de `envio`, junto a `cmp-ue` (en el netns del `ue`). Devuelve el archivo. |
+| `cmp-gen` | Generador de tráfico variable: manda clases de paquetes sin parar para que los paneles de compresión tengan datos. Vive en el netns del `ue`. |
 
-> ⚠️ `compresion` **necesita** `ran`, igual que `probes`. No arranca con el
-> despliegue normal y el CI no lo toca. Dónde iría en una red real (PDCP), qué
+> ⚠️ `compresion` **necesita** `ran`, igual que `probes`. Lo arranca la pila
+> (`lab5g.sh start`) y el CI lo incluye en el despliegue. Dónde iría en una red real (PDCP), qué
 > se probó y los resultados: [docs/08](docs/08-compresion-paquetes.md).
 
 ---
@@ -516,7 +524,7 @@ ilegible donde lo que buscas se esconde entre miles de mensajes de otras piezas.
 
 | Red | Rango | Quién vive ahí | Para qué sirve la separación |
 |---|---|---|---|
-| `sbi_net` | `10.100.200.0/24` | Todo el plano de control, mongo, webui | Es la "oficina": las piezas del núcleo se hablan entre sí |
+| `sbi_net` | `10.100.200.0/24` | Todo el plano de control, mongo | Es la "oficina": las piezas del núcleo se hablan entre sí |
 | `n3_net` | `10.100.201.0/24` | `upf` `gnb` | Aísla el túnel de datos: `tcpdump -i any udp port 2152` sale limpio |
 | `radio_net` | `10.100.203.0/24` | `gnb` `ue` | Distingue "el teléfono no encuentra la antena" de "la antena no encuentra el núcleo" |
 | `dn_net` | `10.100.204.0/24` | `upf` `dn-iperf` `cmp-dn` | El NAT se aplica a una interfaz concreta y estable, no a "la que Docker haya llamado eth0 hoy" |
@@ -537,7 +545,7 @@ La tabla completa de direcciones y puertos está en
 
 ### La lección que hay detrás
 
-Arrancar los 22 contenedores a la vez en un host de 4 núcleos y 3.8 GB **no
+Arrancar todos los contenedores a la vez en un host de 4 núcleos y 3.8 GB **no
 funciona, y no es un problema de paciencia**. Lo que ocurre es una espiral:
 
 ```
@@ -550,29 +558,30 @@ demasiados servicios arrancando a la vez
 ```
 
 Con 26 veces más carga que núcleos disponibles, ampliar los tiempos de espera no
-arregla nada: hay que arrancar **menos cosas**. De ahí los perfiles.
+arregla nada: hay que arrancar **de una en una y con compuertas**. De ahí la pila
+escalonada ([docs/09](docs/09-arranque-seguro.md)) y los perfiles.
 
 ### Los perfiles
 
-| Comando | Contenedores | Qué obtienes |
+| Qué arranca | Contenedores | Qué obtienes |
 |---|---|---|
-| `docker compose up -d` | **10** | El núcleo 5G. Lo mínimo utilizable. |
-| `docker compose --profile ran up -d` | **13** | + antena, teléfono y destino. **Una red 5G completa y verificable.** |
-| `… --profile obs up -d` | **19** | + Grafana, Prometheus y los logs en web |
-| `… --profile obs --profile probes up -d` | **21** | + las mediciones desde dentro del teléfono |
-| `… --profile tools up -d` | **22** | + la consola web de abonados |
-| `docker compose --profile ran --profile compresion up -d` | **15** | Núcleo + RAN + el compresor de paquetes. Cabe sin `obs`. |
+| `sudo /usr/local/sbin/lab5g.sh start nucleo` | **10** | El núcleo 5G. Lo mínimo utilizable. |
+| `sudo /usr/local/sbin/lab5g.sh start nucleo ran` | **13** | + antena, teléfono y destino. **Una red 5G completa y verificable.** |
+| `sudo /usr/local/sbin/lab5g.sh start` | **20** | Todo lo que gestiona la pila: núcleo, `ran`, `compresion` y `obs`. Por etapas |
+| `sudo /usr/local/sbin/lab5g.sh grafana up` | **21** | + Grafana, a demanda |
+| `sudo /usr/local/sbin/lab5g.sh start blackbox iperf-probe` | **+2** | + las mediciones desde dentro del teléfono. Requiere `ue` arriba |
+| `sudo /usr/local/sbin/lab5g.sh start phy-sim` | **+1** | + métricas teóricas de capa física. No es de la red del lab |
 
-**Recomendación:** quédate en 13 mientras montas el laboratorio. Añade `obs`
-solo cuando `smoke-ue.sh` pase en verde, y solo si te sobran 2 GB de RAM.
+**Recomendación:** arranca con `lab5g.sh start`. Mientras montas el laboratorio,
+quédate en `nucleo ran` (13) hasta que `smoke-ue.sh` pase en verde. Los
+límites de memoria por perfil están en [docs/04 §9](docs/04-operacion.md#9-vigilar-los-recursos).
 
-> ⚠️ **Al prender el LXC vuelve todo lo que estaba corriendo al apagarlo**, con
-> todos los perfiles, porque los servicios tienen `restart: unless-stopped`. Si
-> lo apagaste con `obs` arriba, al prenderlo arrancan los 21 a la vez y el host
-> entra en la espiral de arriba (pasó el 2026-11-05: disco al 95 % durante más
-> de 10 minutos). Antes de apagar, para lo que no quieras de vuelta:
-> `docker compose --profile obs --profile probes stop`. Un contenedor parado a
-> mano no revive al arrancar.
+> ⚠️ **Al encender el LXC, la pila arranca sola, por etapas.** `lab5g-stack`
+> levanta todo lo gestionado, uno a uno, con compuertas de carga. Tarda 20–30
+> minutos y no arranca Grafana ni las sondas. Lo que hayas parado a mano **no
+> sobrevive a un reinicio**: `/run/lab5g` se vacía. Ver
+> [docs/09](docs/09-arranque-seguro.md). Con `restart: unless-stopped`, esa misma
+> situación llevó el disco al 95 % el 2026-11-05; por eso se retiró esa política.
 
 ### El detalle que confunde a todo el mundo
 
@@ -647,14 +656,14 @@ docker compose exec nrf curl -s http://nrf:8000/nnrf-nfm/v1/nf-instances | grep 
 
 ### Con Grafana
 
-Con el perfil `obs` activo, entra en `http://192.168.1.50:3000` y abre el panel
+Con Grafana encendido (`sudo /usr/local/sbin/lab5g.sh grafana up`), entra en `http://192.168.1.50:3000` y abre el panel
 **lab5g-overview**. Está montado para leerse de arriba abajo:
 
 | Fila | Qué te dice |
 |---|---|
 | Arriba | Un cuadro verde por pieza del núcleo. Rojo = esa pieza no responde. |
 | Medio | `ue_tunnel_up`: ¿existe el túnel? Latencia y velocidad medidas **desde el teléfono**. |
-| Abajo | CPU y memoria por contenedor, e **iowait** del LXC. |
+| Abajo | Presión de I/O, memoria del host y memoria por contenedor, publicadas por `lab5g-stack`. La CPU por contenedor no tiene fuente: cAdvisor está retirado. |
 
 Ese último panel es el más valioso del conjunto. En este tipo de host el cuello
 de botella real casi nunca es la CPU: es el **disco**. Cuando el `iowait` sube,
@@ -686,7 +695,7 @@ El árbol de decisión completo, con los comandos de cada rama, está en
 
 | Síntoma | Causa casi segura | Comprobación |
 |---|---|---|
-| El UPF reinicia en bucle | `gtp5g` no está cargado **en el host** | `lsmod \| grep gtp5g` en el host |
+| El UPF no arranca, o la pila lo omite | `gtp5g` no está cargado **en el host** | `lsmod \| grep gtp5g` en el host; `lab5g.sh status` |
 | El teléfono no se registra | Los tres números no coinciden, o falta el abonado | `python3 ci/check-plmn.py`, luego `bash ci/provision-subscriber.sh` |
 | Se registra pero no hay `uesimtun0` | El SMF y el UPF no se dieron la mano (N4) | `docker compose logs smf \| grep -i pfcp` |
 | El túnel sube pero no pasa nada | La antena manda los datos a la dirección equivocada | Comparar `gtpIp` de `gnb.yaml` con la IP N3 del UPF |
@@ -705,12 +714,15 @@ corta de los tres planos. Es lo que hay que adjuntar al pedir ayuda.
 ### Empezar de cero
 
 ```bash
-docker compose --profile ran --profile obs --profile probes --profile tools --profile compresion down
+sudo /usr/local/sbin/lab5g.sh stop
 ```
 
 ```bash
-docker compose up -d --wait --wait-timeout 600 mongodb && docker compose up -d && bash ci/wait-ready.sh && docker compose --profile ran up -d
+sudo /usr/local/sbin/lab5g.sh start
 ```
+
+Para volver a levantarlo: `sudo /usr/local/sbin/lab5g.sh start`, y después
+`bash ci/wait-ready.sh` si acabas de recrear el volumen de MongoDB.
 
 Fíjate en que no lleva `-v`. **`down -v` borra el volumen de MongoDB** y con él
 el abonado: si lo usas, ejecuta después `bash ci/provision-subscriber.sh`.
@@ -731,7 +743,7 @@ config/                  Configuración del núcleo free5GC — un YAML por piez
   uerouting.yaml         Rutas por abonado (se refiere a él por su IMSI)
   udrcfg / udmcfg /
   ausfcfg / pcfcfg /
-  nssfcfg / webuicfg     El resto de piezas
+  nssfcfg                El resto de piezas (webuicfg queda sin uso: la webui se retiró)
   upf-nat.sh             Da salida al tráfico del teléfono. Resuelve su
                          interfaz POR IP, no por nombre: Docker no garantiza
                          que dn_net sea siempre eth1.
@@ -743,6 +755,7 @@ ueransim/
 
 ci/                      Todo esto se puede ejecutar a mano, no solo en CI
   preflight.sh           13 comprobaciones del entorno antes de desplegar
+  capacity-check.sh      Capacidad del host antes de arrancar (RAM, swap, I/O, disco, módulos)
   check-plmn.py          Compara los tres números en los 11 sitios
   wait-ready.sh          Espera al núcleo, con presupuesto POR comprobación
   provision-subscriber.sh  Crea la SIM en MongoDB
@@ -750,10 +763,14 @@ ci/                      Todo esto se puede ejecutar a mano, no solo en CI
   collect-logs.sh        Paquete de diagnóstico
 
 deploy/                  Lo que va instalado en el LXC, fuera de Docker
+  lab5g.sh               CLI del operador: sync, check, start, stop, status, grafana, backup, restore, env-set
+  lab5g-stack.sh         Arranque por etapas y recuperación (lo ejecuta lab5g-stack.service)
+  lab5g-stack.service    Unidad de systemd de la pila
+  lab5g-backup.sh        Copia diaria de Prometheus; lab5g-backup.service y .timer la programan
   lab5g-netrules.sh      Abre el paso desde la LAN a las redes internas
   lab5g-netrules.service Para que sobreviva a los reinicios
   sudoers-lab5g-deploy   Permisos acotados del usuario del runner
-  bootstrap-runner.sh    Instala lo anterior de forma reproducible
+  bootstrap-runner.sh    Instala lo anterior de forma reproducible (no arranca nada)
 
 observability/
   prometheus/            A quién preguntar y cada cuánto
@@ -771,8 +788,8 @@ compresion/              Compresor de paquetes UE <-> DN (perfil 'compresion')
   textos/                Copia congelada de docs/01-07: el texto del tráfico de prueba
 
 .github/workflows/
-  deploy.yml               Despliegue del núcleo + RAN. Ver docs/07-cicd.md
-  deploy-observability.yml Despliegue de Grafana/Prometheus/sondas, aparte
+  deploy.yml               Despliegue de la pila: validate, capacidad, deploy, smoke, rollback. Ver docs/07-cicd.md
+  observability-control.yml  Grafana a demanda, estado y copia de Prometheus
 ```
 
 ---
@@ -791,6 +808,7 @@ Este README cubre el camino normal. Cuando necesites el "por qué":
 | [06 — PLMN e identidades](docs/06-plmn-e-identidades.md) | Vas a cambiar el operador, el IMSI o el slice |
 | [07 — CI/CD](docs/07-cicd.md) | Quieres que se despliegue solo al hacer push |
 | [08 — Compresión de paquetes](docs/08-compresion-paquetes.md) | Quieres comprimir el tráfico del UE: dónde va el compresor, qué sirve y qué no (con IA, del Lab 3 de Teoría de la Información) |
+| [09 — Arranque seguro y recuperación](docs/09-arranque-seguro.md) | Quieres saber por qué la pila arranca por etapas, qué hace la recuperación y qué comandos usar cada día |
 
 ---
 
