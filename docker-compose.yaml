@@ -537,7 +537,7 @@ services:
     mem_limit: 768m
     mem_reservation: 460m
     cpus: 1.0
-    pids_limit: 100
+    pids_limit: 512   # medido: con 100 muere ("failed to create new OS thread", errno 11); Grafana 13 usa decenas de hilos
     oom_score_adj: 800
     logging: *logging
     stop_grace_period: 20s
