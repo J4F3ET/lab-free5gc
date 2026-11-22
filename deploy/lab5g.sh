@@ -38,6 +38,9 @@ cmd_sync() {
     install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$LAB5G_DIR" 2>/dev/null || install -d "$LAB5G_DIR"
   fi
   local stage; stage=$(mktemp -d); STAGE_TMP="$stage"
+  # mktemp -d crea 0700 y rsync -a copiaria ese modo a $LAB5G_DIR: el usuario del runner (deploy)
+  # no podria entrar (fallo real del primer despliegue: "working directory /opt/lab5g ... Permission denied").
+  chmod 755 "$stage"
   trap 'rm -rf "$STAGE_TMP" "$STAGE_TMP.lista"' EXIT
   # Lista NUL-separada de archivos versionados, sin los excluidos.
   git -c safe.directory='*' -C "$src" ls-files -z \
@@ -63,6 +66,8 @@ cmd_sync() {
     find "$LAB5G_DIR" -mindepth 1 -type d -empty -not -path "$LAB5G_DIR/muestras_bandido*" -not -path "$LAB5G_DIR/.git*" -delete 2>/dev/null || true
   fi
   rm -f "$stage.lista"
+  chmod 755 "$LAB5G_DIR"
+  chmod -R go+rX "$LAB5G_DIR" 2>/dev/null || true   # el entorno vive aparte (/etc/lab5g), aqui no hay secretos
   echo "sync: $(wc -l < <(git -c safe.directory='*' -C "$src" ls-files)) archivos de $src -> $LAB5G_DIR"
 }
 
