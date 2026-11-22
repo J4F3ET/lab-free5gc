@@ -136,6 +136,19 @@ def aplicar_canal(marco: bytes, armada: dict | None) -> tuple[bytes, list[int]]:
     return canal.inyectar(marco, pos), pos
 
 
+CODEC_NA = "n/a"                # marco inválido: no hay códec que leer
+CODEC_DESCONOCIDO = "desconocido"   # id sin nombre registrado (p. ej. un bit volteado en el byte 0)
+
+
+def etiqueta_codec(codec_id: int | None) -> str:
+    """Valor de la etiqueta `codec` de las métricas: siempre de un conjunto cerrado y precargado
+    (nombres registrados, «n/a» o «desconocido»), nunca «codec_N»."""
+    if codec_id is None:
+        return CODEC_NA
+    n = nombre_codec(codec_id)
+    return CODEC_DESCONOCIDO if n == f"codec_{codec_id}" else n
+
+
 def info_codec(marco_comprimido: bytes) -> tuple[int, str, bool]:
     """(id del códec, nombre, tiene cabecera ROHC-lite) a partir del byte 0 del marco comprimido."""
     b0 = marco_comprimido[0]
@@ -205,7 +218,7 @@ class CapaFec:
         que nace ya valiendo 1 hace que increase()/rate() de Prometheus no cuenten el primer
         evento: con las series en 0 desde el arranque, la primera inyección se ve en Grafana."""
         from compresores import CODECS, CODECS_CON_PERDIDA
-        codecs = sorted(set(CODECS.values()) | set(CODECS_CON_PERDIDA.values())) + ["n/a"]
+        codecs = sorted(set(CODECS.values()) | set(CODECS_CON_PERDIDA.values())) + [CODEC_NA, CODEC_DESCONOCIDO]
         for e in ESTADOS:
             for c in codecs:
                 self.c_paquetes[(e, c)] = 0
@@ -274,7 +287,7 @@ class CapaFec:
 
     def _cerrar(self, base: dict) -> dict:
         entrada = self.registro.anotar(**base)
-        k = (entrada["estado"], entrada["codec"] or "n/a")
+        k = (entrada["estado"], etiqueta_codec(entrada["codec_id"]))
         self.c_paquetes[k] = self.c_paquetes.get(k, 0) + 1
         for s, v in entrada["sindromes"].items():
             self.c_sindrome[s] = self.c_sindrome.get(s, 0) + v
