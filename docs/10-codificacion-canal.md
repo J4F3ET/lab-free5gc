@@ -249,8 +249,8 @@ allí puede ser mayor.
 
 - `ue` y `dn` deben tener el **mismo** `FEC`. Si difieren, los marcos de un lado no
   se decodifican en el otro (estado `invalido`).
-- Un valor de `FEC` que no existe hace **caer el shim al arrancar** (`fec.buscar`
-  lanza `ValueError`).
+- Un valor de `FEC` que no existe hace **terminar el shim al arrancar** con un mensaje claro
+  (`validar_codigo`, antes de esperar a `uesimtun0`).
 - Los keepalive no pasan por la FEC.
 
 ---
@@ -291,7 +291,7 @@ hasta el cierre. Verbos:
 | `PAQUETES <desde>` | Paquetes del registro con id **mayor** que `<desde>` (exclusivo), más el código y la armada actual |
 | `INYECTAR <json>` | Arma el error: `{"bits": N}` o `{"posiciones": [...]}`, `semilla` opcional |
 | `CODIGO` | Nombre, $n$, $k$ y matrices $P$ y $H$ del código activo |
-| `CONTADORES` | Contadores del shim |
+| `CONTADORES` | Contadores acumulados desde el arranque del shim (no dependen del anillo de 200 paquetes). `POST /enviar` pide estos contadores antes y después del envío y el resumen es la diferencia; el bloque `fec` trae `resumen_fuente` (`contadores` o `anillo`, si el shim es viejo) y `truncado` (la lista de paquetes no cubre todos los nuevos) |
 
 **Endpoints HTTP** de `envio.py pagina` (en el puerto de la página):
 
@@ -333,7 +333,7 @@ volteados. Estados:
 - **limpio**: sin síndrome distinto de cero;
 - **corregido**: se localizó y corrigió un error de un bit en cada palabra afectada;
 - **no corregible**: síndrome que no coincide con ninguna columna de $H$
-  (por ejemplo, repetición (5,1) con 2 o más errores en una palabra);
+  (por ejemplo, repetición (5,1) con 2 o más errores en una palabra; ojo: $d_{min}=5$ permitiría corregir 2 con una tabla de síndromes completa, pero este decodificador solo corrige un bit por palabra);
 - **inválido**: el marco no se pudo decodificar (id de código alterado, largo
   inconsistente). No se entrega a la TUN.
 
@@ -532,12 +532,12 @@ python3 -m unittest compresion/test_compresores.py compresion/test_reproductores
 | Archivo | Qué cubre | Pruebas |
 |---|---|---|
 | `compresion/test_fec.py` | Códigos de repetición y Hamming; ejemplos exactos de clase; marco y síndromes | 18 |
-| `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas y comandos | 15 |
-| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar` y resumen de paquetes | 11 |
+| `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 24 |
+| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar` y resumen de paquetes | 18 |
 | `compresion/test_compresores.py` | Compresión (no es de FEC) | 32 |
 | `compresion/test_reproductores.py` | Reproductores de tráfico (no es de FEC) | 6 |
 
-**Resultado ejecutado en un PC con Windows:** unas 82 pruebas OK en total. Son
+**Resultado ejecutado en un PC con Windows:** 98 pruebas OK en total. Son
 pruebas unitarias; ninguna toca la TUN ni el laboratorio.
 
 **Lo que falta probar en el laboratorio (no probado):**
