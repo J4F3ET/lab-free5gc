@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
+from registro_fec import CapaFec, emitir_marco, mtu_con_fec, recibir_marco, validar_codigo
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
 PUERTO = int(os.environ.get("PUERTO", "7700"))
@@ -39,10 +40,10 @@ PUERTOS_SUMIDERO_UDP = (5683, 9000, 4000, 5004)  # los de trafico.py: aquí se d
 PUERTOS_SUMIDERO_TCP = (443, 8080)
 
 
-def abrir_tun(nombre: str, ip: str) -> int:
+def abrir_tun(nombre: str, ip: str, mtu: int = MTU) -> int:
     fd = os.open("/dev/net/tun", os.O_RDWR)
     fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", nombre.encode(), IFF_TUN | IFF_NO_PI))
-    for cmd in (f"ip addr add {ip}/30 dev {nombre}", f"ip link set dev {nombre} mtu {MTU}",
+    for cmd in (f"ip addr add {ip}/30 dev {nombre}", f"ip link set dev {nombre} mtu {mtu}",
                 f"ip link set dev {nombre} up"):
         subprocess.run(cmd.split(), check=False)
     return fd
@@ -75,6 +76,7 @@ class Metricas:
         self.c = {"orig_tx": 0, "marco_tx": 0, "orig_rx": 0, "marco_rx": 0, "errores": 0}
         self.codec = {n: 0 for n in [*CODECS.values(), *CODECS_CON_PERDIDA.values()]}
         self.emisor = None   # el EmisorAdaptativo de este lado: de ahí salen las métricas del bandido
+        self.fec = None      # la CapaFec de este lado (None = FEC apagado: no se publica nada de FEC)
 
     def texto(self) -> str:
         l = f'lado="{self.lado}"'
@@ -82,6 +84,8 @@ class Metricas:
                     for k, v in self.c.items() if k != "errores")
         s += f"lab5g_cmp_errores{{{l}}} {self.c['errores']}\n"
         s += "".join(f'lab5g_cmp_paquetes{{{l},codec="{n}"}} {v}\n' for n, v in self.codec.items())
+        if self.fec is not None:
+            s += self.fec.texto(l)
         return s + (texto_bandido(self.emisor, l) if self.emisor is not None else "")
 
     def publicar(self) -> None:
@@ -116,6 +120,38 @@ def servir_contadores(met: Metricas, puerto: int) -> None:
     threading.Thread(target=atender, daemon=True).start()
 
 
+def servir_fec(capa: CapaFec, puerto: int) -> None:
+    """Comandos de la capa FEC (PAQUETES / INYECTAR / CODIGO / CONTADORES), SOLO en 127.0.0.1. El cliente manda
+    UNA línea (tope 4 KB, 2 s) y lee el JSON de respuesta hasta el cierre. Se atiende de a una
+    conexión: con pids_limit 64 no se abren hilos por conexión."""
+    import json
+
+    def atender():
+        s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", puerto)); s.listen(8)
+        while True:
+            try:
+                c, _ = s.accept()
+                with c:
+                    c.settimeout(2.0)
+                    datos = b""
+                    while b"\n" not in datos and len(datos) < 4096:
+                        trozo = c.recv(4096 - len(datos))
+                        if not trozo:
+                            break
+                        datos += trozo
+                    if b"\n" not in datos and len(datos) >= 4096:
+                        resp = {"ok": False, "error": "línea de más de 4096 bytes"}
+                    else:
+                        resp = capa.responder(datos.split(b"\n")[0].decode("utf-8", "replace"))
+                    c.sendall(json.dumps(resp).encode())
+            except Exception as e:  # nada debe matar este hilo (un OSError, un JSON raro...)
+                print(f"[cmp-{capa.lado}] servidor FEC: {e!r}"[:200], flush=True)
+                time.sleep(0.05)
+
+    threading.Thread(target=atender, daemon=True).start()
+
+
 def esperar_interfaz(nombre: str, segundos: int = 300) -> None:
     for _ in range(segundos):
         if Path(f"/sys/class/net/{nombre}").exists():
@@ -141,10 +177,21 @@ def main() -> None:
     lado = sys.argv[1] if len(sys.argv) > 1 else ""
     if lado not in ("ue", "dn"):
         sys.exit("uso: shim.py ue|dn")
+    # FEC de clase (síndrome): apagado si FEC está vacío o ausente. ue y dn deben usar el mismo valor.
+    # Se valida ANTES de esperar uesimtun0: un valor malo debe fallar al instante y con mensaje claro.
+    capa = None
+    if os.environ.get("FEC"):
+        try:
+            validar_codigo(os.environ["FEC"])
+        except ValueError as e:
+            sys.exit(f"[cmp-{lado}] {e}")
+        capa = CapaFec(os.environ["FEC"], lado)
     modelo = Modelo.cargar(os.environ.get("MODELO", Path(__file__).with_name("modelo.json")))
     if lado == "ue":
         esperar_interfaz("uesimtun0")  # sin sesión PDU no hay por dónde mandar nada
-    tun = abrir_tun("cmp0", "10.99.0.1" if lado == "ue" else "10.99.0.2")
+    # Con FEC el marco crece n/k: el MTU de cmp0 baja para que quepa en uesimtun0 (ver registro_fec.py)
+    tun = abrir_tun("cmp0", "10.99.0.1" if lado == "ue" else "10.99.0.2",
+                    mtu_con_fec(capa.codigo) if capa else MTU)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip_de("uesimtun0") if lado == "ue" else "0.0.0.0", PUERTO))
     par = (os.environ.get("PAR", "10.100.204.30"), PUERTO) if lado == "ue" else None
@@ -169,6 +216,9 @@ def main() -> None:
     rx = Descompresor(modelo)
     met = Metricas(lado)
     met.emisor = emisor
+    met.fec = capa
+    if capa:
+        servir_fec(capa, int(os.environ.get("PUERTO_FEC") or "7702"))
     servir_contadores(met, int(os.environ.get("PUERTO_CONTADORES", "7701")))
     ultimo_pub = ultimo_ka = 0.0
     print(f"[cmp-{lado}] listo: cmp0 ↔ UDP {PUERTO}" + (f" → {par[0]}" if par else "")
@@ -182,6 +232,7 @@ def main() -> None:
             pkt = os.read(tun, 65535)
             if par is not None:
                 marco, cod = emisor.enviar(pkt)
+                marco = emitir_marco(capa, marco)   # sin FEC: el mismo marco; el keepalive no pasa por aquí
                 sock.sendto(marco, par)
                 met.c["orig_tx"] += len(pkt); met.c["marco_tx"] += len(marco)
                 met.codec[nombre_codec(cod)] += 1
@@ -189,7 +240,16 @@ def main() -> None:
             marco, origen = sock.recvfrom(65535)
             if lado == "dn":
                 par = origen  # la dirección del UE tras el NAT del UPF
-            if marco != KEEPALIVE:
+            if marco != KEEPALIVE and capa:
+                def escribir(pkt: bytes) -> None:
+                    os.write(tun, pkt)
+                    met.c["marco_rx"] += len(marco); met.c["orig_rx"] += len(pkt)
+                _, _, e = recibir_marco(capa, rx, marco, escribir)
+                if e is not None:  # marco inválido o descompresión fallida: igual que sin FEC
+                    met.c["errores"] += 1
+                    if met.c["errores"] < 20:
+                        print(f"[cmp-{lado}] no se pudo descomprimir: {e!r}", flush=True)
+            elif marco != KEEPALIVE:
                 try:
                     pkt = rx.desempaquetar(marco)
                     os.write(tun, pkt)

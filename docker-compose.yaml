@@ -392,6 +392,8 @@ services:
       PUSHGATEWAY: http://10.100.205.14:9091
       VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # vacio = bandido premiado por ahorro
       PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
+      FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
+      PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]
     devices: [ "/dev/net/tun:/dev/net/tun" ]
@@ -422,6 +424,8 @@ services:
       PUSHGATEWAY: http://10.100.205.14:9091
       VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # p. ej. 1000000 con tc a 1 Mbps
       PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
+      FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
+      PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]
     devices: [ "/dev/net/tun:/dev/net/tun" ]
@@ -446,6 +450,7 @@ services:
     entrypoint: [ "python3", "-u", "/cmp/envio.py", "pagina" ]
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
+      PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC del shim de cmp-dn (127.0.0.1 del mismo netns)
     volumes: [ ./compresion:/cmp:ro ]
     network_mode: "service:cmp-dn"  # ve el cmp0 10.99.0.2 y los contadores de cmp-dn
     depends_on: [ cmp-dn ]

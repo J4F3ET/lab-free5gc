@@ -12,9 +12,9 @@ síndrome. La teoría sigue la notación del apunte de clase del 9 de noviembre 
 - [1. Objetivo y alcance de esta entrega](#1-objetivo-y-alcance-de-esta-entrega)
 - [2. Teoría de clase](#2-teoría-de-clase)
 - [3. Dónde encaja en el proyecto](#3-dónde-encaja-en-el-proyecto)
-- [4. Inyección manual del error (diseño)](#4-inyección-manual-del-error-diseño)
-- [5. Visualización «Laboratorio de síndrome» (diseño)](#5-visualización-laboratorio-de-síndrome-diseño)
-- [6. Grafana (diseño, pendiente de aprobación)](#6-grafana-diseño-pendiente-de-aprobación)
+- [4. Inyección manual del error](#4-inyección-manual-del-error)
+- [5. Visualización «Laboratorio de síndrome»](#5-visualización-laboratorio-de-síndrome)
+- [6. Grafana (tablero `lab5g-cmp-fec`)](#6-grafana-tablero-lab5g-cmp-fec)
 - [7. Relación con la compresión](#7-relación-con-la-compresión)
 - [8. Estado del arte](#8-estado-del-arte)
 - [9. Hoja de ruta: siguiente entrega](#9-hoja-de-ruta-siguiente-entrega)
@@ -34,8 +34,10 @@ detectarse y, si el error es de un bit y el código lo permite, corregirse en
   - **Repetición (5,1)**: cada bit se envía cinco veces.
   - **Hamming (7,4)**: cuatro bits de mensaje y tres de paridad.
 - Decodificación por **síndrome**, tal como aparece en el apunte.
-- **Inyección de error solo manual**: la página de envío pide voltear bits del
-  siguiente paquete. No hay canal aleatorio.
+- **Inyección de error solo manual**: la página de envío pide voltear de 1 a 8
+  bits del siguiente marco que reciba `cmp-dn`. No hay canal aleatorio.
+- Integración en el shim (`shim.py`), servidor de línea y endpoints HTTP, página
+  «Laboratorio de síndrome» y métricas `lab5g_cmp_fec_*`.
 
 **Siguiente entrega (no implementado aquí):** SECDED, CRC, entrelazado,
 Reed-Solomon, paridad entre paquetes, modelos de canal aleatorios (BSC, ráfagas
@@ -43,14 +45,21 @@ Gilbert-Elliott, borrado) y RaptorQ. Ver [§9](#9-hoja-de-ruta-siguiente-entrega
 
 **Estado de la implementación**
 
+El código está escrito y tiene pruebas unitarias (82 pruebas en los cinco archivos
+de [§10](#10-cómo-probar), ejecutadas en un PC con Windows). **No se ha probado de
+extremo a extremo en el laboratorio real**: en Windows no hay TUN, así que
+`shim.py` no se ha ejecutado con tráfico de verdad. Lo que falta probar está en
+[§10](#10-cómo-probar).
+
 | Pieza | Estado |
 |---|---|
-| `compresion/fec.py` (códigos de repetición y Hamming, interfaz `CodigoCanal`) | Implementado y probado (`python -m unittest compresion/test_fec.py`: 18 pruebas OK) |
-| `compresion/canal.py` (`inyectar` y `elegir_posiciones`: voltea bits indicados) | Implementado y probado |
-| `compresion/test_fec.py` | Implementado; los ejemplos de clase son pruebas exactas. Se ejecuta en `deploy.yml` |
-| Integración en `compresion/shim.py` | Diseñado, pendiente |
-| Endpoint local de inyección y página de envío | Diseñado, pendiente |
-| Paneles de Grafana y métricas `lab5g_cmp_fec_*` | Diseñado, pendiente de aprobación |
+| `compresion/fec.py` (códigos de repetición y Hamming, `CodigoLineal`, `codificar`/`decodificar` sobre bytes) | Implementado y probado con pruebas unitarias; los ejemplos de clase son pruebas exactas |
+| `compresion/canal.py` (`inyectar` y `elegir_posiciones`) | Implementado y probado con pruebas unitarias |
+| `compresion/registro_fec.py` (`RegistroFec`, `CapaFec`, `mtu_con_fec`, `aplicar_canal`) | Implementado y probado con pruebas unitarias (sin TUN ni sockets) |
+| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada; **no probada en el laboratorio** |
+| Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); **la página no se ha usado contra un shim real** |
+| Métricas `lab5g_cmp_fec_*` | Implementadas en el shim; **no verificadas en el pushgateway** |
+| Tablero de Grafana | **Construido** (`lab5g-cmp-fec`; no visto aún en un Grafana real) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
 
 ---
 
@@ -154,118 +163,234 @@ recupera $\mathbf c$.
 ## 3. Dónde encaja en el proyecto
 
 La protección va **dentro de la sesión PDU**, entre el marco comprimido y el
-socket del shim. No modifica el `Compresor` ni el bandido UCB.
+socket del shim. No modifica el `Compresor` ni el bandido UCB. Se activa con la
+variable de entorno `FEC` (`hamming_7_4` o `repeticion_5_1`; vacía = sin FEC), que
+`docker-compose.yaml` pasa igual a `cmp-ue` y `cmp-dn`.
 
 ```
  cmp-ue                                                       cmp-dn
  app ─▶ Compresor (ROHC + códec elegido por el bandido)
-          │  marco comprimido
+          │  marco comprimido (su byte 0 lleva el id del códec)
           ▼
-       FEC: codifica el contenido ──▶ palabras código
+       FEC: codifica [seq 2 B][largo 2 B][marco comprimido] ──▶ palabras código
           │
           ▼
-       marco = [1 B id códec][palabras]  ──▶ sendto (shim) ─▶ uesimtun0 ─▶ gNB ─▶ GTP-U ─▶ UPF ─▶ ...
+       marco = [1 B id del CÓDIGO FEC][palabras]  ──▶ sendto (shim) ─▶ uesimtun0 ─▶ gNB ─▶ GTP-U ─▶ UPF ─▶ ...
                                                                                                 │
- ... ─▶ recvfrom ─▶ FEC: decodifica por síndrome ─▶ Descompresor ─▶ entrega
+ ... ─▶ recvfrom ─▶ [canal: voltea los bits armados] ─▶ FEC: decodifica por síndrome ─▶ Descompresor ─▶ TUN
 ```
 
-**Formato del marco**
+**Formato del marco en el cable**
 
 | Parte | Tamaño | Protegida por FEC |
 |---|---|---|
-| Id del códec | 1 B | **No.** Viaja sin protección |
+| Id del **código FEC** (1 = repetición (5,1), 2 = Hamming (7,4)) | 1 B (byte 0) | **No.** Viaja sin protección |
 | Palabras código del contenido | variable | Sí |
 
-El **contenido codificado** antes de la FEC es:
+El **contenido codificado** (lo que entra a la FEC) es:
 
 | Campo | Tamaño |
 |---|---|
-| Número de secuencia | 2 B |
+| Número de secuencia (propio de la FEC, módulo 65536) | 2 B |
 | Largo de los datos | 2 B |
-| Datos comprimidos | variable |
+| Marco comprimido (su byte 0: id del códec del bandido en los 4 bits bajos; el bit 7 indica cabecera ROHC-lite) | variable |
 
-**Consecuencia.** Si el bit del id se voltea, el receptor usa el descompresor
-equivocado y el paquete sale mal aunque la FEC haya corregido todo. Es un límite
-aceptado en esta entrega; ver [§7](#7-relación-con-la-compresión).
+El contenido se rellena con ceros hasta un múltiplo de $k$ bits. El **id del
+códec del bandido va protegido**: está dentro de las palabras código, no en el
+byte 0 del cable.
+
+**Qué pasa si se voltea el byte 0.** Es el id del código FEC y no está
+protegido. Si se altera, `fec.decodificar` lanza `ValueError` (id desconocido o
+que no corresponde al código configurado), el marco no se entrega a la TUN, el
+paquete queda con estado **`invalido`** y suma al contador de errores del shim.
+La inyección manual nunca toca el byte 0 (solo posiciones desde el bit 8), así
+que este caso se comprueba con pruebas unitarias y no desde la página.
 
 **Módulos**
 
-- `compresion/fec.py`: códigos de bloque lineales bajo una interfaz común
-  `CodigoCanal` (codificar y decodificar por síndrome). Es el punto de enchufe de
-  las siguientes entregas.
-- `compresion/canal.py`: encadena FEC y marco, aplica la inyección de error y
-  registra qué bits se voltearon.
+- `compresion/fec.py`: códigos de bloque lineales (`CodigoLineal`; instancias
+  `REPETICION_5_1` y `HAMMING_7_4`), con `codificar`, `decodificar` por síndrome y
+  `buscar` (por objeto, id o nombre). Es el punto de enchufe de las siguientes
+  entregas.
+- `compresion/canal.py`: `inyectar` (voltea los bits indicados) y
+  `elegir_posiciones` (elige posiciones al azar, con semilla opcional).
+- `compresion/registro_fec.py`: `RegistroFec` (anillo con los últimos 200
+  paquetes, id incremental desde 1), `CapaFec` (secuencia, canal armado, registro,
+  contadores y comandos), `mtu_con_fec` y `aplicar_canal`. Es puro: no abre TUN ni
+  sockets, y por eso se puede probar sin laboratorio.
+- `compresion/shim.py`: crea la `CapaFec` si `FEC` está definida, abre `cmp0` con
+  el MTU que corresponde y sirve la línea de comandos.
+- `compresion/envio.py`: endpoints HTTP y página de la [§5](#5-visualización-laboratorio-de-síndrome).
+- Pruebas: `test_fec.py`, `test_registro_fec.py` y `test_envio_fec.py` (más
+  `test_compresores.py` y `test_reproductores.py`, que no son de FEC).
 
-**Estado** de esta integración: diseñada, pendiente. Los módulos y sus pruebas
-ya existen; la integración en `shim.py` aún no.
+### 3.1 MTU de cmp0 con FEC
+
+Con FEC el marco crece $n/k$, así que el MTU de `cmp0` baja para que el marco
+quepa en `uesimtun0` (MTU 1464, menos 28 B de IP y UDP del túnel). La variable
+`CMP_MTU` **se ignora** cuando hay FEC. La fórmula (`mtu_con_fec`):
+
+$$\text{bloques}=\left\lfloor\frac{8\,(1464-28-1)}{n}\right\rfloor\qquad
+L_{max}=\left\lfloor\frac{\text{bloques}\cdot k-32}{8}\right\rfloor\qquad
+\text{MTU}=L_{max}-36$$
+
+Resultado: **780** con Hamming (7,4) y **247** con repetición (5,1). Sin FEC sigue
+valiendo `CMP_MTU` (1400 por defecto).
+
+### 3.2 Costo de CPU
+
+La FEC corre **en el bucle principal** del shim, el mismo que lee la TUN y el
+socket. Medido en un PC (no en el LXC 110): unos 2 a 4 ms por paquete de 780 B con
+Hamming (7,4) y hasta unos 12 ms con repetición (5,1). **No está medido en el
+LXC 110**, que es más lento y sufre con la carga de E/S, así que el costo real
+allí puede ser mayor.
+
+### 3.3 Configuración y avisos
+
+- `ue` y `dn` deben tener el **mismo** `FEC`. Si difieren, los marcos de un lado no
+  se decodifican en el otro (estado `invalido`).
+- Un valor de `FEC` que no existe hace **terminar el shim al arrancar** con un mensaje claro
+  (`validar_codigo`, antes de esperar a `uesimtun0`).
+- Los keepalive no pasan por la FEC.
 
 ---
 
-## 4. Inyección manual del error (diseño)
+## 4. Inyección manual del error
 
-La página de envío ([docs/08 §4.9](08-compresion-paquetes.md)) permite pedir un
-error antes de que el paquete salga. Diseño:
+La página de envío ([docs/08 §4.9](08-compresion-paquetes.md)) permite armar un
+error antes de mandar un archivo.
 
-1. La página llama a un endpoint local del shim con una de estas órdenes: voltear
-   $N$ bits elegidos al azar dentro de las palabras, o voltear el bit $k$.
-2. El shim aplica la orden **al siguiente paquete**, después de codificarlo y
-   antes de `sendto`.
-3. Se calcula $\mathbf r=\mathbf c+\mathbf e$, donde $\mathbf e$ tiene un 1 en
-   cada bit volteado.
-4. Se registra qué bits se volteron, en qué paquete y con qué resultado tras
-   decodificar.
+**Dónde se aplica.** El error se inyecta en la **recepción del shim de `cmp-dn`**,
+antes de decodificar. Equivale a un canal ruidoso entre codificar y decodificar, y
+deja todo el registro en un solo proceso. Consecuencia: **solo se ve el tráfico que
+recibe `cmp-dn`**, por ejemplo la vuelta del eco. El tráfico que `cmp-dn` envía y
+recibe el UE no pasa por este canal.
 
-**Decisión de diseño.** La inyección solo cambia bits de las palabras, no el id
-del códec. Así el experimento mide la protección de la FEC y no un fallo del
-identificador, que está fuera de la protección. Ese caso se puede estudiar
-aparte.
+**Cómo funciona**
 
-El error se aplica por orden, no por canal aleatorio. El canal aleatorio es
+1. La página (o un cliente HTTP) arma el error: voltear $N$ bits al azar, con $N$
+   entre 1 y 8, o voltear posiciones exactas (enteros $\ge 8$ dentro del marco).
+2. El shim lo guarda como «armada» y la aplica **al siguiente marco FEC que
+   reciba**; después se desarma sola.
+3. Se calcula $\mathbf r=\mathbf c+\mathbf e$, donde $\mathbf e$ tiene un 1 en cada
+   bit volteado, y recién entonces se decodifica por síndrome.
+4. El paquete queda en el registro con los bits volteados, los síndromes, las
+   posiciones corregidas y el estado.
+
+**Decisión de diseño.** La inyección solo cambia bits de las palabras código
+(desde el bit 8), nunca el byte 0 (id del código FEC). Así el experimento mide la
+protección de la FEC y no un fallo del identificador, que está fuera de la
+protección.
+
+**Servidor de línea** en `127.0.0.1:7702` (variable `PUERTO_FEC`), solo local al
+netns del shim. El cliente manda **una línea** (hasta 4 KB, 2 s) y lee el JSON
+hasta el cierre. Verbos:
+
+| Verbo | Efecto |
+|---|---|
+| `PAQUETES <desde>` | Paquetes del registro con id **mayor** que `<desde>` (exclusivo), más el código y la armada actual |
+| `INYECTAR <json>` | Arma el error: `{"bits": N}` o `{"posiciones": [...]}`, `semilla` opcional |
+| `CODIGO` | Nombre, $n$, $k$ y matrices $P$ y $H$ del código activo |
+| `CONTADORES` | Contadores acumulados desde el arranque del shim (no dependen del anillo de 200 paquetes). `POST /enviar` pide estos contadores antes y después del envío y el resumen es la diferencia; el bloque `fec` trae `resumen_fuente` (`contadores` o `anillo`, si el shim es viejo) y `truncado` (la lista de paquetes no cubre todos los nuevos) |
+
+**Endpoints HTTP** de `envio.py pagina` (en el puerto de la página):
+
+| Endpoint | Efecto |
+|---|---|
+| `GET /fec/codigo` | Equivale a `CODIGO` |
+| `GET /fec/paquetes?desde=<id>` | Equivale a `PAQUETES <id>` |
+| `POST /fec/inyectar` | Equivale a `INYECTAR`; cuerpo JSON de hasta 1 KB, con `bits` entre 1 y 8, o hasta 8 `posiciones` $\ge 8$. **`Content-Type: application/json` es obligatorio** |
+| `POST /enviar` con cabecera `X-Inyectar: N` | Arma $N$ bits (1 a 8) justo antes de mandar el archivo y devuelve en el resultado los paquetes FEC observados y su resumen |
+
+Si el shim no responde (sin FEC o `cmp-dn` caído), los endpoints `/fec/*` devuelven 503.
+
+**Seguridad.** La página **no tiene login**: quien esté en la LAN puede armar
+errores mientras la FEC esté activa. Debe exponerse solo en la LAN o la tailnet,
+**nunca por Funnel**.
+
+El error se aplica por orden manual, no por canal aleatorio. El canal aleatorio es
 parte de la siguiente entrega.
 
 ---
 
-## 5. Visualización «Laboratorio de síndrome» (diseño)
+## 5. Visualización «Laboratorio de síndrome»
 
-Dos niveles, para no saturar la vista:
+Es la segunda pestaña de la página de envío. Consulta `GET /fec/paquetes` cada
+1,5 s. Todo texto que llega del shim se inserta como texto, no como HTML.
 
-**Nivel 1, paquetes.** Una fila por paquete con:
+**Código activo.** Dibuja las matrices $G=[P:I_k]$ y $H=[I:P^{T}]$, con la parte
+de paridad sombreada. Si el shim no tiene FEC, lo indica y la pestaña de envío
+sigue funcionando.
 
-- número de secuencia;
-- códec elegido por el bandido UCB;
-- estado: **limpio** (sin error), **corregido** (error de un bit localizado y
-  corregido) o **no corregible** (síndrome que no se resuelve o error de más de
-  un bit).
+**Inyección.** Botones para armar 1 bit, 2 bits o un bit exacto (entero $\ge 8$), y
+una línea que dice qué hay armado.
 
-Los bits no aparecen en este nivel.
+**Nivel 1: línea y tabla de paquetes.** Una casilla por paquete y una tabla (últimos
+100, con filtro por estado) con: id, lado, secuencia, códec elegido por el bandido
+UCB, estado, síndromes distintos de cero, corregidas, no corregibles y bits
+volteados. Estados:
 
-**Nivel 2, detalle de un paquete.** Al abrir un paquete se muestra el proceso
-paso a paso:
+- **limpio**: sin síndrome distinto de cero;
+- **corregido**: se localizó y corrigió un error de un bit en cada palabra afectada;
+- **no corregible**: síndrome que no coincide con ninguna columna de $H$
+  (por ejemplo, repetición (5,1) con 2 o más errores en una palabra; ojo: $d_{min}=5$ permitiría corregir 2 con una tabla de síndromes completa, pero este decodificador solo corrige un bit por palabra);
+- **inválido**: el marco no se pudo decodificar (id de código alterado, largo
+  inconsistente). No se entrega a la TUN.
 
-1. Códec elegido.
-2. Marco: id, luego palabras código.
-3. Palabras con la paridad resaltada.
-4. Bits volteados por la inyección, marcados en la palabra recibida.
-5. Síndrome $\mathbf s=\mathbf rH^{T}$ calculado.
-6. Columna de $H$ que coincide con $\mathbf s$, si la hay.
-7. Bit corregido y palabra resultante.
+**Nivel 2: detalle de un paquete.** Al abrirlo se lista paso a paso:
 
-Los bits solo aparecen en el detalle.
+1. Códec elegido (nombre e id), lado, secuencia y código.
+2. Bytes comprimidos, bytes con paridad (sobrecoste) y número de palabras.
+3. Bits volteados en el canal, con su posición en el marco.
+4. Cada síndrome observado ($\mathbf s\neq 0$), cuántas veces apareció, qué
+   columna de $H$ coincide y cuántas palabras se corrigieron.
+5. Lista de correcciones (palabra y posición corregida). La numeración de las
+   posiciones es **desde 1**, como en clase.
+6. Resultado e íntegro (ver el límite de abajo).
+
+**Lo que NO está implementado.** El detalle **no dibuja las palabras una por una**
+con la paridad resaltada, ni la palabra recibida con los bits volteados marcados,
+ni la palabra corregida. Solo se dibujan las matrices $G$ y $H$; el resto es texto
+con los síndromes y las posiciones.
+
+**Límites que hay que saber al leer los resultados**
+
+- Un paquete **`no_corregible` se entrega igual a la TUN**: el shim descomprime lo
+  que decodificó, aunque sea basura.
+- **`integro` solo significa «descomprimió sin excepción»**. El receptor no tiene
+  el paquete original, así que no se compara con él. Una corrección errónea
+  puede dar `integro = sí` con datos distintos; lo detectaría el checksum de IP,
+  TCP o UDP de la aplicación. En `/enviar`, `sha_identico` sí compara el archivo
+  de ida con el de vuelta.
+- Con **2 errores en una misma palabra Hamming (7,4)** el decodificador corrige mal
+  sin avisar (ver [§7](#7-relación-con-la-compresión)).
 
 ---
 
-## 6. Grafana (diseño, pendiente de aprobación)
+## 6. Grafana (tablero `lab5g-cmp-fec`)
 
 Regla del proyecto: pocos paneles y cada uno con su explicación. Cada panel se
 describe con **Significado / Cómo funciona / Eje X / Eje Y / A qué responde**.
-Ningún panel se construye sin aprobación previa.
+**El tablero está construido:** `lab5g-cmp-fec`, «Codificación de canal (síndrome)»,
+generado por `observability/grafana/dashboards_compresion.py` en
+`observability/grafana/provisioning/dashboards/json/lab5g-cmp-fec.json` (se provisiona
+solo). Tiene un texto de ayuda y cuatro paneles (los 2, 3 y 4 de abajo tal cual; el 1
+se construyó como «Qué pasó con los paquetes», barras por estado, porque no hay
+contadores por etapa). Menús `lado` y `codigo`. **No se ha visto aún en un Grafana real.**
 
-Métricas previstas, prefijo `lab5g_cmp_fec_*` (nombres por definir al
-implementar):
+**Métricas ya implementadas** en `shim.py`, empujadas al pushgateway cada 10 s, con
+las etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **No se han
+visto aún en el pushgateway real.** Solo aparecen si el shim tiene FEC activa.
 
-- contador de paquetes por estado (limpio, corregido, no corregible);
-- contador de síndromes por valor;
-- contador de bits volteados por inyección.
+| Métrica | Etiquetas extra | Qué cuenta |
+|---|---|---|
+| `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, no_corregible, invalido) y códec |
+| `lab5g_cmp_fec_sindrome_total` | `sindrome` | Palabras por valor de síndrome distinto de cero |
+| `lab5g_cmp_fec_bits_inyectados_total` | ninguna | Bits volteados por la inyección |
+| `lab5g_cmp_fec_palabras_total` | ninguna | Palabras código decodificadas |
+| `lab5g_cmp_fec_bytes_total` | `tipo` (`comprimido`, `fec`) | Bytes emitidos antes y después de añadir la paridad |
+
+El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (recibidos, entregados) que las métricas actuales no tienen; en su lugar el tablero muestra los paquetes por estado.
 
 **Panel 1. Embudo del flujo**
 
@@ -400,15 +525,38 @@ punto que la inyección manual.
 
 ## 10. Cómo probar
 
+Desde la raíz del repositorio, con Python 3. Son los cinco archivos que corre el
+paso «Pruebas de compresion» del workflow
+[`deploy.yml`](../.github/workflows/deploy.yml):
+
 ```bash
-python -m unittest compresion/test_fec.py
+python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py
 ```
 
-Esta prueba se ejecuta también en el paso «Pruebas de compresion» del workflow
-[`deploy.yml`](../.github/workflows/deploy.yml).
+| Archivo | Qué cubre | Pruebas |
+|---|---|---|
+| `compresion/test_fec.py` | Códigos de repetición y Hamming; ejemplos exactos de clase; marco y síndromes | 18 |
+| `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 24 |
+| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar` y resumen de paquetes | 18 |
+| `compresion/test_compresores.py` | Compresión (no es de FEC) | 32 |
+| `compresion/test_reproductores.py` | Reproductores de tráfico (no es de FEC) | 6 |
 
-**Resultados.** Aún no hay resultados de pruebas. Esta sección se rellenará
-cuando se ejecuten.
+**Resultado ejecutado en un PC con Windows:** 98 pruebas OK en total. Son
+pruebas unitarias; ninguna toca la TUN ni el laboratorio.
+
+**Lo que falta probar en el laboratorio (no probado):**
+
+- Levantar `cmp-ue` y `cmp-dn` con el mismo `FEC` y comprobar que el MTU de `cmp0`
+  queda en 780 (Hamming (7,4)) o 247 (repetición (5,1)).
+- Prueba de extremo a extremo con envío de un archivo desde la página: que el
+  archivo vuelva idéntico (`sha_identico`) sin inyección.
+- Inyección de 1 bit: comprobar que aparecen paquetes `corregido` y que el archivo
+  vuelve idéntico.
+- Inyección de 2 bits con Hamming (7,4): ver la corrección errónea descrita en la
+  [§7](#7-relación-con-la-compresión).
+- Que las métricas `lab5g_cmp_fec_*` lleguen al pushgateway con las etiquetas
+  `lado` y `codigo`.
+- El costo de CPU de la FEC en el LXC 110 y su efecto en el rendimiento del túnel.
 
 ---
 
