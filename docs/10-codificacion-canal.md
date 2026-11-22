@@ -333,6 +333,12 @@ volteados. Estados:
 
 - **limpio**: sin síndrome distinto de cero;
 - **corregido**: se localizó y corrigió un error de un bit en cada palabra afectada;
+- **corregido_mal** («corrigió mal»; estado añadido tras la verificación del 22-11):
+  el síndrome indicó una corrección (`corregido`) pero el paquete no se pudo
+  reconstruir (`integro = false`: la descompresión falla o la TUN lo rechaza). Es lo
+  que pasa típicamente con 2 errores en una palabra Hamming (7,4). No se confunde con
+  `corregido` (íntegro), `no_corregible` ni `invalido`. El contador `corregidas` de
+  palabras no cambia; solo cambia el estado del paquete;
 - **no corregible**: síndrome que no coincide con ninguna columna de $H$
   (por ejemplo, repetición (5,1) con 2 o más errores en una palabra; ojo: $d_{min}=5$ permitiría corregir 2 con una tabla de síndromes completa, pero este decodificador solo corrige un bit por palabra);
 - **inválido**: el marco no se pudo decodificar (id de código alterado, largo
@@ -364,7 +370,9 @@ con los síndromes y las posiciones.
   TCP o UDP de la aplicación. En `/enviar`, `sha_identico` sí compara el archivo
   de ida con el de vuelta.
 - Con **2 errores en una misma palabra Hamming (7,4)** el decodificador corrige mal
-  sin avisar (ver [§7](#7-relación-con-la-compresión)).
+  sin avisar en el síndrome (ver [§7](#7-relación-con-la-compresión)). Si el paquete
+  no se reconstruye, hoy queda como `corregido_mal`; si se reconstruye (por ejemplo,
+  el error cae en bytes que no afectan al contenido), sigue contando como `corregido`.
 
 ---
 
@@ -385,7 +393,7 @@ visto aún en el pushgateway real.** Solo aparecen si el shim tiene FEC activa.
 
 | Métrica | Etiquetas extra | Qué cuenta |
 |---|---|---|
-| `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, no_corregible, invalido) y códec |
+| `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, corregido_mal, no_corregible, invalido) y códec |
 | `lab5g_cmp_fec_sindrome_total` | `sindrome` | Palabras por valor de síndrome distinto de cero |
 | `lab5g_cmp_fec_bits_inyectados_total` | ninguna | Bits volteados por la inyección |
 | `lab5g_cmp_fec_palabras_total` | ninguna | Palabras código decodificadas |
@@ -405,7 +413,7 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
 
 **Panel 2. Paquetes por estado en el tiempo**
 
-- **Significado:** la evolución de limpios, corregidos y no corregibles.
+- **Significado:** la evolución de limpios, corregidos, corregidos mal y no corregibles.
 - **Cómo funciona:** serie temporal apilada.
 - **Eje X:** tiempo.
 - **Eje Y:** paquetes por ventana.
@@ -452,7 +460,7 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
 - **Límite de Hamming (7,4).** Con dos errores, el síndrome nunca vale 0, así que
   el error se nota. Pero en Hamming (7,4) cada síndrome no nulo coincide con la
   columna de algún bit, y la suma de dos columnas es siempre una tercera columna.
-  El decodificador **corrige mal sin avisar** en el contador de síndromes: el estado queda `corregido`, aunque el paquete puede salir no íntegro (la descompresión falla o la TUN lo rechaza) y entonces suma a `lab5g_cmp_errores`; el tablero lo cuenta igualmente como corrección. Esta es la razón de la siguiente
+  El decodificador **corrige mal sin avisar** en el contador de síndromes: el estado queda `corregido` si el paquete aun así se reconstruye, y `corregido_mal` si sale no íntegro (la descompresión falla o la TUN lo rechaza; entonces suma además a `lab5g_cmp_errores`). Nota: el estado `corregido_mal` se añadió tras la verificación del 22-11; antes el tablero contaba esos paquetes como corrección exitosa. Esta es la razón de la siguiente
   entrega (SECDED, §9).
 
 ---
@@ -558,7 +566,7 @@ pruebas unitarias; ninguna toca la TUN ni el laboratorio.
 
 - La orden de inyección la gasta el siguiente marco que recibe `cmp-dn`, normalmente de `cmp-gen`.
 - Una ráfaga de 64 marcos `invalido` justo tras activar `FEC` en `cmp-dn`: durante el cambio los dos lados llevaban valores distintos. Cambiar `FEC` siempre en ambos lados.
-- Un paquete `corregido` con `integro=false` hoy cuenta como corrección en el tablero; conviene distinguirlo.
+- ~~Un paquete `corregido` con `integro=false` contaba como corrección en el tablero.~~ Resuelto tras la verificación del 22-11 con el estado `corregido_mal` (aún sin desplegar ni verificar en el lab real). Sigue pendiente la limitación de fondo: con 2 errores Hamming (7,4) no puede corregir (SECDED, §9), y un `corregido` íntegro puede seguir llevando datos distintos al original, porque el receptor no compara.
 - La memoria de `cmp-ue` subió de ~23 a ~47 MiB de 64 y parecía estabilizarse; vigilar con `docker stats` y subir el tope si llega cerca.
 - Costo de CPU en el LXC 110: sin cuello de botella visible (carga ~1-2), pero no se midió con tráfico alto.
 

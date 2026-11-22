@@ -41,7 +41,7 @@ class TestPrecarga(unittest.TestCase):
             sind = [x for x in lineas if x.startswith("lab5g_cmp_fec_sindrome_total")]
             self.assertEqual(len(sind), sindromes)
             paq = [x for x in lineas if x.startswith("lab5g_cmp_fec_paquetes_total")]
-            for estado in ("limpio", "corregido", "no_corregible", "invalido"):
+            for estado in ("limpio", "corregido", "corregido_mal", "no_corregible", "invalido"):
                 self.assertTrue(any(f'estado="{estado}"' in x for x in paq))
             self.assertTrue(all(x.endswith(" 0") for x in sind + paq))
             self.assertTrue(any('codec="n/a"' in x for x in paq))
@@ -134,6 +134,30 @@ class TestRecepcion(unittest.TestCase):
         self.assertEqual(e["bits_inyectados"], [8, 9])
         self.assertGreaterEqual(e["sindromes_no_cero"], 1)   # se ve s != 0, pero...
         self.assertEqual(e["estado"], "corregido")           # ...se "corrige" mal (d_min = 3)
+
+    def test_dos_bits_que_rompen_la_descompresion_son_corregido_mal(self):
+        # Hamming (7,4): la zona de datos empieza en el bit 64 (8 palabras de 7 bits de cabecera tras el byte 0).
+        # Con 2 bits en la MISMA palabra el síndrome «corrige» el bit equivocado y el paquete sale distinto;
+        # el «descompresor» falso exige el contenido exacto, como la TUN rechazaría un paquete corrupto.
+        def exacto(comprimido):
+            if comprimido != COMPRIMIDO:
+                raise ValueError("no descomprime")
+            return len(comprimido) + 20
+        self.rx.armar({"posiciones": [64, 65]})
+        e, err = self.rx.recibir(self.marco, exacto)
+        self.assertIsInstance(err, ValueError)
+        self.assertEqual((e["estado"], e["integro"], e["corregidas"], e["no_corregibles"]), ("corregido_mal", False, 1, 0))
+        self.assertEqual(self.rx.c_paquetes[("corregido_mal", e["codec"])], 1)
+        self.assertEqual(self.rx.c_paquetes[("corregido", e["codec"])], 0)
+        self.assertIn(f'estado="corregido_mal",codec="{e["codec"]}"}} 1', self.rx.texto('lado="dn"'))
+        c = self.rx.registro.contadores()
+        self.assertEqual((c["corregidos_mal"], c["corregidas"]), (1, 1))   # las palabras corregidas no cambian
+        # 1 bit en el mismo sitio sigue siendo corregido (íntegro) con el mismo descompresor
+        self.rx.armar({"posiciones": [65]})
+        e, err = self.rx.recibir(self.marco, exacto)
+        self.assertIsNone(err)
+        self.assertEqual((e["estado"], e["integro"]), ("corregido", True))
+        self.assertEqual(self.rx.registro.contadores()["corregidos_mal"], 1)
 
     def test_marco_invalido_no_escribe(self):
         llamadas = []
@@ -238,7 +262,7 @@ class TestComandos(unittest.TestCase):
                           r["bits_inyectados"], r["ultimo_id"]), (11, 1, 1, 1, 1, 11))
         self.assertEqual(set(r), {"ok", "codigo", "lado", "paquetes", "con_error_inyectado", "sindromes_no_cero",
                                   "corregidas", "no_corregibles", "invalidos", "bits_inyectados", "palabras",
-                                  "ultimo_id"})
+                                  "corregidos_mal", "ultimo_id"})
         self.assertEqual(r["palabras"], 11 * fec.decodificar(marco)[1].palabras)
         json.dumps(r)
 

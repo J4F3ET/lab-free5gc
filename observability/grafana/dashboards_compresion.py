@@ -610,7 +610,8 @@ d2 = tablero("lab5g-cmp-comparacion", "lab5g · Compresión — comparación de 
 # rango [..] los respeta recordar(); el histórico lo conserva el pushgateway.
 L = Lienzo()
 F = 'lado=~"$lado",codigo=~"$codigo"'
-ESTADOS = [("limpio", "#9aa0a6"), ("corregido", "#73BF69"), ("no_corregible", "#F2495C"), ("invalido", "#FF9830")]
+ESTADOS = [("limpio", "#9aa0a6"), ("corregido", "#73BF69"), ("corregido_mal", "#FA6400"),
+           ("no_corregible", "#F2495C"), ("invalido", "#B877D9")]
 PAQ = "lab5g_cmp_fec_paquetes_total"
 NOTA_FEC = " Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»)."
 
@@ -628,18 +629,19 @@ L.poner([(texto("Cómo leer este tablero",
                 "calcula el **síndrome** s = r·Hᵀ = e·Hᵀ: no depende del mensaje, solo del error.\n\n"
                 "- **s = 0**: no se ve error (paquete *limpio*).\n"
                 "- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** "
-                "(paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o corrige mal.\n\n"
+                "(paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o *corregido_mal* («corrigió mal»: el síndrome corrigió un bit, pero el paquete no se pudo reconstruir).\n\n"
                 "Los errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. "
                 "Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. "
                 "Fórmulas y códigos: `docs/10-codificacion-canal.md`."), 24)], 6)
 est = barras("Qué pasó con los paquetes", ctx(
         "Cuántos paquetes recibidos cayeron en cada estado en el rango de tiempo elegido." + NOTA_FEC,
         "increase() del contador de paquetes sumado por estado: limpio = s 0; corregido = s ≠ 0 y se arregló; "
+        "corregido_mal = «corrigió mal»: s ≠ 0 y se corrigió un bit, pero el paquete no se pudo reconstruir (p. ej. 2 errores en una palabra Hamming); "
         "no_corregible = el código detecta más errores de los que corrige; invalido = el marco no se pudo leer. "
         "Los contadores reinician con el shim; increase() lo compensa.",
         "estado del paquete.", "número de paquetes en el rango de tiempo.",
         "¿Cómo le va al código con el canal actual? Si «corregido» crece al inyectar errores, la FEC está trabajando; "
-        "«no_corregible» es lo que se le escapa."),
+        "«corregido_mal» es lo que corrigió mal y «no_corregible» lo que se le escapa."),
         [f'sum(increase({PAQ}{{{F},estado="{e}"}}[$__range]))' for e, _ in ESTADOS], "none", 0, x="estado")
 # Una consulta por estado, cada una con su color; las filas se unen por la etiqueta `estado`.
 for i, (e, _) in enumerate(ESTADOS):
@@ -655,7 +657,7 @@ tiempo = serie("Estados en el tiempo", ctx(
         "Cuántos paquetes por minuto llegan en cada estado, a lo largo del tiempo." + NOTA_FEC,
         "rate() del contador de paquetes por estado en la ventana de gráfica, por 60. Barras apiladas: la altura total "
         "es el tráfico recibido.", "hora.", "paquetes por minuto, apilados por estado.",
-        "¿Cuándo se inyectaron errores y cómo respondió el código? Un salto de «corregido» o «no_corregible» marca "
+        "¿Cuándo se inyectaron errores y cómo respondió el código? Un salto de «corregido», «corregido_mal» o «no_corregible» marca "
         "el momento de la inyección."),
         [(f'sum by (estado) (rate({PAQ}{{{F}}}[$__rate_interval])) * 60', "{{estado}}")], "none")
 tiempo["fieldConfig"]["defaults"]["custom"] = {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1,
@@ -676,7 +678,7 @@ mapa = calor("Códec del bandido por estado", ctx(
         "celda = increase() del contador de paquetes, por códec (fila) y estado (columna), en el rango elegido. "
         "Color más fuerte = más paquetes.", "estado del paquete (columnas).", "códec que eligió el bandido (filas).",
         "¿El bandido sigue eligiendo códecs frágiles cuando hay errores? Un códec con estado (deflate_flujo) que "
-        "acumula «no_corregible» o «invalido» se desincroniza más que uno sin estado."),
+        "acumula «corregido_mal», «no_corregible» o «invalido» se desincroniza más que uno sin estado."),
         f'sum by (codec, estado) (increase({PAQ}{{{F}}}[$__range]))', "codec", "estado", "none", 0, 0, None,
         colores="continuous-BlPu")
 del mapa["fieldConfig"]["defaults"]["max"]
@@ -693,7 +695,7 @@ def variable_fec(nombre, etiqueta, clave, desc):
 
 
 d3 = tablero("lab5g-cmp-fec", "Codificación de canal (síndrome)",
-             "Paquetes limpios, corregidos y no corregibles por la FEC, y los síndromes observados.", L,
+             "Paquetes limpios, corregidos, corregidos mal y no corregibles por la FEC, y los síndromes observados.", L,
              [variable_fec("lado", "Lado que recibe (ue = bajada, dn = subida)", "lado", "Qué lado del shim mostrar."),
               variable_fec("codigo", "Código", "codigo", "Qué código FEC mostrar (repetición, Hamming).")])
 d3["tags"] = ["lab5g", "compresion", "fec"]

@@ -3,6 +3,7 @@ y el servidor HTTP real de envio.py en un puerto efímero. Solo biblioteca está
 import json, os, socket, socketserver, struct, sys, threading, unittest, urllib.error, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path  # noqa: E402
 import envio  # noqa: E402
 
 P = [[1, 1, 0], [0, 1, 1], [1, 1, 1], [1, 0, 1]]
@@ -159,6 +160,20 @@ class Endpoints(Base):
                                paquete(4, "invalido", [8])])
         self.assertEqual(r, {"paquetes": 4, "con_error_inyectado": 3, "sindromes_no_cero": 3, "corregidas": 1,
                              "no_corregibles": 1, "invalidos": 1})
+
+    def test_resumen_corregido_mal_es_opcional(self):
+        mal = paquete(5, "corregido_mal", [9, 10])
+        self.assertEqual(envio.resumen_fec([paquete(1), mal])["corregidos_mal"], 1)
+        self.assertNotIn("corregidos_mal", envio.resumen_fec([paquete(1)]))       # compatibilidad: sin clave si no hubo
+        a = {k: 0 for k in envio.CLAVES_RESUMEN}
+        d = {k: 3 for k in envio.CLAVES_RESUMEN}
+        self.assertNotIn("corregidos_mal", envio.resumen_diferencia(a, d))         # shim viejo sin la clave
+        self.assertEqual(envio.resumen_diferencia({**a, "corregidos_mal": 1}, {**d, "corregidos_mal": 4})["corregidos_mal"], 3)
+
+    def test_ui_tiene_el_estado_nuevo(self):
+        src = Path(envio.__file__).read_text(encoding="utf-8")
+        for t in ('value="corregido_mal"', "corregido_mal:'corrigió mal'", "--c-cmal", "#linea button.corregido_mal"):
+            self.assertIn(t, src)
 
 
 class SinShim(unittest.TestCase):
