@@ -195,6 +195,20 @@ class CapaFec:
         self.c_bits = 0
         self.c_palabras = 0
         self.c_bytes = {"comprimido": 0, "fec": 0}
+        self._precargar()
+
+    def _precargar(self) -> None:
+        """Crea a 0 todas las series posibles (estado × códec y síndromes no nulos). Un contador
+        que nace ya valiendo 1 hace que increase()/rate() de Prometheus no cuenten el primer
+        evento: con las series en 0 desde el arranque, la primera inyección se ve en Grafana."""
+        from compresores import CODECS, CODECS_CON_PERDIDA
+        codecs = sorted(set(CODECS.values()) | set(CODECS_CON_PERDIDA.values())) + ["n/a"]
+        for e in ESTADOS:
+            for c in codecs:
+                self.c_paquetes[(e, c)] = 0
+        r = self.codigo.n - self.codigo.k
+        for v in range(1, 2 ** r):
+            self.c_sindrome[format(v, f"0{r}b")] = 0
 
     # --- emisión ---
     def emitir(self, marco_comprimido: bytes) -> bytes:
