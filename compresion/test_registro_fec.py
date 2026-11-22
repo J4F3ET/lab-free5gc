@@ -31,6 +31,22 @@ class TestRegistro(unittest.TestCase):
         self.assertEqual(r.listar(desde_id=5), [])
 
 
+class TestPrecarga(unittest.TestCase):
+    """Las series nacen a 0: si nacieran valiendo 1, increase()/rate() no contarían el primer evento."""
+
+    def test_series_a_cero_al_arrancar(self):
+        for nombre, sindromes in ("hamming_7_4", 7), ("repeticion_5_1", 15):
+            capa = CapaFec(nombre, "dn")
+            lineas = capa.texto('lado="dn"').splitlines()
+            sind = [x for x in lineas if x.startswith("lab5g_cmp_fec_sindrome_total")]
+            self.assertEqual(len(sind), sindromes)
+            paq = [x for x in lineas if x.startswith("lab5g_cmp_fec_paquetes_total")]
+            for estado in ("limpio", "corregido", "no_corregible", "invalido"):
+                self.assertTrue(any(f'estado="{estado}"' in x for x in paq))
+            self.assertTrue(all(x.endswith(" 0") for x in sind + paq))
+            self.assertTrue(any('codec="n/a"' in x for x in paq))
+
+
 class TestEmision(unittest.TestCase):
     def test_apagado_no_cambia_el_marco(self):
         # Sin FEC el shim llama a emitir_marco(None, marco): debe devolver el MISMO objeto, y por un
