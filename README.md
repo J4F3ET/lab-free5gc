@@ -809,6 +809,7 @@ Este README cubre el camino normal. Cuando necesites el "por qué":
 | [07 — CI/CD](docs/07-cicd.md) | Quieres que se despliegue solo al hacer push |
 | [08 — Compresión de paquetes](docs/08-compresion-paquetes.md) | Quieres comprimir el tráfico del UE: dónde va el compresor, qué sirve y qué no (con IA, del Lab 3 de Teoría de la Información) |
 | [09 — Arranque seguro y recuperación](docs/09-arranque-seguro.md) | Quieres saber por qué la pila arranca por etapas, qué hace la recuperación y qué comandos usar cada día |
+| [10 — Codificación de canal](docs/10-codificacion-canal.md) | Quieres proteger el marco contra errores de bit: códigos de bloque lineales (repetición y Hamming (7,4), síndrome), con inyección manual del error |
 
 ---
 

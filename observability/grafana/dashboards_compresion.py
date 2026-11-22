@@ -1,4 +1,4 @@
-"""Genera los dos dashboards de compresión de Grafana a partir de las métricas lab5g_cmp_eval_*.
+"""Genera los tres dashboards de compresión (el tercero, lab5g-cmp-fec, usa lab5g_cmp_fec_*) de Grafana a partir de las métricas lab5g_cmp_eval_*.
 
     python observability/grafana/dashboards_compresion.py observability/grafana/provisioning/dashboards/json
 
@@ -604,6 +604,100 @@ L.poner([(serie("Retroalimentación diaria: ahorro de cada algoritmo con el trá
 d2 = tablero("lab5g-cmp-comparacion", "lab5g · Compresión — comparación de algoritmos",
              "Tasa, información mutua, confiabilidad y velocidad de todos los algoritmos.", L, [var_clase])
 
-for nombre, d in (("lab5g-cmp-algoritmo.json", d1), ("lab5g-cmp-comparacion.json", d2)):
+# ═══════════════════════════ 3. codificación de canal (FEC) ═══════════════════════════
+# Contadores lab5g_cmp_fec_* que publica shim.py (CapaFec.texto) al pushgateway, con lado=ue|dn y codigo.
+# Reinician en 0 si el shim se reinicia: por eso increase()/rate() y no el valor crudo. Los selectores con
+# rango [..] los respeta recordar(); el histórico lo conserva el pushgateway.
+L = Lienzo()
+F = 'lado=~"$lado",codigo=~"$codigo"'
+ESTADOS = [("limpio", "#9aa0a6"), ("corregido", "#73BF69"), ("no_corregible", "#F2495C"), ("invalido", "#FF9830")]
+PAQ = "lab5g_cmp_fec_paquetes_total"
+NOTA_FEC = " Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»)."
+
+
+def color_estado(p, nombres):
+    """Un color fijo por estado, para que el mismo estado se vea igual en todos los paneles."""
+    p["fieldConfig"]["overrides"] = [
+        {"matcher": {"id": "byName", "options": e}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]}
+        for e, c in ESTADOS if e in nombres]
+    return p
+
+
+L.poner([(texto("Cómo leer este tablero",
+                "**Idea de clase.** Se envía una palabra código *r = c + e* (e = el error que mete el canal). El receptor "
+                "calcula el **síndrome** s = r·Hᵀ = e·Hᵀ: no depende del mensaje, solo del error.\n\n"
+                "- **s = 0**: no se ve error (paquete *limpio*).\n"
+                "- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** "
+                "(paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o corrige mal.\n\n"
+                "Los errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. "
+                "Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. "
+                "Fórmulas y códigos: `docs/10-codificacion-canal.md`."), 24)], 6)
+est = barras("Qué pasó con los paquetes", ctx(
+        "Cuántos paquetes recibidos cayeron en cada estado en el rango de tiempo elegido." + NOTA_FEC,
+        "increase() del contador de paquetes sumado por estado: limpio = s 0; corregido = s ≠ 0 y se arregló; "
+        "no_corregible = el código detecta más errores de los que corrige; invalido = el marco no se pudo leer. "
+        "Los contadores reinician con el shim; increase() lo compensa.",
+        "estado del paquete.", "número de paquetes en el rango de tiempo.",
+        "¿Cómo le va al código con el canal actual? Si «corregido» crece al inyectar errores, la FEC está trabajando; "
+        "«no_corregible» es lo que se le escapa."),
+        [f'sum(increase({PAQ}{{{F},estado="{e}"}}[$__range]))' for e, _ in ESTADOS], "none", 0, x="estado")
+# Una consulta por estado, cada una con su color; las filas se unen por la etiqueta `estado`.
+for i, (e, _) in enumerate(ESTADOS):
+    est["targets"][i] = q(f'label_replace(sum(increase({PAQ}{{{F},estado="{e}"}}[$__range])), "estado", "{e}", "", "")',
+                          chr(65 + i), tabla=True)
+est["fieldConfig"]["defaults"]["color"] = {"mode": "fixed", "fixedColor": "#9aa0a6"}
+est["options"].update({"orientation": "horizontal", "showValue": "always", "xTickLabelRotation": 0,
+                       "legend": {"showLegend": False, "displayMode": "list", "placement": "bottom"}})
+est["transformations"][-1]["options"]["renameByName"] = {f"Value #{chr(65 + i)}": e for i, (e, _) in enumerate(ESTADOS)}
+est["transformations"][-1]["options"]["excludeByName"] = {"Time": True}
+est = color_estado(est, [e for e, _ in ESTADOS])
+tiempo = serie("Estados en el tiempo", ctx(
+        "Cuántos paquetes por minuto llegan en cada estado, a lo largo del tiempo." + NOTA_FEC,
+        "rate() del contador de paquetes por estado en la ventana de gráfica, por 60. Barras apiladas: la altura total "
+        "es el tráfico recibido.", "hora.", "paquetes por minuto, apilados por estado.",
+        "¿Cuándo se inyectaron errores y cómo respondió el código? Un salto de «corregido» o «no_corregible» marca "
+        "el momento de la inyección."),
+        [(f'sum by (estado) (rate({PAQ}{{{F}}}[$__rate_interval])) * 60', "{{estado}}")], "none")
+tiempo["fieldConfig"]["defaults"]["custom"] = {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1,
+                                               "stacking": {"mode": "normal", "group": "A"}}
+tiempo = color_estado(tiempo, [e for e, _ in ESTADOS])
+L.poner([(est, 12), (tiempo, 12)], 9)
+sind = barras("Síndromes observados", ctx(
+        "Cuántas palabras código dieron cada valor de síndrome distinto de cero en el rango elegido." + NOTA_FEC,
+        "increase() del contador de síndromes por valor. Cada valor (en binario) es una **columna de H**: la columna "
+        "que coincide con s es la posición del bit que el decodificador corrige. s = 0 no se cuenta.",
+        "valor del síndrome s, en binario (cada uno = una columna de H).", "número de palabras en el rango de tiempo.",
+        "¿Dónde caen los errores? Si un síndrome domina, el canal daña casi siempre el mismo bit; si se reparten, "
+        "los errores son uniformes."),
+        [f'sum by (sindrome) (increase(lab5g_cmp_fec_sindrome_total{{{F}}}[$__range]))'], "none", 0,
+        x="sindrome", ordenar=True)
+mapa = calor("Códec del bandido por estado", ctx(
+        "Qué códec eligió el bandido y en qué estado terminaron sus paquetes." + NOTA_FEC,
+        "celda = increase() del contador de paquetes, por códec (fila) y estado (columna), en el rango elegido. "
+        "Color más fuerte = más paquetes.", "estado del paquete (columnas).", "códec que eligió el bandido (filas).",
+        "¿El bandido sigue eligiendo códecs frágiles cuando hay errores? Un códec con estado (deflate_flujo) que "
+        "acumula «no_corregible» o «invalido» se desincroniza más que uno sin estado."),
+        f'sum by (codec, estado) (increase({PAQ}{{{F}}}[$__range]))', "codec", "estado", "none", 0, 0, None,
+        colores="continuous-BlPu")
+del mapa["fieldConfig"]["defaults"]["max"]
+L.poner([(sind, 12), (mapa, 12)], 9)
+
+
+def variable_fec(nombre, etiqueta, clave, desc):
+    """Menú con todos los valores de la etiqueta `clave`; «Todos» vale «.+» y filtra con =~."""
+    consulta = f"query_result(count by ({clave}) ({recordar(PAQ)}))"
+    return {"name": nombre, "label": etiqueta, "description": desc, "type": "query", "datasource": DS,
+            "query": {"query": consulta, "refId": "v"}, "definition": consulta,
+            "regex": f'/{clave}="(?<value>[^"]+)"/', "refresh": 2, "sort": 1, "multi": False,
+            "includeAll": True, "allValue": ".+", "current": {"selected": True, "text": "All", "value": "$__all"}}
+
+
+d3 = tablero("lab5g-cmp-fec", "Codificación de canal (síndrome)",
+             "Paquetes limpios, corregidos y no corregibles por la FEC, y los síndromes observados.", L,
+             [variable_fec("lado", "Lado que recibe (ue = bajada, dn = subida)", "lado", "Qué lado del shim mostrar."),
+              variable_fec("codigo", "Código", "codigo", "Qué código FEC mostrar (repetición, Hamming).")])
+d3["tags"] = ["lab5g", "compresion", "fec"]
+
+for nombre, d in (("lab5g-cmp-algoritmo.json", d1), ("lab5g-cmp-comparacion.json", d2), ("lab5g-cmp-fec.json", d3)):
     (SALIDA / nombre).write_text(json.dumps(d, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(nombre, len(d["panels"]), "paneles")

@@ -645,3 +645,5 @@ bytes, pero la latencia sube. Para ver la ganancia en latencia hay que limitar l
 - **Darle al bandido por latencia la ocupación del enlace**, no solo la velocidad, para que vea la cola.
 - **Formatos binarios en la aplicación** (CBOR o Protobuf en vez de JSON para IoT): ahorran antes de llegar a la red, sin estado que se pueda desincronizar.
 - **ROHC completo** (biblioteca `rohc` en C) con perfil TCP, y medir en PDCP con una pila que lo implemente (OpenAirInterface o srsRAN) en vez de UERANSIM.
+
+> **Ver también:** [10 — Codificación de canal](10-codificacion-canal.md). Protección del marco contra errores de bit con códigos de bloque lineales (repetición (5,1) y Hamming (7,4)), implementada en el shim con pruebas unitarias; aún no probada de extremo a extremo en el laboratorio. Explica por qué la FEC encarece la compresión (+75 % de bytes con Hamming (7,4)) y qué comparar en ese caso.
