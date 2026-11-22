@@ -14,7 +14,7 @@ síndrome. La teoría sigue la notación del apunte de clase del 9 de noviembre 
 - [3. Dónde encaja en el proyecto](#3-dónde-encaja-en-el-proyecto)
 - [4. Inyección manual del error](#4-inyección-manual-del-error)
 - [5. Visualización «Laboratorio de síndrome»](#5-visualización-laboratorio-de-síndrome)
-- [6. Grafana (diseño, tablero aún no construido)](#6-grafana-diseño-tablero-aún-no-construido)
+- [6. Grafana (tablero `lab5g-cmp-fec`)](#6-grafana-tablero-lab5g-cmp-fec)
 - [7. Relación con la compresión](#7-relación-con-la-compresión)
 - [8. Estado del arte](#8-estado-del-arte)
 - [9. Hoja de ruta: siguiente entrega](#9-hoja-de-ruta-siguiente-entrega)
@@ -59,7 +59,7 @@ extremo a extremo en el laboratorio real**: en Windows no hay TUN, así que
 | Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada; **no probada en el laboratorio** |
 | Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); **la página no se ha usado contra un shim real** |
 | Métricas `lab5g_cmp_fec_*` | Implementadas en el shim; **no verificadas en el pushgateway** |
-| Tablero de Grafana | **Diseño, aún no construido** ([§6](#6-grafana-diseño-tablero-aún-no-construido)) |
+| Tablero de Grafana | **Construido** (`lab5g-cmp-fec`; no visto aún en un Grafana real) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
 
 ---
 
@@ -367,12 +367,16 @@ con los síndromes y las posiciones.
 
 ---
 
-## 6. Grafana (diseño, tablero aún no construido)
+## 6. Grafana (tablero `lab5g-cmp-fec`)
 
 Regla del proyecto: pocos paneles y cada uno con su explicación. Cada panel se
 describe con **Significado / Cómo funciona / Eje X / Eje Y / A qué responde**.
-Ningún panel se construye sin aprobación previa. **El tablero es solo diseño; no
-existe todavía.** Las métricas sí existen.
+**El tablero está construido:** `lab5g-cmp-fec`, «Codificación de canal (síndrome)»,
+generado por `observability/grafana/dashboards_compresion.py` en
+`observability/grafana/provisioning/dashboards/json/lab5g-cmp-fec.json` (se provisiona
+solo). Tiene un texto de ayuda y cuatro paneles (los 2, 3 y 4 de abajo tal cual; el 1
+se construyó como «Qué pasó con los paquetes», barras por estado, porque no hay
+contadores por etapa). Menús `lado` y `codigo`. **No se ha visto aún en un Grafana real.**
 
 **Métricas ya implementadas** en `shim.py`, empujadas al pushgateway cada 10 s, con
 las etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **No se han
@@ -386,7 +390,7 @@ visto aún en el pushgateway real.** Solo aparecen si el shim tiene FEC activa.
 | `lab5g_cmp_fec_palabras_total` | ninguna | Palabras código decodificadas |
 | `lab5g_cmp_fec_bytes_total` | `tipo` (`comprimido`, `fec`) | Bytes emitidos antes y después de añadir la paridad |
 
-Los paneles son previstos; el panel 1 necesita contadores por etapa (recibidos, entregados) que las métricas actuales no tienen del todo, y habría que añadirlos.
+El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (recibidos, entregados) que las métricas actuales no tienen; en su lugar el tablero muestra los paquetes por estado.
 
 **Panel 1. Embudo del flujo**
 
