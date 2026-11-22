@@ -663,7 +663,7 @@ Con Grafana encendido (`sudo /usr/local/sbin/lab5g.sh grafana up`), entra en `ht
 |---|---|
 | Arriba | Un cuadro verde por pieza del núcleo. Rojo = esa pieza no responde. |
 | Medio | `ue_tunnel_up`: ¿existe el túnel? Latencia y velocidad medidas **desde el teléfono**. |
-| Abajo | Presión de I/O, memoria del host y memoria por contenedor, publicadas por `lab5g-stack`. La CPU por contenedor no tiene fuente: cAdvisor está retirado. |
+| Abajo | Presión de I/O, memoria del host y memoria por contenedor, publicadas por `lab5g-stack`. No hay panel de CPU por contenedor: cAdvisor está retirado. |
 
 Ese último panel es el más valioso del conjunto. En este tipo de host el cuello
 de botella real casi nunca es la CPU: es el **disco**. Cuando el `iowait` sube,
