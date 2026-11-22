@@ -104,6 +104,23 @@ def resumen_fec(paquetes: list[dict]) -> dict:
             "invalidos": sum(1 for p in paquetes if p.get("estado") == "invalido")}
 
 
+CLAVES_RESUMEN = ("paquetes", "con_error_inyectado", "sindromes_no_cero", "corregidas", "no_corregibles", "invalidos")
+
+
+def _contadores_fec() -> dict | None:
+    """Contadores acumulados del shim (verbo CONTADORES) o None si no responde o es un shim viejo
+    (arrancado antes de que existiera el verbo: contesta «comando desconocido»)."""
+    r = fec_consulta("CONTADORES")
+    if not r.get("ok") or not all(_entero(r.get(k)) for k in (*CLAVES_RESUMEN, "ultimo_id")):
+        return None
+    return r
+
+
+def resumen_diferencia(antes: dict, despues: dict) -> dict:
+    """Resumen de un envío = contadores después − antes. No depende del anillo de 200 paquetes."""
+    return {k: max(0, despues[k] - antes[k]) for k in CLAVES_RESUMEN}
+
+
 def _ultimo_id_fec() -> int:
     r = fec_consulta("PAQUETES 0")
     ids = [p["id"] for p in r.get("paquetes", []) if isinstance(p, dict) and _entero(p.get("id"))]
@@ -241,9 +258,10 @@ class Envios:
     def medir(self, nombre: str, datos: bytes, inyectar: int = 0) -> dict:
         cod = fec_consulta("CODIGO")
         fec_activo = bool(cod.get("disponible") and cod.get("codigo"))
-        armada, ultimo = None, 0
+        armada, ultimo, c_antes = None, 0, None
         if fec_activo:
-            ultimo = _ultimo_id_fec()
+            c_antes = _contadores_fec()
+            ultimo = c_antes["ultimo_id"] if c_antes else _ultimo_id_fec()
             if inyectar:
                 armada = fec_consulta(f"INYECTAR {json.dumps({'bits': inyectar})}")
         antes = contadores()
@@ -285,11 +303,20 @@ class Envios:
         if ue:
             r["errores_ue"] = ue["bytes"]["errores"]
         if fec_activo:
+            c_despues = _contadores_fec() if c_antes else None
             nuevos = fec_consulta(f"PAQUETES {ultimo}").get("paquetes", [])
             nuevos = [p for p in nuevos if isinstance(p, dict) and _entero(p.get("id")) and p["id"] > ultimo]
+            if c_antes and c_despues:      # exacto: diferencia de contadores acumulados
+                resumen, fuente = resumen_diferencia(c_antes, c_despues), "contadores"
+                esperados = resumen["paquetes"]
+            else:                          # shim sin CONTADORES: solo se ve lo que queda en el anillo
+                resumen, fuente, esperados = resumen_fec(nuevos), "anillo", 0
+            # El anillo guarda 200: si los devueltos no cubren todos los nuevos, la lista está incompleta.
+            truncado = bool(nuevos and nuevos[0]["id"] > ultimo + 1) or len(nuevos) < esperados
             r["fec"] = {"codigo": cod.get("codigo"), "n": cod.get("n"), "k": cod.get("k"),
                         "inyectado_pedido": inyectar, "armada": armada,
-                        "resumen": resumen_fec(nuevos), "paquetes": nuevos[-MAX_PAQUETES_FEC:],
+                        "resumen": resumen, "resumen_fuente": fuente, "truncado": truncado,
+                        "paquetes": nuevos[-MAX_PAQUETES_FEC:],
                         "sha_identico": r["identico"]}
         self.historial = [r] + self.historial[:19]
         return r
@@ -313,6 +340,11 @@ class Pagina(BaseHTTPRequestHandler):
     def _json(self, codigo: int, obj) -> None:
         self._responder(codigo, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
+    def _largo(self) -> int:
+        """Content-Length como entero >= 0; lo que no sean dígitos ASCII (vacío, «²», «-5») cuenta 0."""
+        raw = (self.headers.get("Content-Length") or "0").strip()
+        return int(raw) if raw.isascii() and raw.isdigit() and len(raw) <= 12 else 0
+
     def _fec(self, linea: str) -> None:
         r = fec_consulta(linea)
         if not r.get("disponible"):
@@ -332,14 +364,17 @@ class Pagina(BaseHTTPRequestHandler):
             self._fec("CODIGO")
         elif ruta == "/fec/paquetes":
             desde = parse_qs(consulta).get("desde", ["0"])[0]
-            if not desde.isdigit() or len(desde) > 15:
+            if not (desde.isascii() and desde.isdigit()) or len(desde) > 15:
                 return self._json(400, {"error": "«desde» debe ser un entero >= 0"})
             self._fec(f"PAQUETES {int(desde)}")
         else:
             self._json(404, {"error": "no existe"})
 
     def _post_inyectar(self) -> None:
-        n = int(self.headers.get("Content-Length") or 0)
+        # CSRF: un <form> de otro sitio no puede mandar application/json sin pasar por CORS (y aquí no hay).
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            return self._json(415, {"ok": False, "error": "Content-Type debe ser application/json"})
+        n = self._largo()
         if n <= 0 or n > 1024:
             return self._json(413, {"error": "el cuerpo debe tener entre 1 B y 1 KB"})
         try:
@@ -362,10 +397,10 @@ class Pagina(BaseHTTPRequestHandler):
         raw = (self.headers.get("X-Inyectar") or "").strip()
         inyectar = 0
         if raw:
-            if not raw.isdigit() or not 1 <= int(raw) <= 8:
+            if not (raw.isascii() and raw.isdigit() and len(raw) <= 3) or not 1 <= int(raw) <= 8:
                 return self._json(400, {"error": "X-Inyectar debe ser un entero entre 1 y 8"})
             inyectar = int(raw)
-        n = int(self.headers.get("Content-Length") or 0)
+        n = self._largo()
         if n <= 0 or n > LIMITE:
             return self._json(413, {"error": f"el archivo debe tener entre 1 B y {LIMITE // 2**20} MB"})
         if not ENVIOS.ocupado.acquire(blocking=False):
@@ -470,7 +505,7 @@ function mostrar(r){ const ok=r.identico;
   <div><div class="k">H(O) · H(R)</div><div class="v">${r.H_O.toFixed(3)} · ${r.H_R.toFixed(3)}</div><div class="k">bits por byte</div></div>
   <div><div class="k">I(O;R)</div><div class="v">${r.I_OR.toFixed(3)}</div><div class="k">${pct(r.info_entregada_pct)} de H(O)</div></div>
   ${sentido(r.bajada,'Bajada (cmp-dn)')}${sentido(r.subida,'Subida (cmp-ue)')}
-  ${r.fec?`<div><div class="k">FEC ${esc(String(r.fec.codigo))}</div><div class="v">${Number(r.fec.resumen.paquetes)} paq.</div><div class="k">con error ${Number(r.fec.resumen.con_error_inyectado)} · s≠0 ${Number(r.fec.resumen.sindromes_no_cero)} · corregidos ${Number(r.fec.resumen.corregidas)} · no corregibles ${Number(r.fec.resumen.no_corregibles)} · inválidos ${Number(r.fec.resumen.invalidos)}</div></div>`:''}
+  ${r.fec?`<div><div class="k">FEC ${esc(String(r.fec.codigo))}</div><div class="v">${Number(r.fec.resumen.paquetes)} paq.</div><div class="k">con error ${Number(r.fec.resumen.con_error_inyectado)} · s≠0 ${Number(r.fec.resumen.sindromes_no_cero)} · corregidos ${Number(r.fec.resumen.corregidas)} · no corregibles ${Number(r.fec.resumen.no_corregibles)} · inválidos ${Number(r.fec.resumen.invalidos)}${r.fec.truncado?' · <b class="bad">lista de paquetes truncada ('+(r.fec.resumen_fuente==='contadores'?'el resumen sí es exacto':'resumen incompleto: el shim no tiene CONTADORES')+')</b>':''}</div></div>`:''}
   </div><details><summary>SHA-256</summary><code>original ${r.sha_original}<br>vuelta&nbsp;&nbsp; ${r.sha_vuelta}</code></details></div>`;}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 async function historial(){ const h=await (await fetch('historial')).json();
@@ -510,7 +545,7 @@ async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren();
   const G=j.P.map((fila,i)=>fila.concat(Array.from({length:k},(_,c)=>c===i?1:0)));
   cont.append(h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad)`)),
     matriz('G = [P : I_k]  (k×n)',G,c=>c<r), matriz('H = [I : Pᵀ]  ((n−k)×n)',j.H,c=>c>=r),
-    h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ.')); }
+    h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).')); }
 function columnasH(){ const H=lab.codigo&&lab.codigo.H; if(!H) return {}; const m={};
   for(let j=0;j<H[0].length;j++){ m[H.map(f=>f[j]).join('')]=j; } return m; }
 function estadoPaq(p){ return ETQ[p.estado]?p.estado:'invalido'; }
@@ -552,8 +587,8 @@ function labDetalle(id){ lab.sel=id; const p=lab.paquetes.find(x=>x.id===id), d=
     h('li',{},'Bits volteados en el canal: ',(p.bits_inyectados||[]).length?(p.bits_inyectados.join(', ')+' (posición en el marco; 0..7 es el id del código)'):'ninguno'),
     h('li',{},'Síndromes observados (s ≠ 0): ',sind.length?h('ul',{},sind.map(([s,c])=>{ const j=cols[s];
         const corr=(p.posiciones_corregidas||[]).filter(x=>x[1]===j).length;
-        return h('li',{},h('code',{},s),` × ${c} → `,j==null?'no coincide con ninguna columna de H: no corregible con 1 bit':`coincide con la columna ${j} de H (bit ${j} de la palabra); corregida ${corr} vez/veces`); })):'ninguno'),
-    (p.posiciones_corregidas||[]).length?h('li',{},'Correcciones (palabra, posición): ',p.posiciones_corregidas.map(x=>`(${x[0]}, ${x[1]})`).join(' ')):null,
+        return h('li',{},h('code',{},s),` × ${c} → `,j==null?'no coincide con ninguna columna de H: no corregible con 1 bit':`coincide con la columna ${j+1} de H (bit ${j+1} de la palabra, contando desde 1); corregida ${corr} vez/veces`); })):'ninguno'),
+    (p.posiciones_corregidas||[]).length?h('li',{},'Correcciones (palabra desde 0, posición en la palabra desde 1): ',p.posiciones_corregidas.map(x=>`(${x[0]}, ${x[1]+1})`).join(' ')):null,
     h('li',{},'Resultado: ',h('b',{class:'st-'+est},ETQ[est]),' · íntegro: ',h('b',{class:p.integro?'ok':'bad'},p.integro?'sí':'no'))];
   d.append(h('h3',{style:'font-size:15px;margin:0 0 6px'},`Paquete #${p.id} paso a paso`),h('ol',{},pasos),
     h('div',{class:'k'},'Con 2 errores Hamming (7,4) puede «corregir» mal y entregar otra palabra código; el receptor no compara contra el original.'));

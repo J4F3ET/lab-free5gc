@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
-from registro_fec import CapaFec, mtu_con_fec
+from registro_fec import CapaFec, emitir_marco, mtu_con_fec, recibir_marco, validar_codigo
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
 PUERTO = int(os.environ.get("PUERTO", "7700"))
@@ -121,7 +121,7 @@ def servir_contadores(met: Metricas, puerto: int) -> None:
 
 
 def servir_fec(capa: CapaFec, puerto: int) -> None:
-    """Comandos de la capa FEC (PAQUETES / INYECTAR / CODIGO), SOLO en 127.0.0.1. El cliente manda
+    """Comandos de la capa FEC (PAQUETES / INYECTAR / CODIGO / CONTADORES), SOLO en 127.0.0.1. El cliente manda
     UNA línea (tope 4 KB, 2 s) y lee el JSON de respuesta hasta el cierre. Se atiende de a una
     conexión: con pids_limit 64 no se abren hilos por conexión."""
     import json
@@ -130,9 +130,9 @@ def servir_fec(capa: CapaFec, puerto: int) -> None:
         s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", puerto)); s.listen(8)
         while True:
-            c, _ = s.accept()
-            with c:
-                try:
+            try:
+                c, _ = s.accept()
+                with c:
                     c.settimeout(2.0)
                     datos = b""
                     while b"\n" not in datos and len(datos) < 4096:
@@ -145,8 +145,9 @@ def servir_fec(capa: CapaFec, puerto: int) -> None:
                     else:
                         resp = capa.responder(datos.split(b"\n")[0].decode("utf-8", "replace"))
                     c.sendall(json.dumps(resp).encode())
-                except OSError:
-                    pass
+            except Exception as e:  # nada debe matar este hilo (un OSError, un JSON raro...)
+                print(f"[cmp-{capa.lado}] servidor FEC: {e!r}"[:200], flush=True)
+                time.sleep(0.05)
 
     threading.Thread(target=atender, daemon=True).start()
 
@@ -176,11 +177,18 @@ def main() -> None:
     lado = sys.argv[1] if len(sys.argv) > 1 else ""
     if lado not in ("ue", "dn"):
         sys.exit("uso: shim.py ue|dn")
+    # FEC de clase (síndrome): apagado si FEC está vacío o ausente. ue y dn deben usar el mismo valor.
+    # Se valida ANTES de esperar uesimtun0: un valor malo debe fallar al instante y con mensaje claro.
+    capa = None
+    if os.environ.get("FEC"):
+        try:
+            validar_codigo(os.environ["FEC"])
+        except ValueError as e:
+            sys.exit(f"[cmp-{lado}] {e}")
+        capa = CapaFec(os.environ["FEC"], lado)
     modelo = Modelo.cargar(os.environ.get("MODELO", Path(__file__).with_name("modelo.json")))
     if lado == "ue":
         esperar_interfaz("uesimtun0")  # sin sesión PDU no hay por dónde mandar nada
-    # FEC de clase (síndrome): apagado si FEC está vacío o ausente. ue y dn deben usar el mismo valor.
-    capa = CapaFec(os.environ["FEC"], lado) if os.environ.get("FEC") else None
     # Con FEC el marco crece n/k: el MTU de cmp0 baja para que quepa en uesimtun0 (ver registro_fec.py)
     tun = abrir_tun("cmp0", "10.99.0.1" if lado == "ue" else "10.99.0.2",
                     mtu_con_fec(capa.codigo) if capa else MTU)
@@ -224,8 +232,7 @@ def main() -> None:
             pkt = os.read(tun, 65535)
             if par is not None:
                 marco, cod = emisor.enviar(pkt)
-                if capa:
-                    marco = capa.emitir(marco)   # el keepalive no pasa por aquí
+                marco = emitir_marco(capa, marco)   # sin FEC: el mismo marco; el keepalive no pasa por aquí
                 sock.sendto(marco, par)
                 met.c["orig_tx"] += len(pkt); met.c["marco_tx"] += len(marco)
                 met.codec[nombre_codec(cod)] += 1
@@ -234,12 +241,10 @@ def main() -> None:
             if lado == "dn":
                 par = origen  # la dirección del UE tras el NAT del UPF
             if marco != KEEPALIVE and capa:
-                def procesar(comprimido: bytes) -> int:
-                    pkt = rx.desempaquetar(comprimido)
+                def escribir(pkt: bytes) -> None:
                     os.write(tun, pkt)
                     met.c["marco_rx"] += len(marco); met.c["orig_rx"] += len(pkt)
-                    return len(pkt)
-                _, e = capa.recibir(marco, procesar)
+                _, _, e = recibir_marco(capa, rx, marco, escribir)
                 if e is not None:  # marco inválido o descompresión fallida: igual que sin FEC
                     met.c["errores"] += 1
                     if met.c["errores"] < 20:

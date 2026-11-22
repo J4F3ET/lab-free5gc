@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import json
+import socket
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fec
-from registro_fec import (CapaFec, RegistroFec, aplicar_canal, info_codec, mtu_con_fec,
-                          tamano_en_cable, validar_armada)
+from registro_fec import (CapaFec, RegistroFec, aplicar_canal, emitir_marco, info_codec, mtu_con_fec,
+                          recibir_marco, tamano_en_cable, validar_armada, validar_codigo)
 
 # byte 0: bit 7 = ROHC-lite, bits 0-3 = id del códec; el resto es "carga" cualquiera
 COMPRIMIDO = bytes([0x80 | 3]) + bytes(range(40))
@@ -32,12 +33,31 @@ class TestRegistro(unittest.TestCase):
 
 class TestEmision(unittest.TestCase):
     def test_apagado_no_cambia_el_marco(self):
-        # Sin FEC no se crea CapaFec (shim: capa = None): el marco va tal cual al sock.sendto.
-        capa = None
-        marco = COMPRIMIDO
-        if capa:
-            marco = capa.emitir(marco)
-        self.assertIs(marco, COMPRIMIDO)
+        # Sin FEC el shim llama a emitir_marco(None, marco): debe devolver el MISMO objeto, y por un
+        # socket UDP real en loopback los bytes que llegan son exactamente los comprimidos.
+        self.assertIs(emitir_marco(None, COMPRIMIDO), COMPRIMIDO)
+        emisor, receptor = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.addCleanup(emisor.close); self.addCleanup(receptor.close)
+        receptor.bind(("127.0.0.1", 0)); receptor.settimeout(5)
+        emisor.sendto(emitir_marco(None, COMPRIMIDO), receptor.getsockname())
+        self.assertEqual(receptor.recvfrom(65535)[0], COMPRIMIDO)
+        # y con FEC activo sí cambia (para que la prueba anterior discrimine)
+        self.assertNotEqual(emitir_marco(CapaFec("hamming_7_4", "ue"), COMPRIMIDO), COMPRIMIDO)
+
+    def test_shim_usa_las_funciones_puras_y_valida_antes_de_esperar_la_tun(self):
+        # shim.py no se importa en Windows (fcntl): se comprueba el orden en el fuente de main().
+        fuente = (Path(__file__).resolve().parent / "shim.py").read_text(encoding="utf-8")
+        main = fuente[fuente.index("def main()"):]
+        self.assertLess(main.index("validar_codigo("), main.index('esperar_interfaz("uesimtun0")'))
+        self.assertIn("emitir_marco(capa, marco)", main)
+        self.assertIn("recibir_marco(capa, rx, marco, escribir)", main)
+
+    def test_validar_codigo(self):
+        self.assertIs(validar_codigo("hamming_7_4"), HAM)
+        for malo in ("hamming", "x", "7_4"):
+            with self.assertRaises(ValueError) as c:
+                validar_codigo(malo)
+            self.assertIn("hamming_7_4", str(c.exception))   # el mensaje lista los válidos
 
     def test_emitir_secuencia_y_tamano(self):
         capa = CapaFec("hamming_7_4", "ue")
@@ -133,7 +153,87 @@ class TestRecepcion(unittest.TestCase):
         self.assertIn('tipo="fec"', self.tx.texto('lado="ue"'))
 
 
+class Desempaquetador:
+    """rx falso: «descomprimir» = quitar el byte 0 (lo que importa aquí es el marco FEC)."""
+    def desempaquetar(self, comprimido: bytes) -> bytes:
+        if comprimido[1:2] == b"\xee":
+            raise RuntimeError("flujo desincronizado")
+        return comprimido[1:]
+
+
+class TestBucleLoopback(unittest.TestCase):
+    """Emisión y recepción FEC con las funciones puras del shim sobre UDP en loopback (sin TUN)."""
+    def setUp(self):
+        self.tx, self.rx = CapaFec("hamming_7_4", "ue"), CapaFec("hamming_7_4", "dn")
+        self.a, self.b = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(2))
+        self.addCleanup(self.a.close); self.addCleanup(self.b.close)
+        self.b.bind(("127.0.0.1", 0)); self.b.settimeout(5)
+        self.tun = []
+
+    def viaje(self, comprimido=COMPRIMIDO):
+        self.a.sendto(emitir_marco(self.tx, comprimido), self.b.getsockname())
+        marco, _ = self.b.recvfrom(65535)
+        return recibir_marco(self.rx, Desempaquetador(), marco, self.tun.append)
+
+    def test_limpio(self):
+        pkt, e, err = self.viaje()
+        self.assertIsNone(err)
+        self.assertEqual((pkt, self.tun, e["estado"], e["integro"]), (COMPRIMIDO[1:], [COMPRIMIDO[1:]], "limpio", True))
+
+    def test_un_error_se_corrige_y_dos_se_cuentan(self):
+        self.rx.armar({"posiciones": [9]})
+        pkt, e, _ = self.viaje()
+        self.assertEqual((pkt, e["estado"], e["bits_inyectados"]), (COMPRIMIDO[1:], "corregido", [9]))
+        self.rx.armar({"posiciones": [8, 9]})
+        pkt, e, _ = self.viaje()
+        self.assertGreaterEqual(e["sindromes_no_cero"], 1)
+
+    def test_falla_al_descomprimir_no_escribe(self):
+        pkt, e, err = self.viaje(bytes([3, 0xEE]) + bytes(10))
+        self.assertIsInstance(err, RuntimeError)
+        self.assertEqual((pkt, self.tun, e["integro"]), (None, [], False))
+
+    def test_marco_invalido_no_escribe(self):
+        pkt, e, err = recibir_marco(self.rx, Desempaquetador(), b"\x09\x01\x02", self.tun.append)
+        self.assertEqual((pkt, self.tun, e["estado"]), (None, [], "invalido"))
+        self.assertIsInstance(err, ValueError)
+
+    def test_contadores_acumulados_tras_el_bucle(self):
+        self.rx.armar({"posiciones": [9]}); self.viaje()
+        self.viaje()
+        recibir_marco(self.rx, Desempaquetador(), b"\x09\x01", None)
+        c = self.rx.registro.contadores()
+        self.assertEqual((c["paquetes"], c["con_error_inyectado"], c["corregidas"], c["invalidos"],
+                          c["bits_inyectados"], c["ultimo_id"]), (3, 1, 1, 1, 1, 3))
+
+
 class TestComandos(unittest.TestCase):
+    def test_contadores_no_dependen_del_anillo(self):
+        capa = CapaFec("hamming_7_4", "dn", capacidad=3)
+        capa.armar({"posiciones": [9]})
+        marco = capa.emitir(COMPRIMIDO)
+        capa.recibir(marco, procesar_ok)            # el único con error: será el primero en salir del anillo
+        for _ in range(10):
+            capa.recibir(marco, procesar_ok)
+        self.assertEqual(len(capa.registro.listar()), 3)
+        r = capa.responder("CONTADORES")
+        self.assertEqual(r["ok"], True)
+        self.assertEqual((r["paquetes"], r["con_error_inyectado"], r["corregidas"], r["sindromes_no_cero"],
+                          r["bits_inyectados"], r["ultimo_id"]), (11, 1, 1, 1, 1, 11))
+        self.assertEqual(set(r), {"ok", "codigo", "lado", "paquetes", "con_error_inyectado", "sindromes_no_cero",
+                                  "corregidas", "no_corregibles", "invalidos", "bits_inyectados", "palabras",
+                                  "ultimo_id"})
+        self.assertEqual(r["palabras"], 11 * fec.decodificar(marco)[1].palabras)
+        json.dumps(r)
+
+    def test_json_anidado_no_mata_el_hilo(self):
+        capa = CapaFec("hamming_7_4", "dn")
+        for nido in ("[" * 4000, "[" * 4000 + "]" * 4000, '{"a":' * 1000):
+            r = capa.responder("INYECTAR " + nido)       # RecursionError o JSONDecodeError: ambos deben contestarse
+            self.assertFalse(r["ok"])
+            self.assertTrue(r["error"])
+        self.assertEqual(capa.responder("CODIGO")["codigo"], "hamming_7_4")   # sigue vivo
+
     def test_validar(self):
         self.assertEqual(validar_armada({"bits": 2}), {"bits": 2, "semilla": None})
         for malo in ({"bits": 0}, {"bits": "2"}, {"posiciones": []}, {"posiciones": [3]},

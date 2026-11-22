@@ -19,7 +19,7 @@ MTU con FEC. Un paquete de L bytes comprimidos ocupa en el cable
 y debe caber en  mtu_enlace − 28 (IP+UDP del túnel). Despejando L:
     bloques = floor(8·(mtu_enlace − 28 − 1) / n) ;  L_max = floor((bloques·k − 32) / 8)
 y el MTU de cmp0 es  L_max − margen  (margen 36 B, el mismo que hoy: 1464−28=1436 → 1400).
-Hamming (7,4): 779 ; repetición (5,1): 247. Sin FEC no se usa: sigue valiendo CMP_MTU.
+Hamming (7,4): 780 ; repetición (5,1): 247. Sin FEC no se usa: sigue valiendo CMP_MTU.
 """
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ MTU_ENLACE = 1464        # MTU de uesimtun0
 TUNEL = 28               # IP + UDP del túnel
 MARGEN = 36              # 1464 - 28 - 1400 = lo que deja hoy CMP_MTU por defecto
 MAX_POSICIONES_ARMADA = 256
+CLAVES_CONTADORES = ("paquetes", "con_error_inyectado", "sindromes_no_cero", "corregidas",
+                     "no_corregibles", "invalidos", "bits_inyectados", "palabras")
 ESTADOS = ("limpio", "corregido", "no_corregible", "invalido")
 
 
@@ -58,6 +60,8 @@ class RegistroFec:
         self._cola: deque[dict] = deque(maxlen=capacidad)
         self._sig = 1
         self._cerrojo = threading.Lock()
+        # Acumulados desde el arranque; NO se derivan del anillo (que olvida lo viejo).
+        self._tot = {k: 0 for k in CLAVES_CONTADORES}
 
     def anotar(self, **campos) -> dict:
         """Añade una entrada; le pone `id` (incremental, empieza en 1) y devuelve la entrada."""
@@ -65,7 +69,21 @@ class RegistroFec:
             entrada = {"id": self._sig, **campos}
             self._sig += 1
             self._cola.append(entrada)
+            t = self._tot
+            t["paquetes"] += 1
+            t["con_error_inyectado"] += 1 if campos.get("bits_inyectados") else 0
+            t["sindromes_no_cero"] += int(campos.get("sindromes_no_cero") or 0)
+            t["corregidas"] += int(campos.get("corregidas") or 0)
+            t["no_corregibles"] += int(campos.get("no_corregibles") or 0)
+            t["invalidos"] += 1 if campos.get("estado") == "invalido" else 0
+            t["bits_inyectados"] += len(campos.get("bits_inyectados") or ())
+            t["palabras"] += int(campos.get("palabras") or 0)
             return entrada
+
+    def contadores(self) -> dict:
+        """Contadores acumulados desde el arranque + `ultimo_id` (id de la última entrada, 0 si ninguna)."""
+        with self._cerrojo:
+            return {**self._tot, "ultimo_id": self._sig - 1}
 
     def listar(self, desde_id: int = 0) -> list[dict]:
         """Entradas con id > desde_id, de más antigua a más reciente."""
@@ -119,6 +137,40 @@ def info_codec(marco_comprimido: bytes) -> tuple[int, str, bool]:
     """(id del códec, nombre, tiene cabecera ROHC-lite) a partir del byte 0 del marco comprimido."""
     b0 = marco_comprimido[0]
     return b0 & 0x0F, nombre_codec(b0 & 0x0F), bool(b0 & 0x80)
+
+
+def validar_codigo(valor) -> fec.CodigoLineal:
+    """Código FEC por nombre/id o ValueError con mensaje claro (para fallar al arrancar el shim)."""
+    try:
+        return fec.buscar(valor)
+    except ValueError:
+        validos = ", ".join(c.nombre for c in fec.CODIGOS.values())
+        raise ValueError(f"FEC={valor!r} no es un código válido; usa uno de: {validos} (o vacío para apagarlo)") from None
+
+
+def emitir_marco(capa, marco_comprimido: bytes) -> bytes:
+    """Decisión de emisión del shim: sin capa FEC (None) el marco pasa SIN tocar (mismo objeto)."""
+    return capa.emitir(marco_comprimido) if capa else marco_comprimido
+
+
+def recibir_marco(capa, rx, marco: bytes, escribir=None):
+    """Recepción con FEC: (paquete IP | None, entrada, excepción | None). Sin red ni TUN.
+
+    `rx.desempaquetar(comprimido)` descomprime; `escribir(pkt)` (la TUN en el shim) se llama dentro de
+    `procesar`, así `integro` sigue significando «se escribió sin excepción». Con marco inválido o
+    descompresión fallida el paquete es None.
+    """
+    salida: list[bytes] = []
+
+    def procesar(comprimido: bytes) -> int:
+        pkt = rx.desempaquetar(comprimido)
+        if escribir is not None:
+            escribir(pkt)
+        salida.append(pkt)
+        return len(pkt)
+
+    entrada, error = capa.recibir(marco, procesar)
+    return (salida[0] if salida and error is None else None), entrada, error
 
 
 def estado_de(res: fec.Resultado) -> str:
@@ -240,10 +292,14 @@ class CapaFec:
                     a = dict(self.armada) if self.armada else None
                 return {"codigo": self.codigo.nombre, "n": self.codigo.n, "k": self.codigo.k,
                         "lado": self.lado, "armada": a, "paquetes": self.registro.listar(desde)}
+            if verbo == "CONTADORES":
+                return {"ok": True, "codigo": self.codigo.nombre, "lado": self.lado, **self.registro.contadores()}
             if verbo == "INYECTAR":
                 return {"ok": True, "armada": self.armar(json.loads(resto))}
             if verbo == "CODIGO":
                 return self.describir_codigo()
             return {"ok": False, "error": f"comando desconocido: {verbo[:20]!r}"}
-        except (ValueError, TypeError) as e:  # incluye JSONDecodeError
-            return {"ok": False, "error": str(e)[:200]}
+        except Exception as e:  # JSONDecodeError, RecursionError por JSON anidado... el hilo no debe morir
+            if not isinstance(e, (ValueError, TypeError)):   # los de validación son rutina; el resto, no
+                print(f"[cmp-{self.lado}] comando FEC fallido: {e!r}"[:200], flush=True)
+            return {"ok": False, "error": str(e)[:200] or type(e).__name__}

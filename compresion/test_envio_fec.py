@@ -1,6 +1,6 @@
 """Pruebas del laboratorio de síndrome de envio.py con un shim FALSO (servidor de línea en un hilo)
 y el servidor HTTP real de envio.py en un puerto efímero. Solo biblioteca estándar."""
-import json, os, socketserver, struct, sys, threading, unittest, urllib.error, urllib.request
+import json, os, socket, socketserver, struct, sys, threading, unittest, urllib.error, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import envio  # noqa: E402
@@ -27,6 +27,8 @@ class ShimFalso(socketserver.ThreadingTCPServer):
         super().__init__(("127.0.0.1", 0), ShimFalso.Linea)
         self.codigo, self.recibidas, self.paquetes = codigo, [], [paquete(5), paquete(6)]
         self.al_inyectar = None
+        self.extra = {k: 0 for k in envio.CLAVES_RESUMEN}   # lo que el anillo ya olvidó (acumulado)
+        self.sin_contadores = False                          # simula un shim viejo sin el verbo
 
     class Linea(socketserver.StreamRequestHandler):
         def handle(self):
@@ -38,7 +40,10 @@ class ShimFalso(socketserver.ThreadingTCPServer):
                 r = s.codigo or {"codigo": None}
             elif cmd == "PAQUETES":
                 r = {"codigo": "hamming74", "n": 7, "k": 4, "lado": "dn", "armada": None,
-                     "paquetes": [p for p in s.paquetes if p["id"] >= int(resto)]}
+                     "paquetes": [p for p in s.paquetes if p["id"] > int(resto)]}   # exclusivo, como el real
+            elif cmd == "CONTADORES" and not s.sin_contadores:
+                r = {k: v + s.extra[k] for k, v in envio.resumen_fec(s.paquetes).items()}
+                r.update(ok=True, ultimo_id=max((p["id"] for p in s.paquetes), default=0))
             elif cmd == "INYECTAR":
                 if s.al_inyectar:
                     s.al_inyectar()
@@ -46,6 +51,9 @@ class ShimFalso(socketserver.ThreadingTCPServer):
             else:
                 r = {"error": "?"}
             self.wfile.write(json.dumps(r).encode())
+
+
+JSON = {"Content-Type": "application/json"}
 
 
 def lanzar(srv):
@@ -85,21 +93,23 @@ class Endpoints(Base):
         self.assertEqual((j["codigo"], j["n"], j["k"], j["H"]), ("hamming74", 7, 4, H))
 
     def test_paquetes_desde(self):
-        st, b = self.pedir("/fec/paquetes?desde=6")
+        # `desde` es EXCLUSIVO (id > desde), como el shim real: desde=5 devuelve solo el 6
+        st, b = self.pedir("/fec/paquetes?desde=5")
         self.assertEqual(st, 200)
         self.assertEqual([p["id"] for p in json.loads(b)["paquetes"]], [6])
-        self.assertIn("PAQUETES 6", self.shim.recibidas)
+        self.assertIn("PAQUETES 5", self.shim.recibidas)
+        self.assertEqual(json.loads(self.pedir("/fec/paquetes?desde=6")[1])["paquetes"], [])
 
     def test_paquetes_desde_invalido(self):
-        for malo in ("abc", "-1", "1;CODIGO"):
+        for malo in ("abc", "-1", "1;CODIGO", "%C2%B2", "%D9%A3", "1" * 16):   # «²» y «٣» son isdigit() pero no ASCII
             st, _ = self.pedir("/fec/paquetes?desde=" + malo)
             self.assertEqual(st, 400, malo)
 
     def test_inyectar_bits_y_posiciones(self):
-        st, b = self.pedir("/fec/inyectar", json.dumps({"bits": 2, "semilla": 7}).encode())
+        st, b = self.pedir("/fec/inyectar", json.dumps({"bits": 2, "semilla": 7}).encode(), JSON)
         self.assertEqual((st, json.loads(b)["ok"]), (200, True))
         self.assertEqual(self.shim.recibidas[-1], 'INYECTAR {"bits": 2, "semilla": 7}')
-        st, b = self.pedir("/fec/inyectar", json.dumps({"posiciones": [8, 20]}).encode())
+        st, b = self.pedir("/fec/inyectar", json.dumps({"posiciones": [8, 20]}).encode(), JSON)
         self.assertEqual(st, 200)
 
     def test_inyectar_rechazos(self):
@@ -108,11 +118,36 @@ class Endpoints(Base):
                  {"posiciones": []}, {"posiciones": [7]}, {"posiciones": list(range(8, 17))},
                  {"posiciones": ["8"]}, {"posiciones": [8.5]}, {"bits": 1, "semilla": "x"}, [1], "x"]
         for m in malos:
-            st, _ = self.pedir("/fec/inyectar", json.dumps(m).encode())
+            st, _ = self.pedir("/fec/inyectar", json.dumps(m).encode(), JSON)
             self.assertEqual(st, 400, m)
-        self.assertEqual(self.pedir("/fec/inyectar", b"no es json")[0], 400)
-        self.assertEqual(self.pedir("/fec/inyectar", b"{" + b" " * 2000 + b"}")[0], 413)
+        self.assertEqual(self.pedir("/fec/inyectar", b"no es json", JSON)[0], 400)
+        self.assertEqual(self.pedir("/fec/inyectar", b"{" + b" " * 2000 + b"}", JSON)[0], 413)
         self.assertEqual(len(self.shim.recibidas), n, "nada inválido debe llegar al shim")
+
+    def test_csrf_exige_content_type_json(self):
+        n = len(self.shim.recibidas)
+        cuerpo = json.dumps({"bits": 1}).encode()
+        for cab in ({}, {"Content-Type": "text/plain"}, {"Content-Type": "application/x-www-form-urlencoded"},
+                    {"Content-Type": "multipart/form-data; boundary=x"}):
+            st, _ = self.pedir("/fec/inyectar", cuerpo, cab)
+            self.assertEqual(st, 415, cab)
+        self.assertEqual(len(self.shim.recibidas), n, "un POST de formulario no debe armar el canal")
+        st, _ = self.pedir("/fec/inyectar", cuerpo, {"Content-Type": "Application/JSON; charset=utf-8"})
+        self.assertEqual(st, 200)
+
+    def test_cifras_no_ascii_rechazadas(self):
+        for v in ("²", "³", "¹"):   # latin-1 (las cabeceras HTTP lo exigen), isdigit() True, no ASCII
+            st, _ = self.pedir("/enviar", b"hola", {"X-Inyectar": v})
+            self.assertEqual(st, 400, v)
+        self.assertEqual(self.pedir("/enviar", b"hola", {"X-Inyectar": "1" * 5000})[0], 400)
+
+    def test_content_length_no_ascii_no_revienta(self):
+        sck = socket.create_connection(("127.0.0.1", self.http.server_address[1]), timeout=10)
+        crlf = "\r\n"
+        with sck:
+            sck.sendall(crlf.join(["POST /fec/inyectar HTTP/1.1", "Host: x", "Content-Type: application/json",
+                                   "Content-Length: ²", "", ""]).encode("utf-8"))
+            self.assertIn(b" 413 ", sck.recv(4096).split(crlf.encode())[0])
 
     def test_x_inyectar_invalido(self):
         for v in ("0", "9", "x", "-1"):
@@ -137,7 +172,7 @@ class SinShim(unittest.TestCase):
             base = f"http://127.0.0.1:{http.server_address[1]}"
             for ruta, cuerpo in (("/fec/codigo", None), ("/fec/paquetes?desde=0", None), ("/fec/inyectar", b'{"bits":1}')):
                 with self.assertRaises(urllib.error.HTTPError) as c:
-                    urllib.request.urlopen(urllib.request.Request(base + ruta, data=cuerpo), timeout=10)
+                    urllib.request.urlopen(urllib.request.Request(base + ruta, data=cuerpo, headers=JSON), timeout=10)
                 self.assertEqual(c.exception.code, 503, ruta)
                 self.assertFalse(json.loads(c.exception.read())["disponible"])
         finally:
@@ -150,7 +185,8 @@ class Pagina(Base):
         html = b.decode()
         self.assertEqual(st, 200)
         for t in ("Laboratorio de síndrome", "Inyectar 1 bit", "Inyectar 2 bits", "bit exacto", "fec/paquetes",
-                  "d_min = 3", "no compara contra el original", "recepción del shim de cmp-dn"):
+                  "d_min = 3", "no compara contra el original", "recepción del shim de cmp-dn",
+                  "se numeran desde 1", "columna ${j+1} de H", "r.fec.truncado", "'Content-Type':'application/json'"):
             self.assertIn(t, html)
         lab = html[html.index("Laboratorio de síndrome: todo texto"):]
         self.assertNotIn("innerHTML", lab.replace("(nunca innerHTML)", ""))
@@ -159,7 +195,8 @@ class Pagina(Base):
 
 class EnviarConFec(Base):
     """/enviar completo con un eco falso: añade el bloque fec con los paquetes nuevos."""
-    def test_enviar_con_x_inyectar(self):
+
+    def enviar(self, cabeceras):
         eco = socketserver.TCPServer(("127.0.0.1", 0), socketserver.BaseRequestHandler)
 
         def atender():
@@ -174,27 +211,75 @@ class EnviarConFec(Base):
                 c.sendall(datos); c.recv(1)
                 c.sendall(struct.pack("!I", 4) + b"null")
         threading.Thread(target=atender, daemon=True).start()
-        self.shim.paquetes = [paquete(5), paquete(6)]
-        self.shim.al_inyectar = lambda: self.shim.paquetes.extend([paquete(7, "corregido", [9]),
-                                                                   paquete(8, "no_corregible", [9, 10])])
         v = (envio.DESTINO, envio.PUERTO_ECO, envio.PUERTO_CONTADORES, envio.PUSHGATEWAY)
         envio.DESTINO, envio.PUERTO_ECO = "127.0.0.1", eco.server_address[1]
         envio.PUERTO_CONTADORES, envio.PUSHGATEWAY = 1, "http://127.0.0.1:1"
         try:
-            st, b = self.pedir("/enviar", b"datos de prueba" * 10, {"X-Nombre": "t.txt", "X-Inyectar": "2"})
+            st, b = self.pedir("/enviar", b"datos de prueba" * 10, {"X-Nombre": "t.txt", **cabeceras})
         finally:
             envio.DESTINO, envio.PUERTO_ECO, envio.PUERTO_CONTADORES, envio.PUSHGATEWAY = v
             self.shim.al_inyectar = None; eco.server_close()
-        j = json.loads(b)
+        return st, json.loads(b)
+
+    def setUp(self):
+        self.shim.paquetes = [paquete(5), paquete(6)]
+        self.shim.extra = {k: 0 for k in envio.CLAVES_RESUMEN}
+        self.shim.sin_contadores = False
+
+    def test_enviar_con_x_inyectar(self):
+        self.shim.al_inyectar = lambda: self.shim.paquetes.extend([paquete(7, "corregido", [9]),
+                                                                   paquete(8, "no_corregible", [9, 10])])
+        st, j = self.enviar({"X-Inyectar": "2"})
         self.assertEqual(st, 200, j)
         self.assertTrue(j["identico"])
         self.assertEqual([p["id"] for p in j["fec"]["paquetes"]], [7, 8])
         self.assertEqual(j["fec"]["resumen"], {"paquetes": 2, "con_error_inyectado": 2, "sindromes_no_cero": 2,
                                                "corregidas": 1, "no_corregibles": 1, "invalidos": 0})
+        self.assertEqual((j["fec"]["resumen_fuente"], j["fec"]["truncado"]), ("contadores", False))
         self.assertTrue(j["fec"]["sha_identico"])
         self.assertIn('INYECTAR {"bits": 2}', self.shim.recibidas)
 
-    def test_fec_apagado_no_cambia_el_resultado(self):
+    def test_archivo_grande_el_resumen_sale_de_contadores_no_del_anillo(self):
+        # ~28 000 paquetes: el anillo de 200 solo conserva los últimos; el único con error inyectado ya salió.
+        def mucho():
+            self.shim.paquetes = [paquete(i) for i in range(300, 500)]
+            self.shim.extra.update(paquetes=27800, con_error_inyectado=1, sindromes_no_cero=1, corregidas=1)
+        self.shim.al_inyectar = mucho
+        st, j = self.enviar({"X-Inyectar": "1"})
+        self.assertEqual(st, 200, j)
+        f = j["fec"]
+        self.assertEqual(f["resumen"], {"paquetes": 27998, "con_error_inyectado": 1, "sindromes_no_cero": 1,
+                                        "corregidas": 1, "no_corregibles": 0, "invalidos": 0})
+        self.assertTrue(f["truncado"])
+        self.assertEqual(len(f["paquetes"]), 200)
+
+    def test_shim_sin_contadores_cae_al_anillo_y_lo_dice(self):
+        self.shim.sin_contadores = True
+        self.shim.al_inyectar = lambda: self.shim.paquetes.extend([paquete(7, "corregido", [9])])
+        st, j = self.enviar({"X-Inyectar": "1"})
+        self.assertEqual(st, 200, j)
+        self.assertEqual((j["fec"]["resumen_fuente"], j["fec"]["resumen"]["paquetes"], j["fec"]["truncado"]),
+                         ("anillo", 1, False))
+
+    def test_contadores_del_shim_falso_son_acumulados(self):
+        c = envio._contadores_fec()
+        self.assertEqual((c["paquetes"], c["ultimo_id"]), (2, 6))
+        self.shim.sin_contadores = True
+        self.assertIsNone(envio._contadores_fec())
+
+    def test_fec_apagado_enviar_no_trae_bloque_fec(self):
+        self.shim.codigo, viejo = None, self.shim.codigo
+        n = len(self.shim.recibidas)
+        try:
+            st, j = self.enviar({})
+        finally:
+            self.shim.codigo = viejo
+        self.assertEqual(st, 200, j)
+        self.assertTrue(j["identico"])
+        self.assertNotIn("fec", j)
+        self.assertEqual([x.split()[0] for x in self.shim.recibidas[n:]], ["CODIGO"], "solo se consulta el código")
+
+    def test_fec_apagado_codigo_null(self):
         self.shim.codigo, viejo = None, self.shim.codigo
         try:
             self.assertFalse(envio.fec_consulta("CODIGO").get("codigo"))

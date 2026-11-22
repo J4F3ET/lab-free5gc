@@ -450,6 +450,7 @@ services:
     entrypoint: [ "python3", "-u", "/cmp/envio.py", "pagina" ]
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
+      PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC del shim de cmp-dn (127.0.0.1 del mismo netns)
     volumes: [ ./compresion:/cmp:ro ]
     network_mode: "service:cmp-dn"  # ve el cmp0 10.99.0.2 y los contadores de cmp-dn
     depends_on: [ cmp-dn ]
