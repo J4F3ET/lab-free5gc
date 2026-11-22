@@ -62,6 +62,22 @@ class TableroFec(unittest.TestCase):
                 for nombre in re.findall(r"lab5g_cmp_fec_\w+", t["expr"]):
                     self.assertIn(nombre, EMITIDAS, nombre)
 
+    def test_corregido_mal_en_los_paneles_de_estado(self):
+        self.assertIn("corregido_mal", registro_fec.ESTADOS)
+        pan = {p["title"]: p for p in self.paneles()}
+        barras = pan["Qué pasó con los paquetes"]
+        exprs = [t["expr"] for t in barras["targets"]]
+        self.assertEqual(len(exprs), len(registro_fec.ESTADOS))                  # una consulta por estado
+        for e in registro_fec.ESTADOS:
+            self.assertTrue(any(f'estado="{e}"' in x for x in exprs), e)
+        colores = {o["matcher"]["options"]: o["properties"][0]["value"]["fixedColor"]
+                   for o in barras["fieldConfig"]["overrides"]}
+        self.assertEqual(len(set(colores.values())), len(colores))               # colores todos distintos
+        self.assertIn("corregido_mal", colores)
+        self.assertIn("corrigió mal", barras["description"])
+        self.assertIn("sum by (estado)", pan["Estados en el tiempo"]["targets"][0]["expr"])
+        self.assertIn("estado", pan["Códec del bandido por estado"]["targets"][0]["expr"])
+
     def test_ids_unicos(self):
         ids = [p["id"] for p in self.t["panels"]]
         self.assertEqual(len(ids), len(set(ids)))

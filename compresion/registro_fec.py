@@ -36,8 +36,10 @@ TUNEL = 28               # IP + UDP del túnel
 MARGEN = 36              # 1464 - 28 - 1400 = lo que deja hoy CMP_MTU por defecto
 MAX_POSICIONES_ARMADA = 256
 CLAVES_CONTADORES = ("paquetes", "con_error_inyectado", "sindromes_no_cero", "corregidas",
-                     "no_corregibles", "invalidos", "bits_inyectados", "palabras")
-ESTADOS = ("limpio", "corregido", "no_corregible", "invalido")
+                     "no_corregibles", "invalidos", "bits_inyectados", "palabras", "corregidos_mal")
+# corregido_mal (añadido tras la verificación del 22-11): el síndrome indicó una corrección (estado
+# «corregido») pero el paquete no se pudo reconstruir (integro=False), p. ej. 2 errores en Hamming (7,4).
+ESTADOS = ("limpio", "corregido", "corregido_mal", "no_corregible", "invalido")
 
 
 def mtu_con_fec(codigo, mtu_enlace: int = MTU_ENLACE, tunel: int = TUNEL, margen: int = MARGEN) -> int:
@@ -76,6 +78,7 @@ class RegistroFec:
             t["corregidas"] += int(campos.get("corregidas") or 0)
             t["no_corregibles"] += int(campos.get("no_corregibles") or 0)
             t["invalidos"] += 1 if campos.get("estado") == "invalido" else 0
+            t["corregidos_mal"] += 1 if campos.get("estado") == "corregido_mal" else 0
             t["bits_inyectados"] += len(campos.get("bits_inyectados") or ())
             t["palabras"] += int(campos.get("palabras") or 0)
             return entrada
@@ -265,6 +268,8 @@ class CapaFec:
             base["integro"] = True
         except Exception as e:  # contexto perdido, flujo desincronizado, datos corruptos...
             error = e
+        if base["estado"] == "corregido" and not base["integro"]:
+            base["estado"] = "corregido_mal"   # el síndrome «corrigió», pero el paquete no se reconstruyó
         return self._cerrar(base), error
 
     def _cerrar(self, base: dict) -> dict:

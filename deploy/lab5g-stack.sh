@@ -396,7 +396,7 @@ restart_svc() {   # recuperacion: con padres => recrear siempre; sin padres => u
 
 # Arranca UN servicio y espera su salud. 0 ok, 1 fallo, 99 parada.
 start_one() {
-  local svc="$1" mode=""
+  local svc="$1" mode="" before="" after=""
   if [ "$svc" = upf ] && ! gtp5g_loaded; then
     log "ERROR: modulo gtp5g no cargado: omito upf (sin plano de usuario). Cargalo en el host del LXC: modprobe gtp5g"
     return 1
@@ -410,8 +410,21 @@ start_one() {
     if is_stale "$svc" || ! is_running "$svc"; then mode=force; fi
     is_stale "$svc" && log "$svc: su padre es mas nuevo (namespace obsoleto): recreo"
   fi
+  is_running "$svc" && before="${ID[$svc]:-}"
   log "aplicando $svc${mode:+ (recreate)}"
   apply_svc "$svc" "$mode" || { log "FALLO: 'up' de $svc"; return 1; }
+  # Un servicio que ya corria pasa igualmente por 'up -d --no-deps' (idempotente: compose
+  # solo lo recrea si cambio su configuracion). Se deja constancia de lo ocurrido, porque
+  # "Container X Running" en la salida de compose no dice si hubo o no cambio de configuracion.
+  if [ -n "$before" ] && [ -z "$mode" ] && [ "$DRYRUN" != 1 ]; then
+    after=$(dk inspect -f '{{.Id}}' "$svc" 2>/dev/null || true)
+    if [ -z "$after" ]; then :
+    elif [ "$after" = "$before" ]; then
+      log "$svc: ya corria y compose no vio cambios de configuracion (mismo contenedor); si esperabas un valor nuevo del entorno, verifica con 'docker exec $svc env' o usa 'stop $svc' y luego 'start $svc'"
+    else
+      log "$svc: recreado con la configuracion nueva"
+    fi
+  fi
   wait_health "$svc"
 }
 

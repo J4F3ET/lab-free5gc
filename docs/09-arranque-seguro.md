@@ -438,6 +438,12 @@ sudo /usr/local/sbin/lab5g.sh stop cmp-gen cmp-ue     # solo esos
   hasta el próximo `start`. Para todo: sondas, `phy-sim`, Grafana y la pila.
 - `stop` con nombres los deja anotados como parados a mano. La recuperación no
   los toca hasta el próximo `start`.
+- `start <svc>` de un servicio que ya corre ejecuta igualmente `up -d --no-deps <svc>`:
+  compose lo recrea solo si cambió su configuración (p. ej. tras `env-set`). El log
+  dice si lo recreó o si compose no vio cambios; en ese caso se comprueba con
+  `docker exec <svc> env` y, si hace falta, `stop <svc>` y luego `start <svc>`.
+  Tras cambiar una variable que comparten `cmp-dn` y `cmp-ue`, conviene aplicar ambos
+  en el mismo `start`.
 - Un `stop` sin argumentos tardó **254 s** en el apagado medido. Mejora futura,
   no implementada: apagar por grupos (sondas y Grafana, compresión, RAN, NF, `upf`,
   `mongodb`, y por último `prometheus` y `pushgateway`).

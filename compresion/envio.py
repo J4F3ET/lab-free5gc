@@ -96,7 +96,9 @@ def validar_inyeccion(obj) -> tuple[bool, dict | str]:
 
 def resumen_fec(paquetes: list[dict]) -> dict:
     """Resumen de los paquetes del shim vistos durante un envío."""
-    return {"paquetes": len(paquetes),
+    mal = sum(1 for p in paquetes if p.get("estado") == "corregido_mal")
+    extra = {"corregidos_mal": mal} if mal else {}   # clave opcional: solo si hubo, no rompe a los clientes viejos
+    return {**extra, "paquetes": len(paquetes),
             "con_error_inyectado": sum(1 for p in paquetes if p.get("bits_inyectados")),
             "sindromes_no_cero": sum(int(p.get("sindromes_no_cero") or 0) for p in paquetes),
             "corregidas": sum(int(p.get("corregidas") or 0) for p in paquetes),
@@ -118,7 +120,10 @@ def _contadores_fec() -> dict | None:
 
 def resumen_diferencia(antes: dict, despues: dict) -> dict:
     """Resumen de un envío = contadores después − antes. No depende del anillo de 200 paquetes."""
-    return {k: max(0, despues[k] - antes[k]) for k in CLAVES_RESUMEN}
+    r = {k: max(0, despues[k] - antes[k]) for k in CLAVES_RESUMEN}
+    if _entero(antes.get("corregidos_mal")) and _entero(despues.get("corregidos_mal")):
+        r["corregidos_mal"] = max(0, despues["corregidos_mal"] - antes["corregidos_mal"])   # shim nuevo; opcional
+    return r
 
 
 def _ultimo_id_fec() -> int:
@@ -446,17 +451,17 @@ main{max-width:980px;margin:0 auto;padding:28px 16px 60px}h1{font-size:22px;marg
 table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
 th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:500}.tabla{overflow-x:auto}
 code{font-size:12px;overflow-wrap:anywhere}details{margin-top:10px;color:var(--mute)}
-:root{--warn:#9a6700;--c-limpio:#9a9992;--c-corr:#1f7a4d;--c-mal:#b3261e;--par:#e7efff}
-@media (prefers-color-scheme:dark){:root{--warn:#e3b341;--c-limpio:#6b6b66;--c-corr:#5cc28d;--c-mal:#ff8a80;--par:#26324f}}
+:root{--warn:#9a6700;--c-limpio:#9a9992;--c-corr:#1f7a4d;--c-mal:#b3261e;--c-cmal:#d9480f;--par:#e7efff}
+@media (prefers-color-scheme:dark){:root{--warn:#e3b341;--c-limpio:#6b6b66;--c-corr:#5cc28d;--c-mal:#ff8a80;--c-cmal:#ff922b;--par:#26324f}}
 nav.tabs{display:flex;gap:6px;margin:0 0 18px;flex-wrap:wrap}nav.tabs button,.btn{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
 nav.tabs button.sel{border-color:var(--acc);color:var(--acc)}.btn:hover{border-color:var(--acc)}
 .aviso{border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:13px}
 .mat{border-collapse:collapse;display:inline-table;margin:4px 14px 8px 0}.mat td{border:1px solid var(--line);padding:2px 7px;text-align:center;font:13px ui-monospace,monospace}
 .mat td.par{background:var(--par)}.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.ctl input{font:inherit;width:90px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
 #linea{display:flex;flex-wrap:wrap;gap:3px;margin:10px 0}#linea button{width:26px;height:26px;padding:0;border-radius:5px;border:2px solid transparent;cursor:pointer;color:#fff;font-size:10px}
-#linea button.limpio{background:var(--c-limpio)}#linea button.corregido{background:var(--c-corr);border-color:var(--fg)}#linea button.no_corregible,#linea button.invalido{background:var(--c-mal)}
+#linea button.limpio{background:var(--c-limpio)}#linea button.corregido{background:var(--c-corr);border-color:var(--fg)}#linea button.corregido_mal{background:var(--c-cmal);border-color:var(--fg)}#linea button.no_corregible,#linea button.invalido{background:var(--c-mal)}
 #linea button.iny{outline:2px dashed var(--warn);outline-offset:1px}#linea button.act{box-shadow:0 0 0 2px var(--acc)}
-#detalle ol{padding-left:20px}#detalle li{margin:6px 0}.st-limpio{color:var(--c-limpio)}.st-corregido{color:var(--c-corr)}.st-no_corregible,.st-invalido{color:var(--c-mal)}
+#detalle ol{padding-left:20px}#detalle li{margin:6px 0}.st-limpio{color:var(--c-limpio)}.st-corregido{color:var(--c-corr)}.st-corregido_mal{color:var(--c-cmal)}.st-no_corregible,.st-invalido{color:var(--c-mal)}
 tr.fila{cursor:pointer}tr.fila:hover{background:var(--bg)}
 </style></head><body><main>
 <h1>Enviar un archivo por la red 5G</h1>
@@ -478,16 +483,16 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <h2 style="font-size:18px;margin:0 0 4px">Laboratorio de síndrome</h2>
 <p class="sub" style="margin-bottom:8px">Detección y corrección de errores con códigos de bloque lineales: recibido r = c + e, síndrome s = r·Hᵀ; s = 0 sin error, s ≠ 0 error, y si coincide con la columna i de H se voltea el bit i.</p>
 <div class="aviso">Nota: el canal se modela en la recepción del shim de cmp-dn, es decir sobre el tráfico que RECIBE el DN (p. ej. el viaje de vuelta del eco). El error se inyecta ahí, no en la bajada.</div>
-<div class="aviso">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y queda contado como «corregido»; el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
+<div class="aviso">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y, si el paquete no se reconstruye, queda como «corrigió mal» (si sí se reconstruye, sigue contado como «corregido»); el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
 <div id="lab-codigo" class="res"></div>
 <div class="res"><div class="ctl">
 <button class="btn" id="b-uno" type="button">Inyectar 1 bit</button><button class="btn" id="b-dos" type="button">Inyectar 2 bits</button>
 <label class="k">bit exacto <input id="bit-exacto" type="number" min="8" step="1" placeholder="&ge; 8"></label><button class="btn" id="b-exacto" type="button">Inyectar ahí</button>
 </div><div id="armada" class="k"></div></div>
 <h3 style="font-size:15px;margin:18px 0 0">Línea de tiempo de paquetes</h3>
-<div class="k">gris: limpio · verde con borde: corregido · rojo: no corregible o inválido · borde punteado: con error inyectado. Clic para ver el detalle.</div>
+<div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido · borde punteado: con error inyectado. Clic para ver el detalle.</div>
 <div id="linea"></div>
-<div class="ctl"><label class="k">estado <select id="filtro"><option value="">todos</option><option value="limpio">limpio</option><option value="corregido">corregido</option><option value="no_corregible">no corregible</option><option value="invalido">inválido</option></select></label><span id="cuenta" class="k"></span></div>
+<div class="ctl"><label class="k">estado <select id="filtro"><option value="">todos</option><option value="limpio">limpio</option><option value="corregido">corregido</option><option value="corregido_mal">corrigió mal</option><option value="no_corregible">no corregible</option><option value="invalido">inválido</option></select></label><span id="cuenta" class="k"></span></div>
 <div class="tabla"><table><thead><tr><th>id</th><th>lado</th><th>sec.</th><th>códec</th><th>estado</th><th>s≠0</th><th>corr.</th><th>no corr.</th><th>bits volteados</th></tr></thead><tbody id="lab-tabla"></tbody></table></div>
 <div id="detalle" class="res" hidden></div>
 </div>
@@ -505,7 +510,7 @@ function mostrar(r){ const ok=r.identico;
   <div><div class="k">H(O) · H(R)</div><div class="v">${r.H_O.toFixed(3)} · ${r.H_R.toFixed(3)}</div><div class="k">bits por byte</div></div>
   <div><div class="k">I(O;R)</div><div class="v">${r.I_OR.toFixed(3)}</div><div class="k">${pct(r.info_entregada_pct)} de H(O)</div></div>
   ${sentido(r.bajada,'Bajada (cmp-dn)')}${sentido(r.subida,'Subida (cmp-ue)')}
-  ${r.fec?`<div><div class="k">FEC ${esc(String(r.fec.codigo))}</div><div class="v">${Number(r.fec.resumen.paquetes)} paq.</div><div class="k">con error ${Number(r.fec.resumen.con_error_inyectado)} · s≠0 ${Number(r.fec.resumen.sindromes_no_cero)} · corregidos ${Number(r.fec.resumen.corregidas)} · no corregibles ${Number(r.fec.resumen.no_corregibles)} · inválidos ${Number(r.fec.resumen.invalidos)}${r.fec.truncado?' · <b class="bad">lista de paquetes truncada ('+(r.fec.resumen_fuente==='contadores'?'el resumen sí es exacto':'resumen incompleto: el shim no tiene CONTADORES')+')</b>':''}</div></div>`:''}
+  ${r.fec?`<div><div class="k">FEC ${esc(String(r.fec.codigo))}</div><div class="v">${Number(r.fec.resumen.paquetes)} paq.</div><div class="k">con error ${Number(r.fec.resumen.con_error_inyectado)} · s≠0 ${Number(r.fec.resumen.sindromes_no_cero)} · corregidos ${Number(r.fec.resumen.corregidas)} · corrigió mal ${Number(r.fec.resumen.corregidos_mal||0)} · no corregibles ${Number(r.fec.resumen.no_corregibles)} · inválidos ${Number(r.fec.resumen.invalidos)}${r.fec.truncado?' · <b class="bad">lista de paquetes truncada ('+(r.fec.resumen_fuente==='contadores'?'el resumen sí es exacto':'resumen incompleto: el shim no tiene CONTADORES')+')</b>':''}</div></div>`:''}
   </div><details><summary>SHA-256</summary><code>original ${r.sha_original}<br>vuelta&nbsp;&nbsp; ${r.sha_vuelta}</code></details></div>`;}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 async function historial(){ const h=await (await fetch('historial')).json();
@@ -527,7 +532,7 @@ function h(tag,attrs,...hijos){ const e=document.createElement(tag);
   for(const [k,v] of Object.entries(attrs||{})){ if(k==='class') e.className=v; else e.setAttribute(k,String(v)); }
   for(const c of hijos.flat()){ if(c==null||c===false) continue; e.append(c instanceof Node?c:document.createTextNode(String(c))); }
   return e; }
-const ETQ={limpio:'limpio',corregido:'corregido',no_corregible:'no corregible',invalido:'inválido'};
+const ETQ={limpio:'limpio',corregido:'corregido',corregido_mal:'corrigió mal',no_corregible:'no corregible',invalido:'inválido'};
 const lab={paquetes:[],ultimo:0,codigo:null,sel:null,timer:null};
 function vista(cual){ const l=cual==='lab';
   $('#vista-envio').hidden=l; $('#vista-lab').hidden=!l;
