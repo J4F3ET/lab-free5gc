@@ -1,0 +1,560 @@
+{
+ "uid": "lab5g-cmp-fec",
+ "title": "Codificación de canal (síndrome)",
+ "description": "Paquetes limpios, corregidos y no corregibles por la FEC, y los síndromes observados.",
+ "tags": [
+  "lab5g",
+  "compresion",
+  "fec"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 1,
+ "editable": true,
+ "refresh": "1m",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "lado",
+    "label": "Lado (ue = subida, dn = bajada)",
+    "description": "Qué lado del shim mostrar.",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "query_result(count by (lado) (last_over_time(lab5g_cmp_fec_paquetes_total[30d])))",
+     "refId": "v"
+    },
+    "definition": "query_result(count by (lado) (last_over_time(lab5g_cmp_fec_paquetes_total[30d])))",
+    "regex": "/lado=\"(?<value>[^\"]+)\"/",
+    "refresh": 2,
+    "sort": 1,
+    "multi": false,
+    "includeAll": true,
+    "allValue": ".+",
+    "current": {
+     "selected": true,
+     "text": "All",
+     "value": "$__all"
+    }
+   },
+   {
+    "name": "codigo",
+    "label": "Código",
+    "description": "Qué código FEC mostrar (repetición, Hamming).",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "query_result(count by (codigo) (last_over_time(lab5g_cmp_fec_paquetes_total[30d])))",
+     "refId": "v"
+    },
+    "definition": "query_result(count by (codigo) (last_over_time(lab5g_cmp_fec_paquetes_total[30d])))",
+    "regex": "/codigo=\"(?<value>[^\"]+)\"/",
+    "refresh": 2,
+    "sort": 1,
+    "multi": false,
+    "includeAll": true,
+    "allValue": ".+",
+    "current": {
+     "selected": true,
+     "text": "All",
+     "value": "$__all"
+    }
+   }
+  ]
+ },
+ "annotations": {
+  "list": []
+ },
+ "links": [
+  {
+   "type": "dashboards",
+   "tags": [
+    "compresion"
+   ],
+   "asDropdown": true,
+   "title": "Compresión",
+   "includeVars": false
+  }
+ ],
+ "panels": [
+  {
+   "type": "text",
+   "title": "Cómo leer este tablero",
+   "options": {
+    "mode": "markdown",
+    "content": "**Idea de clase.** Se envía una palabra código *r = c + e* (e = el error que mete el canal). El receptor calcula el **síndrome** s = r·Hᵀ = e·Hᵀ: no depende del mensaje, solo del error.\n\n- **s = 0**: no se ve error (paquete *limpio*).\n- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** (paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o corrige mal.\n\nLos errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. Fórmulas y códigos: `docs/10-codificacion-canal.md`."
+   },
+   "id": 1,
+   "gridPos": {
+    "h": 6,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Qué pasó con los paquetes",
+   "description": "**Significado:** Cuántos paquetes recibidos cayeron en cada estado en el rango de tiempo elegido. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** increase() del contador de paquetes sumado por estado: limpio = s 0; corregido = s ≠ 0 y se arregló; no_corregible = el código detecta más errores de los que corrige; invalido = el marco no se pudo leer. Los contadores reinician con el shim; increase() lo compensa.\n\n**Eje X:** estado del paquete.\n\n**Eje Y:** número de paquetes en el rango de tiempo.\n\n**A qué responde:** ¿Cómo le va al código con el canal actual? Si «corregido» crece al inyectar errores, la FEC está trabajando; «no_corregible» es lo que se le escapa.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "label_replace(sum(increase(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\",estado=\"limpio\"}[$__range])), \"estado\", \"limpio\", \"\", \"\")",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "B",
+     "expr": "label_replace(sum(increase(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\",estado=\"corregido\"}[$__range])), \"estado\", \"corregido\", \"\", \"\")",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "C",
+     "expr": "label_replace(sum(increase(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\",estado=\"no_corregible\"}[$__range])), \"estado\", \"no_corregible\", \"\", \"\")",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    },
+    {
+     "refId": "D",
+     "expr": "label_replace(sum(increase(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\",estado=\"invalido\"}[$__range])), \"estado\", \"invalido\", \"\", \"\")",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "limpio",
+       "Value #B": "corregido",
+       "Value #C": "no_corregible",
+       "Value #D": "invalido"
+      }
+     }
+    }
+   ],
+   "options": {
+    "xField": "estado",
+    "orientation": "horizontal",
+    "showValue": "always",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": 0
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#9aa0a6"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "limpio"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9aa0a6"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "corregido"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#73BF69"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "no_corregible"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#F2495C"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "invalido"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#FF9830"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "id": 2,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Estados en el tiempo",
+   "description": "**Significado:** Cuántos paquetes por minuto llegan en cada estado, a lo largo del tiempo. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** rate() del contador de paquetes por estado en la ventana de gráfica, por 60. Barras apiladas: la altura total es el tráfico recibido.\n\n**Eje X:** hora.\n\n**Eje Y:** paquetes por minuto, apilados por estado.\n\n**A qué responde:** ¿Cuándo se inyectaron errores y cómo respondió el código? Un salto de «corregido» o «no_corregible» marca el momento de la inyección.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (estado) (rate(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\"}[$__rate_interval])) * 60",
+     "instant": false,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{estado}}",
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "custom": {
+      "drawStyle": "bars",
+      "fillOpacity": 70,
+      "lineWidth": 1,
+      "stacking": {
+       "mode": "normal",
+       "group": "A"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "limpio"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9aa0a6"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "corregido"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#73BF69"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "no_corregible"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#F2495C"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "invalido"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#FF9830"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "id": 3,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "barchart",
+   "title": "Síndromes observados",
+   "description": "**Significado:** Cuántas palabras código dieron cada valor de síndrome distinto de cero en el rango elegido. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** increase() del contador de síndromes por valor. Cada valor (en binario) es una **columna de H**: la columna que coincide con s es la posición del bit que el decodificador corrige. s = 0 no se cuenta.\n\n**Eje X:** valor del síndrome s, en binario (cada uno = una columna de H).\n\n**Eje Y:** número de palabras en el rango de tiempo.\n\n**A qué responde:** ¿Dónde caen los errores? Si un síndrome domina, el canal daña casi siempre el mismo bit; si se reparten, los errores son uniformes.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (sindrome) (increase(lab5g_cmp_fec_sindrome_total{lado=~\"$lado\",codigo=~\"$codigo\"}[$__range]))",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Value",
+        "desc": true
+       }
+      ]
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {}
+     }
+    }
+   ],
+   "options": {
+    "xField": "sindrome",
+    "orientation": "horizontal",
+    "showValue": "always",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xTickLabelRotation": 0
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 1,
+      "gradientMode": "none",
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "id": 4,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 15
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Códec del bandido por estado",
+   "description": "**Significado:** Qué códec eligió el bandido y en qué estado terminaron sus paquetes. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** celda = increase() del contador de paquetes, por códec (fila) y estado (columna), en el rango elegido. Color más fuerte = más paquetes.\n\n**Eje X:** estado del paquete (columnas).\n\n**Eje Y:** códec que eligió el bandido (filas).\n\n**A qué responde:** ¿El bandido sigue eligiendo códecs frágiles cuando hay errores? Un códec con estado (deflate_flujo) que acumula «no_corregible» o «invalido» se desincroniza más que uno sin estado.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (codec, estado) (increase(lab5g_cmp_fec_paquetes_total{lado=~\"$lado\",codigo=~\"$codigo\"}[$__range]))",
+     "instant": true,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "groupingToMatrix",
+     "options": {
+      "columnField": "estado",
+      "rowField": "codec",
+      "valueField": "Value",
+      "emptyValue": "null"
+     }
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "min": 0,
+     "color": {
+      "mode": "continuous-BlPu"
+     },
+     "custom": {
+      "align": "center",
+      "minWidth": 55,
+      "cellOptions": {
+       "type": "color-background",
+       "mode": "basic"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byType",
+       "options": "string"
+      },
+      "properties": [
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "auto"
+        }
+       },
+       {
+        "id": "custom.minWidth",
+        "value": 110
+       },
+       {
+        "id": "custom.align",
+        "value": "left"
+       }
+      ]
+     }
+    ]
+   },
+   "id": 5,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 15
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  }
+ ]
+}
