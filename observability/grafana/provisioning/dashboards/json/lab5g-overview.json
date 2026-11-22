@@ -163,27 +163,9 @@
     },
     {
       "type": "timeseries",
-      "title": "CPU por contenedor del lab",
-      "description": "Sin datos: cAdvisor fue retirado y ya no hay fuente de CPU por contenedor. Se deja el panel como recordatorio.",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]))",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 1, "fillOpacity": 8 } },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
       "title": "Memoria por contenedor del lab",
       "description": "Memoria (MB) de cada contenedor. La publica el servicio lab5g-stack al pushgateway (job lab5g_stack) como lab5g_ct_mem_mb.",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 21 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {

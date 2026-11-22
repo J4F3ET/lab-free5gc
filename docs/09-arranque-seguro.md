@@ -547,9 +547,9 @@ para comprobar que aparecen solo los servicios actuales.
 - **Subredes del compose.** `docker-compose.yaml` fija las subredes con valores
   literales. Por confirmar si las variables `SBI_SUBNET`…`OBS_SUBNET` de
   `.env.example` se usan en algún sitio.
-- **Panel de CPU por contenedor.** `lab5g-overview` tiene el panel «CPU por
-  contenedor del lab», que consulta `container_cpu_usage_seconds_total` de
-  cAdvisor, retirado. Sin fuente hasta que se decida una alternativa.
+- **Panel de CPU por contenedor.** Quitado de `lab5g-overview` el 22-11:
+  consultaba `container_cpu_usage_seconds_total` de cAdvisor, retirado. El panel
+  de memoria por contenedor ocupa ahora todo el ancho de esa fila.
 - **Configuración de `webuicfg`.** `config/webuicfg.yaml` sigue en el repositorio sin
   uso. Por confirmar si se borra.
 

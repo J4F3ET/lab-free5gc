@@ -290,9 +290,8 @@ responde. Rojo aquí significa "ese servicio no acepta conexiones".
 **Fila 3 — Recursos.** Tres paneles salen de la pila (`lab5g-stack` al
 pushgateway): «Presion de I/O del host (%)» (`lab5g_host_io_presion_pct`),
 «Memoria disponible del host» (`lab5g_host_mem_disponible_mb`) y «Memoria por
-contenedor del lab» (`lab5g_ct_mem_mb`). El cuarto, «CPU por contenedor del lab»,
-no tiene fuente: consulta cAdvisor, retirado. Ver
-[09 §12](09-arranque-seguro.md#12-pendientes-y-cosas-por-confirmar).
+contenedor del lab» (`lab5g_ct_mem_mb`). El panel «CPU por contenedor del lab»
+se quitó (22-11): su fuente, cAdvisor, está retirada.
 
 El dashboard tiene además una sección de capa física simulada (`lab5g_phy_*`).
 
@@ -373,8 +372,8 @@ Un truco que vale la pena: superpón en el mismo panel la **latencia del teléfo
 y la **presión de I/O**. Si suben juntas, el problema es de capacidad del host.
 Si la latencia sube sola, es de red.
 
-> No hay CPU por contenedor: el panel «CPU por contenedor del lab» consulta
-> cAdvisor, retirado, y no tiene fuente. Por confirmar cómo sustituirlo.
+> No hay CPU por contenedor: el panel se quitó porque cAdvisor está retirado.
+> Si hace falta, `docker stats --no-stream` dentro del LXC da el valor puntual.
 
 ---
 
