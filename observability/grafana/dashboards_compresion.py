@@ -694,7 +694,7 @@ def variable_fec(nombre, etiqueta, clave, desc):
 
 d3 = tablero("lab5g-cmp-fec", "Codificación de canal (síndrome)",
              "Paquetes limpios, corregidos y no corregibles por la FEC, y los síndromes observados.", L,
-             [variable_fec("lado", "Lado (ue = subida, dn = bajada)", "lado", "Qué lado del shim mostrar."),
+             [variable_fec("lado", "Lado que recibe (ue = bajada, dn = subida)", "lado", "Qué lado del shim mostrar."),
               variable_fec("codigo", "Código", "codigo", "Qué código FEC mostrar (repetición, Hamming).")])
 d3["tags"] = ["lab5g", "compresion", "fec"]
 

@@ -20,7 +20,7 @@
   "list": [
    {
     "name": "lado",
-    "label": "Lado (ue = subida, dn = bajada)",
+    "label": "Lado que recibe (ue = bajada, dn = subida)",
     "description": "Qué lado del shim mostrar.",
     "type": "query",
     "datasource": {

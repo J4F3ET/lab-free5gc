@@ -16,6 +16,13 @@ def balanceada(expr: str) -> bool:
     return n == 0
 
 
+import re
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import registro_fec  # noqa: E402
+
+EMITIDAS = {l.split("{")[0] for l in registro_fec.CapaFec("hamming_7_4", "dn").texto('lado="dn"').splitlines()}
+
+
 class TableroFec(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -52,6 +59,8 @@ class TableroFec(unittest.TestCase):
             for t in p.get("targets", []):
                 self.assertTrue(balanceada(t["expr"]), t["expr"])
                 self.assertIn("lab5g_cmp_fec_", t["expr"])
+                for nombre in re.findall(r"lab5g_cmp_fec_\w+", t["expr"]):
+                    self.assertIn(nombre, EMITIDAS, nombre)
 
     def test_ids_unicos(self):
         ids = [p["id"] for p in self.t["panels"]]
