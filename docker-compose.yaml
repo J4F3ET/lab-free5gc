@@ -552,6 +552,10 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?define GRAFANA_ADMIN_PASSWORD en /etc/lab5g/lab5g.env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_INSTALL_PLUGINS: ""
+      # Arranque ligero: el lab solo usa Prometheus. Cada plugin core lanza un proceso y lee
+      # disco al arrancar; en el host (3.8 GB, disco mecanico) Grafana tardaba >25 min en servir.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_DISABLE_PLUGINS: "elasticsearch,influxdb,jaeger,loki,mssql,mysql,opentsdb,stackdriver,tempo,zipkin,grafana-postgresql-datasource,grafana-pyroscope-datasource,grafana-advisor-app,grafana-exploretraces-app,grafana-lokiexplore-app,grafana-metricsdrilldown-app,grafana-pyroscope-app"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
