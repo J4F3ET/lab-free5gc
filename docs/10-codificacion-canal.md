@@ -301,7 +301,9 @@ hasta el cierre. Verbos:
 | `GET /fec/codigo` | Equivale a `CODIGO` |
 | `GET /fec/paquetes?desde=<id>` | Equivale a `PAQUETES <id>` |
 | `POST /fec/inyectar` | Equivale a `INYECTAR`; cuerpo JSON de hasta 1 KB, con `bits` entre 1 y 8, o hasta 8 `posiciones` $\ge 8$. **`Content-Type: application/json` es obligatorio** |
-| `POST /enviar` con cabecera `X-Inyectar: N` | Arma $N$ bits (1 a 8) justo antes de mandar el archivo (la orden la consume el **siguiente marco que recibe `cmp-dn`**, normalmente de `cmp-gen`, así que no garantiza que el error caiga en el archivo; para verlo con certeza, detener `cmp-gen` con `lab5g.sh stop cmp-gen`) y devuelve en el resultado los paquetes FEC observados y su resumen |
+| `POST /enviar` con cabecera `X-Inyectar: N` | Arma $N$ bits (1 a 8) justo antes de mandar el archivo (la orden la consume el **siguiente marco que recibe `cmp-dn`**, normalmente de `cmp-gen`, así que no garantiza que el error caiga en el archivo; para verlo con certeza, detener `cmp-gen` con `lab5g.sh stop cmp-gen` y volver a arrancarlo con `lab5g.sh start cmp-gen` después) y devuelve en el resultado los paquetes FEC observados y su resumen |
+
+**Nota práctica.** Para ver el error dentro del archivo de `/enviar` hay que parar el generador (`lab5g.sh stop cmp-gen`, y `lab5g.sh start cmp-gen` después), porque la orden armada la gasta el siguiente marco que recibe `cmp-dn`; en las pruebas la gastaron marcos de 50, 54 y 1375 B del generador. Por eso un `sha_identico` con `X-Inyectar` no demuestra por sí solo que el error tocó los datos del archivo.
 
 Si el shim no responde (sin FEC o `cmp-dn` caído), los endpoints `/fec/*` devuelven 503.
 
@@ -388,16 +390,18 @@ se construyó como «Qué pasó con los paquetes», barras por estado, porque no
 contadores por etapa). Menús `lado` y `codigo`. **No se ha visto aún en un Grafana real.**
 
 **Métricas ya implementadas** en `shim.py`, empujadas al pushgateway cada 10 s, con
-las etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **No se han
-visto aún en el pushgateway real.** Solo aparecen si el shim tiene FEC activa.
+las etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **Ya se ven
+en el pushgateway real (22-11).** Solo aparecen si el shim tiene FEC activa.
 
 | Métrica | Etiquetas extra | Qué cuenta |
 |---|---|---|
-| `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, corregido_mal, no_corregible, invalido) y códec |
+| `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, corregido_mal, no_corregible, invalido) y códec. La etiqueta `codec` pertenece a un conjunto cerrado precargado a 0: los nombres registrados, `n/a` (marco `invalido`) y `desconocido` (id sin nombre registrado, p. ej. un bit volteado en el byte 0; un `corregido_mal` con id de códec corrupto se etiqueta `codec="desconocido"`, aunque el registro de la página conserva el `codec_id` numérico real) |
 | `lab5g_cmp_fec_sindrome_total` | `sindrome` | Palabras por valor de síndrome distinto de cero |
 | `lab5g_cmp_fec_bits_inyectados_total` | ninguna | Bits volteados por la inyección |
 | `lab5g_cmp_fec_palabras_total` | ninguna | Palabras código decodificadas |
 | `lab5g_cmp_fec_bytes_total` | `tipo` (`comprimido`, `fec`) | Bytes emitidos antes y después de añadir la paridad |
+
+En estado `invalido` no se registra el síndrome del paquete (el decodificador falla antes de producirlo), así que no suma a `lab5g_cmp_fec_sindrome_total`.
 
 El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (recibidos, entregados) que las métricas actuales no tienen; en su lugar el tablero muestra los paquetes por estado.
 
@@ -561,12 +565,13 @@ pruebas unitarias; ninguna toca la TUN ni el laboratorio.
 - Resumen exacto de `/enviar` por `CONTADORES` (`resumen_fuente: contadores`, `truncado: false`).
 - Métricas `lab5g_cmp_fec_*` en el pushgateway (series precargadas a 0) y consultas `increase()` de los paneles contestadas por Prometheus. Grafana estaba apagado: el tablero no se ha visto renderizado.
 - Tráfico normal: `cmp-gen` sigue enviando, sin errores nuevos sin inyección.
+- Casos de la verificación del 22-11: 1 bit en la posición 82 → $s=011$, `corregido`; 2 bits en 71 y 72 (nibble del id de códec) → `corregido_mal`; 2 bits en 15 y 16 (campo de secuencia) → `corregido` íntegro pero con secuencia falsa (nadie lo detecta: el receptor no compara con el original); 2 bits en 43 y 44 (campo de largo) → `invalido`.
 
 **Reservas observadas (pendientes):**
 
 - La orden de inyección la gasta el siguiente marco que recibe `cmp-dn`, normalmente de `cmp-gen`.
 - Una ráfaga de 64 marcos `invalido` justo tras activar `FEC` en `cmp-dn`: durante el cambio los dos lados llevaban valores distintos. Cambiar `FEC` siempre en ambos lados.
-- ~~Un paquete `corregido` con `integro=false` contaba como corrección en el tablero.~~ Resuelto tras la verificación del 22-11 con el estado `corregido_mal` (aún sin desplegar ni verificar en el lab real). Sigue pendiente la limitación de fondo: con 2 errores Hamming (7,4) no puede corregir (SECDED, §9), y un `corregido` íntegro puede seguir llevando datos distintos al original, porque el receptor no compara.
+- ~~Un paquete `corregido` con `integro=false` contaba como corrección en el tablero.~~ Resuelto tras la verificación del 22-11 con el estado `corregido_mal` (desplegado y verificado en el lab real el 22-11). Sigue pendiente la limitación de fondo: con 2 errores Hamming (7,4) no puede corregir (SECDED, §9), y un `corregido` íntegro puede seguir llevando datos distintos al original, porque el receptor no compara.
 - La memoria de `cmp-ue` subió de ~23 a ~47 MiB de 64 y parecía estabilizarse; vigilar con `docker stats` y subir el tope si llega cerca.
 - Costo de CPU en el LXC 110: sin cuello de botella visible (carga ~1-2), pero no se midió con tráfico alto.
 

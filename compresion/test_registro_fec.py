@@ -159,6 +159,27 @@ class TestRecepcion(unittest.TestCase):
         self.assertEqual((e["estado"], e["integro"]), ("corregido", True))
         self.assertEqual(self.rx.registro.contadores()["corregidos_mal"], 1)
 
+    def test_id_de_codec_corrupto_se_etiqueta_desconocido(self):
+        # 2 bits en la palabra del nibble del id de códec (bits 71, 72): el id real cambia a uno sin nombre
+        comp = bytes([0x80 | 4]) + bytes(range(40))          # id 4 (deflate_flujo); con 2 bits en 71,72 pasa a 12
+        marco = self.tx.emitir(comp)
+        otro = self.tx.emitir(bytes([0x80 | 12]) + bytes(range(40)))   # id 12 real, sin nombre registrado
+        self.assertIn('codec="desconocido"', self.rx.texto('lado="dn"'))
+        for estado in ("limpio", "corregido", "corregido_mal", "no_corregible"):
+            self.assertIn(f'estado="{estado}",codec="desconocido"}} 0', self.rx.texto('lado="dn"'))
+        antes = set(self.rx.c_paquetes)
+        e, _ = self.rx.recibir(otro, procesar_ok)                # limpio: el id 12 real se conserva
+        self.assertEqual((e["codec_id"], e["codec"]), (12, "codec_12"))
+        self.assertEqual(self.rx.c_paquetes[("limpio", "desconocido")], 1)
+        self.rx.armar({"posiciones": [71, 72]})
+        e, _ = self.rx.recibir(marco, lambda c: (_ for _ in ()).throw(ValueError("id sin códec")))
+        self.assertEqual(e["estado"], "corregido_mal")
+        self.assertEqual(e["codec_id"], 12)                      # el registro conserva el id numérico real
+        self.assertEqual(self.rx.c_paquetes[("corregido_mal", "desconocido")], 1)
+        self.assertIn('estado="corregido_mal",codec="desconocido"} 1', self.rx.texto('lado="dn"'))
+        self.assertEqual(set(self.rx.c_paquetes), antes)         # ninguna serie nueva nació en caliente
+        self.assertNotIn("codec_12", self.rx.texto('lado="dn"'))
+
     def test_marco_invalido_no_escribe(self):
         llamadas = []
         e, err = self.rx.recibir(b"\x09\x01\x02", lambda c: llamadas.append(c) or 0)
