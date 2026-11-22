@@ -45,21 +45,22 @@ Gilbert-Elliott, borrado) y RaptorQ. Ver [§9](#9-hoja-de-ruta-siguiente-entrega
 
 **Estado de la implementación**
 
-El código está escrito y tiene pruebas unitarias (82 pruebas en los cinco archivos
-de [§10](#10-cómo-probar), ejecutadas en un PC con Windows). **No se ha probado de
-extremo a extremo en el laboratorio real**: en Windows no hay TUN, así que
-`shim.py` no se ha ejecutado con tráfico de verdad. Lo que falta probar está en
-[§10](#10-cómo-probar).
+El código tiene pruebas unitarias (98 pruebas en los archivos de
+[§10](#10-cómo-probar), ejecutadas en un PC con Windows) y **se probó de extremo a
+extremo en el laboratorio real el 22-11-2026** con `FEC=hamming_7_4` en `cmp-ue` y
+`cmp-dn`: inyección de 1 y 2 bits, síndromes observados, archivo de vuelta con
+SHA idéntico, métricas en el pushgateway y consultas del tablero contestadas por
+Prometheus. Los resultados y las reservas están en [§10](#10-cómo-probar).
 
 | Pieza | Estado |
 |---|---|
 | `compresion/fec.py` (códigos de repetición y Hamming, `CodigoLineal`, `codificar`/`decodificar` sobre bytes) | Implementado y probado con pruebas unitarias; los ejemplos de clase son pruebas exactas |
 | `compresion/canal.py` (`inyectar` y `elegir_posiciones`) | Implementado y probado con pruebas unitarias |
 | `compresion/registro_fec.py` (`RegistroFec`, `CapaFec`, `mtu_con_fec`, `aplicar_canal`) | Implementado y probado con pruebas unitarias (sin TUN ni sockets) |
-| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada; **no probada en el laboratorio** |
-| Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); **la página no se ha usado contra un shim real** |
-| Métricas `lab5g_cmp_fec_*` | Implementadas en el shim; **no verificadas en el pushgateway** |
-| Tablero de Grafana | **Construido** (`lab5g-cmp-fec`; no visto aún en un Grafana real) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
+| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** (22-11) |
+| Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); probados en el laboratorio con `/enviar` y `/fec/inyectar` |
+| Métricas `lab5g_cmp_fec_*` | Verificadas en el pushgateway y en Prometheus (22-11) |
+| Tablero de Grafana | **Construido** (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus, pero no se ha visto renderizado en un Grafana) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
 
 ---
 
@@ -300,7 +301,7 @@ hasta el cierre. Verbos:
 | `GET /fec/codigo` | Equivale a `CODIGO` |
 | `GET /fec/paquetes?desde=<id>` | Equivale a `PAQUETES <id>` |
 | `POST /fec/inyectar` | Equivale a `INYECTAR`; cuerpo JSON de hasta 1 KB, con `bits` entre 1 y 8, o hasta 8 `posiciones` $\ge 8$. **`Content-Type: application/json` es obligatorio** |
-| `POST /enviar` con cabecera `X-Inyectar: N` | Arma $N$ bits (1 a 8) justo antes de mandar el archivo y devuelve en el resultado los paquetes FEC observados y su resumen |
+| `POST /enviar` con cabecera `X-Inyectar: N` | Arma $N$ bits (1 a 8) justo antes de mandar el archivo (la orden la consume el **siguiente marco que recibe `cmp-dn`**, normalmente de `cmp-gen`, así que no garantiza que el error caiga en el archivo; para verlo con certeza, detener `cmp-gen` con `lab5g.sh stop cmp-gen`) y devuelve en el resultado los paquetes FEC observados y su resumen |
 
 Si el shim no responde (sin FEC o `cmp-dn` caído), los endpoints `/fec/*` devuelven 503.
 
@@ -414,7 +415,7 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
 
 - **Significado:** qué síndromes aparecen y con qué frecuencia.
 - **Cómo funciona:** histograma de los valores de $\mathbf s$.
-- **Eje X:** valor del síndrome (los 8 posibles en Hamming (7,4)).
+- **Eje X:** valor del síndrome (los 7 no nulos posibles en Hamming (7,4)).
 - **Eje Y:** número de paquetes.
 - **A qué responde:** si los errores caen donde el código los corrige o si hay
   síndromes que apuntan a columnas incorrectas.
@@ -451,7 +452,7 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
 - **Límite de Hamming (7,4).** Con dos errores, el síndrome nunca vale 0, así que
   el error se nota. Pero en Hamming (7,4) cada síndrome no nulo coincide con la
   columna de algún bit, y la suma de dos columnas es siempre una tercera columna.
-  El decodificador **corrige mal sin avisar**. Esta es la razón de la siguiente
+  El decodificador **corrige mal sin avisar** en el contador de síndromes: el estado queda `corregido`, aunque el paquete puede salir no íntegro (la descompresión falla o la TUN lo rechaza) y entonces suma a `lab5g_cmp_errores`; el tablero lo cuenta igualmente como corrección. Esta es la razón de la siguiente
   entrega (SECDED, §9).
 
 ---
@@ -544,19 +545,22 @@ python3 -m unittest compresion/test_compresores.py compresion/test_reproductores
 **Resultado ejecutado en un PC con Windows:** 98 pruebas OK en total. Son
 pruebas unitarias; ninguna toca la TUN ni el laboratorio.
 
-**Lo que falta probar en el laboratorio (no probado):**
+**Probado en el laboratorio (22-11-2026, `FEC=hamming_7_4`; verificación independiente):**
 
-- Levantar `cmp-ue` y `cmp-dn` con el mismo `FEC` y comprobar que el MTU de `cmp0`
-  queda en 780 (Hamming (7,4)) o 247 (repetición (5,1)).
-- Prueba de extremo a extremo con envío de un archivo desde la página: que el
-  archivo vuelva idéntico (`sha_identico`) sin inyección.
-- Inyección de 1 bit: comprobar que aparecen paquetes `corregido` y que el archivo
-  vuelve idéntico.
-- Inyección de 2 bits con Hamming (7,4): ver la corrección errónea descrita en la
-  [§7](#7-relación-con-la-compresión).
-- Que las métricas `lab5g_cmp_fec_*` lleguen al pushgateway con las etiquetas
-  `lado` y `codigo`.
-- El costo de CPU de la FEC en el LXC 110 y su efecto en el rendimiento del túnel.
+- `cmp-ue` y `cmp-dn` con el mismo `FEC` y `PUERTO_FEC`; MTU de `cmp0` = 780; las matrices P y H de `/fec/codigo` coinciden con el apunte del 9-nov.
+- Inyección de 1 bit: el síndrome es la columna de $H$ de la posición (bit en la palabra 12, posición 5 → $s=011$, como el ejemplo de clase), estado `corregido`, archivo de 20 KB de vuelta con SHA idéntico, `lab5g_cmp_errores` sin crecer.
+- Inyección de 2 bits en la misma palabra: se ve la limitación. Ejemplo: posiciones 1 y 2 dan $s=110$, la columna 4, y se «corrige» el bit equivocado; el paquete puede salir no íntegro. Si el error cae en el campo de largo, el marco queda `invalido`.
+- Resumen exacto de `/enviar` por `CONTADORES` (`resumen_fuente: contadores`, `truncado: false`).
+- Métricas `lab5g_cmp_fec_*` en el pushgateway (series precargadas a 0) y consultas `increase()` de los paneles contestadas por Prometheus. Grafana estaba apagado: el tablero no se ha visto renderizado.
+- Tráfico normal: `cmp-gen` sigue enviando, sin errores nuevos sin inyección.
+
+**Reservas observadas (pendientes):**
+
+- La orden de inyección la gasta el siguiente marco que recibe `cmp-dn`, normalmente de `cmp-gen`.
+- Una ráfaga de 64 marcos `invalido` justo tras activar `FEC` en `cmp-dn`: durante el cambio los dos lados llevaban valores distintos. Cambiar `FEC` siempre en ambos lados.
+- Un paquete `corregido` con `integro=false` hoy cuenta como corrección en el tablero; conviene distinguirlo.
+- La memoria de `cmp-ue` subió de ~23 a ~47 MiB de 64 y parecía estabilizarse; vigilar con `docker stats` y subir el tope si llega cerca.
+- Costo de CPU en el LXC 110: sin cuello de botella visible (carga ~1-2), pero no se midió con tráfico alto.
 
 ---
 
