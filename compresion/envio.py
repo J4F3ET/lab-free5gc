@@ -482,6 +482,7 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <div id="vista-lab" hidden>
 <h2 style="font-size:18px;margin:0 0 4px">Laboratorio de síndrome</h2>
 <p class="sub" style="margin-bottom:8px">Detección y corrección de errores con códigos de bloque lineales: recibido r = c + e, síndrome s = r·Hᵀ; s = 0 sin error, s ≠ 0 error, y si coincide con la columna i de H se voltea el bit i.</p>
+<div class="aviso">Para cambiar de código o canal hay que fijar FEC (repeticion_5_1, hamming_7_4, secded_8_4) y CANAL (bsc:P o rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO) con «lab5g.sh env-set» y reiniciar cmp-ue y cmp-dn.</div>
 <div class="aviso">Nota: el canal se modela en la recepción del shim de cmp-dn, es decir sobre el tráfico que RECIBE el DN (p. ej. el viaje de vuelta del eco). El error se inyecta ahí, no en la bajada.</div>
 <div class="aviso">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y, si el paquete no se reconstruye, queda como «corrigió mal» (si sí se reconstruye, sigue contado como «corregido»); el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
 <div id="lab-codigo" class="res"></div>
@@ -490,7 +491,7 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <label class="k">bit exacto <input id="bit-exacto" type="number" min="8" step="1" placeholder="&ge; 8"></label><button class="btn" id="b-exacto" type="button">Inyectar ahí</button>
 </div><div id="armada" class="k"></div></div>
 <h3 style="font-size:15px;margin:18px 0 0">Línea de tiempo de paquetes</h3>
-<div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido · borde punteado: con error inyectado. Clic para ver el detalle.</div>
+<div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido (con SECDED, «doble detectado») · borde punteado: con error inyectado. Clic para ver el detalle.</div>
 <div id="linea"></div>
 <div class="ctl"><label class="k">estado <select id="filtro"><option value="">todos</option><option value="limpio">limpio</option><option value="corregido">corregido</option><option value="corregido_mal">corrigió mal</option><option value="no_corregible">no corregible</option><option value="invalido">inválido</option></select></label><span id="cuenta" class="k"></span></div>
 <div class="tabla"><table><thead><tr><th>id</th><th>lado</th><th>sec.</th><th>códec</th><th>estado</th><th>s≠0</th><th>corr.</th><th>no corr.</th><th>bits volteados</th></tr></thead><tbody id="lab-tabla"></tbody></table></div>
@@ -533,6 +534,9 @@ function h(tag,attrs,...hijos){ const e=document.createElement(tag);
   for(const c of hijos.flat()){ if(c==null||c===false) continue; e.append(c instanceof Node?c:document.createTextNode(String(c))); }
   return e; }
 const ETQ={limpio:'limpio',corregido:'corregido',corregido_mal:'corrigió mal',no_corregible:'no corregible',invalido:'inválido'};
+let secded=false;   // código activo = SECDED (8,4): su «no_corregible» es «doble detectado» (el valor interno no cambia)
+function etiqueta(est){ return secded&&est==='no_corregible'?'doble detectado':ETQ[est]; }
+function marcarSecded(){ const o=document.querySelector('#filtro option[value="no_corregible"]'); if(o) o.textContent=secded?'doble detectado':'no corregible'; }
 const lab={paquetes:[],ultimo:0,codigo:null,sel:null,timer:null};
 function vista(cual){ const l=cual==='lab';
   $('#vista-envio').hidden=l; $('#vista-lab').hidden=!l;
@@ -542,28 +546,31 @@ function vista(cual){ const l=cual==='lab';
 $('#t-envio').onclick=()=>vista('envio'); $('#t-lab').onclick=()=>vista('lab');
 function matriz(titulo,filas,paridad){ return h('div',{style:'display:inline-block;vertical-align:top'},h('div',{class:'k'},titulo),
   h('table',{class:'mat'},filas.map(f=>h('tr',{},f.map((v,j)=>h('td',{class:paridad(j)?'par':''},v)))))); }
-async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren();
+async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren(); secded=false; marcarSecded();
   let j; try{ const r=await fetch('fec/codigo'); j=await r.json(); if(!r.ok) throw new Error(j.error||r.status); }
   catch(e){ cont.append(h('b',{},'FEC desactivado'),h('div',{class:'k'},' (sin respuesta del shim: '+String(e.message||e)+')')); lab.codigo=null; return; }
   if(!j.codigo){ cont.append(h('b',{},'FEC desactivado'),h('div',{class:'k'},'El shim no tiene código de canal activo; la página de envío funciona igual.')); lab.codigo=null; return; }
   lab.codigo=j; const n=j.n,k=j.k,r=n-k;
+  secded=String(j.codigo).startsWith('secded'); marcarSecded();
+  const canal=j.canal?'Canal aleatorio: '+String(j.canal):'Canal aleatorio: apagado (solo inyección manual)';
   const G=j.P.map((fila,i)=>fila.concat(Array.from({length:k},(_,c)=>c===i?1:0)));
-  cont.append(h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad)`)),
+  cont.append(h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad) · ${canal}`)),
     matriz('G = [P : I_k]  (k×n)',G,c=>c<r), matriz('H = [I : Pᵀ]  ((n−k)×n)',j.H,c=>c>=r),
-    h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).')); }
+    h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).'),
+    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null); }
 function columnasH(){ const H=lab.codigo&&lab.codigo.H; if(!H) return {}; const m={};
   for(let j=0;j<H[0].length;j++){ m[H.map(f=>f[j]).join('')]=j; } return m; }
 function estadoPaq(p){ return ETQ[p.estado]?p.estado:'invalido'; }
 function labRender(){ const f=$('#filtro').value, L=$('#linea'); L.replaceChildren();
   for(const p of lab.paquetes.slice(-400)){ const est=estadoPaq(p);
     const b=h('button',{type:'button',class:est+((p.bits_inyectados||[]).length?' iny':'')+(lab.sel===p.id?' act':''),
-      title:`#${p.id} ${ETQ[est]} · ${p.codec||'?'} · sec ${p.secuencia}`},String(p.codec||'?').slice(0,2));
+      title:`#${p.id} ${etiqueta(est)} · ${p.codec||'?'} · sec ${p.secuencia}`},String(p.codec||'?').slice(0,2));
     b.onclick=()=>labDetalle(p.id); if(f&&est!==f) b.style.opacity='.25'; L.append(b); }
   const filas=lab.paquetes.filter(p=>!f||estadoPaq(p)===f).slice(-100).reverse();
   $('#cuenta').textContent=`${filas.length} de ${lab.paquetes.length} paquetes (tabla: últimos 100)`;
   $('#lab-tabla').replaceChildren(...filas.map(p=>{ const est=estadoPaq(p);
     const tr=h('tr',{class:'fila'},h('td',{},p.id),h('td',{},p.lado),h('td',{},p.secuencia),h('td',{},p.codec),
-      h('td',{class:'st-'+est},ETQ[est]),h('td',{},p.sindromes_no_cero),h('td',{},p.corregidas),h('td',{},p.no_corregibles),
+      h('td',{class:'st-'+est},etiqueta(est)),h('td',{},p.sindromes_no_cero),h('td',{},p.corregidas),h('td',{},p.no_corregibles),
       h('td',{},(p.bits_inyectados||[]).join(', ')||'—')); tr.onclick=()=>labDetalle(p.id); return tr; })); }
 async function labSondear(){ let j;
   try{ const r=await fetch('fec/paquetes?desde='+lab.ultimo); j=await r.json(); if(!r.ok) throw new Error(j.error||r.status); }
@@ -594,9 +601,9 @@ function labDetalle(id){ lab.sel=id; const p=lab.paquetes.find(x=>x.id===id), d=
         const corr=(p.posiciones_corregidas||[]).filter(x=>x[1]===j).length;
         return h('li',{},h('code',{},s),` × ${c} → `,j==null?'no coincide con ninguna columna de H: no corregible con 1 bit':`coincide con la columna ${j+1} de H (bit ${j+1} de la palabra, contando desde 1); corregida ${corr} vez/veces`); })):'ninguno'),
     (p.posiciones_corregidas||[]).length?h('li',{},'Correcciones (palabra desde 0, posición en la palabra desde 1): ',p.posiciones_corregidas.map(x=>`(${x[0]}, ${x[1]+1})`).join(' ')):null,
-    h('li',{},'Resultado: ',h('b',{class:'st-'+est},ETQ[est]),' · íntegro: ',h('b',{class:p.integro?'ok':'bad'},p.integro?'sí':'no'))];
+    h('li',{},'Resultado: ',h('b',{class:'st-'+est},etiqueta(est)),' · íntegro: ',h('b',{class:p.integro?'ok':'bad'},p.integro?'sí':'no'))];
   d.append(h('h3',{style:'font-size:15px;margin:0 0 6px'},`Paquete #${p.id} paso a paso`),h('ol',{},pasos),
-    h('div',{class:'k'},'Con 2 errores Hamming (7,4) puede «corregir» mal y entregar otra palabra código; el receptor no compara contra el original.'));
+    h('div',{class:'k'},secded?'SECDED detecta 2 errores y no los corrige mal (queda como «doble detectado»).':'Con 2 errores Hamming (7,4) puede «corregir» mal y entregar otra palabra código; el receptor no compara contra el original.'));
   labRender(); }
 </script></body></html>"""
 

@@ -8,6 +8,7 @@ evaluar.py — Compara las opciones de compresión sobre tráfico 5G de prueba, 
   python evaluar.py balance             # latencia neta de cada algoritmo según el enlace (balance.py)
   python evaluar.py informacion [--publicar URL]  # original/comprimido/recuperado e I(O;R) (informacion.py)
   python evaluar.py bandido             # qué decide el bandido y por qué: brazos, contextos, arrepentimiento
+  python evaluar.py fec [--sin-archivos]  # BER residual por código FEC, offline (banco_fec.py) -> resultados/fec.md
 
 Entrenamiento (semilla 1, textos TEXTOS_ENTRENO) y prueba (semilla 2, TEXTOS_PRUEBA) no
 comparten paquetes: lo que se mide es sobre tráfico que el modelo nunca vio. Es justo lo
@@ -304,6 +305,15 @@ def informacion(publicar_en: str | None = None, archivos: bool = True):
         print(f"publicado en {publicar_en} (job cmp_eval)")
 
 
+def fec_banco(archivos: bool = True):
+    """Banco offline de códigos FEC (ver banco_fec.py) -> resultados/fec.md."""
+    import banco_fec as BF
+    md = BF.a_markdown(BF.correr())
+    if archivos:
+        BF.escribir(md)
+    print(md)
+
+
 def bandido():
     """El bandido por dentro, sobre el flujo mezclado de PRUEBA -> resultados/bandido.md.
 
@@ -426,11 +436,13 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion", "bandido"])
+    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion", "bandido", "fec"])
     ap.add_argument("--publicar", metavar="URL", help="informacion: subir al pushgateway (p. ej. http://10.100.205.14:9091)")
-    ap.add_argument("--sin-archivos", action="store_true", help="informacion: no escribir resultados/ (contenedor de solo lectura)")
+    ap.add_argument("--sin-archivos", action="store_true", help="informacion y fec: no escribir resultados/ (contenedor de solo lectura)")
     a = ap.parse_args()
     if a.accion == "informacion":
         informacion(a.publicar, not a.sin_archivos)
+    elif a.accion == "fec":
+        fec_banco(not a.sin_archivos)
     else:
         {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance, "bandido": bandido}[a.accion]()

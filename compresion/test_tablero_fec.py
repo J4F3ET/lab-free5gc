@@ -39,7 +39,41 @@ class TableroFec(unittest.TestCase):
 
     def test_identidad_y_cantidad(self):
         self.assertEqual(self.t["uid"], "lab5g-cmp-fec")
-        self.assertEqual(len(self.paneles()), 5)
+        self.assertEqual(len(self.paneles()), 7)        # 5 originales + BER de entrada + sobrecoste
+
+    def test_json_del_repo_coincide_con_el_generador(self):
+        repo = (GEN.parent / "provisioning/dashboards/json" / "lab5g-cmp-fec.json").read_bytes()
+        generado = (Path(self.tmp.name) / "lab5g-cmp-fec.json").read_bytes()
+        self.assertEqual(repo, generado, "regenerar con: python observability/grafana/dashboards_compresion.py "
+                                         "observability/grafana/provisioning/dashboards/json")
+
+    def test_paneles_nuevos_ber_y_sobrecoste(self):
+        pan = {p["title"]: p for p in self.paneles()}
+        ber = pan["BER de entrada del canal"]
+        sobre = pan["Sobrecoste de la protección"]
+        self.assertEqual(ber["type"], "timeseries")
+        self.assertEqual(sobre["type"], "timeseries")
+        self.assertEqual(ber["fieldConfig"]["defaults"]["custom"]["scaleDistribution"]["type"], "log")
+        self.assertEqual(ber["targets"][0]["expr"],
+                         'sum(increase(lab5g_cmp_fec_bits_inyectados_total{lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])) / '
+                         '(8 * sum(increase(lab5g_cmp_fec_bytes_total{tipo="fec",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])))')
+        self.assertEqual(sobre["targets"][0]["expr"],
+                         'sum(increase(lab5g_cmp_fec_bytes_total{tipo="fec",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])) / '
+                         'sum(increase(lab5g_cmp_fec_bytes_total{tipo="comprimido",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval]))')
+        for p in (ber, sobre):
+            self.assertEqual(p["gridPos"]["w"], 12)
+            self.assertGreaterEqual(p["gridPos"]["y"], 24)           # debajo de los actuales
+            partes = [s for s in PARTES if s in p["description"]]
+            self.assertEqual(partes, list(PARTES), p["title"])            # ficha completa, en orden
+            for t in p["targets"]:                                        # rango, no instantánea: sin «No data» falso
+                self.assertTrue(t.get("range"))
+                self.assertNotIn("last_over_time", t["expr"])
+
+    def test_texto_explica_secded(self):
+        texto = next(p for p in self.t["panels"] if p["type"] == "text")["options"]["content"]
+        self.assertIn("SECDED", texto)
+        self.assertIn("doble detectado", texto)
+        self.assertIn("corregido_mal", texto)
 
     def test_uid_unico(self):
         uids = set()

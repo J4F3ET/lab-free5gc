@@ -393,6 +393,8 @@ services:
       VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # vacio = bandido premiado por ahorro
       PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
       FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
+      CANAL: "${CANAL:-}"                               # vacio = sin canal aleatorio; bsc:P | rafaga:P_MALO,PBM,PMB (requiere FEC)
+      CANAL_SEMILLA: "${CANAL_SEMILLA:-1}"              # semilla del canal aleatorio (igual en ue y dn para reproducir)
       PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]
@@ -425,6 +427,8 @@ services:
       VELOCIDAD_ENLACE_BPS: ${VELOCIDAD_ENLACE_BPS:-}   # p. ej. 1000000 con tc a 1 Mbps
       PERDIDA_IOT: ${PERDIDA_IOT:-}                     # vacio = sin perdida; 1 = pasos por defecto (docs/08 4.8)
       FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
+      CANAL: "${CANAL:-}"                               # vacio = sin canal aleatorio; bsc:P | rafaga:P_MALO,PBM,PMB (requiere FEC)
+      CANAL_SEMILLA: "${CANAL_SEMILLA:-1}"              # semilla del canal aleatorio (igual en ue y dn para reproducir)
       PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]

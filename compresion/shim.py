@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
 from registro_fec import CapaFec, emitir_marco, mtu_con_fec, recibir_marco, validar_codigo
+from canal import parse_canal
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
 PUERTO = int(os.environ.get("PUERTO", "7700"))
@@ -179,13 +180,23 @@ def main() -> None:
         sys.exit("uso: shim.py ue|dn")
     # FEC de clase (síndrome): apagado si FEC está vacío o ausente. ue y dn deben usar el mismo valor.
     # Se valida ANTES de esperar uesimtun0: un valor malo debe fallar al instante y con mensaje claro.
+    # CANAL (canal aleatorio BSC o ráfaga; vacío = apagado) se valida igual, antes de esperar uesimtun0.
+    # Sin FEC no tiene efecto: se avisa y se ignora.
     capa = None
+    canal_ruido = None
     if os.environ.get("FEC"):
         try:
             validar_codigo(os.environ["FEC"])
+            canal_ruido = parse_canal(os.environ.get("CANAL"))
         except ValueError as e:
             sys.exit(f"[cmp-{lado}] {e}")
-        capa = CapaFec(os.environ["FEC"], lado)
+        try:
+            semilla_canal = int(os.environ.get("CANAL_SEMILLA") or "1")
+        except ValueError:
+            sys.exit(f"[cmp-{lado}] CANAL_SEMILLA={os.environ.get('CANAL_SEMILLA')!r} debe ser un entero")
+        capa = CapaFec(os.environ["FEC"], lado, canal=canal_ruido, semilla_canal=semilla_canal)
+    elif os.environ.get("CANAL"):
+        print(f"[cmp-{lado}] aviso: CANAL={os.environ['CANAL']!r} se ignora porque FEC está apagado", flush=True)
     modelo = Modelo.cargar(os.environ.get("MODELO", Path(__file__).with_name("modelo.json")))
     if lado == "ue":
         esperar_interfaz("uesimtun0")  # sin sesión PDU no hay por dónde mandar nada

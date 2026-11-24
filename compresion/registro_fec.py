@@ -29,6 +29,7 @@ from collections import deque
 
 import canal
 import fec
+from collections import Counter
 from compresores import nombre_codec
 
 MTU_ENLACE = 1464        # MTU de uesimtun0
@@ -198,12 +199,18 @@ def estado_de(res: fec.Resultado) -> str:
 class CapaFec:
     """Estado FEC de un lado del shim: código, secuencia, armada, registro y contadores."""
 
-    def __init__(self, codigo, lado: str, capacidad: int = 200, reloj=time.time):
+    def __init__(self, codigo, lado: str, capacidad: int = 200, reloj=time.time,
+                 canal=None, semilla_canal: int = 1):
+        """`canal`: objeto de canal.parse_canal (o None = sin canal aleatorio). Cada marco recibido usa
+        la semilla `semilla_canal + n`, con n = marcos recibidos hasta entonces: determinista."""
         self.codigo = fec.buscar(codigo)
         self.lado = lado
         self.registro = RegistroFec(capacidad)
         self.secuencia = 0
         self.armada: dict | None = None
+        self.canal = canal
+        self.semilla_canal = semilla_canal
+        self._marcos_rx = 0
         self._cerrojo = threading.Lock()
         self._reloj = reloj
         self.c_paquetes: dict[tuple[str, str], int] = {}   # (estado, codec) -> n
@@ -247,6 +254,24 @@ class CapaFec:
             a, self.armada = self.armada, None
             return a
 
+    def _aplicar_canales(self, marco: bytes) -> tuple[bytes, list[int]]:
+        """Armada manual y, si hay, canal aleatorio sobre el mismo marco. Devuelve (marco, bits volteados).
+
+        Los volteos se aplican en sucesión, así que cada bit sale invertido tantas veces como aparece
+        en la unión de ambas listas: una posición en las dos se cancela (e + e = 0). Sin canal
+        aleatorio es exactamente aplicar_canal de siempre.
+        """
+        with self._cerrojo:
+            indice = self._marcos_rx
+            self._marcos_rx += 1
+        marco, manual = aplicar_canal(marco, self._consumir())
+        if self.canal is None:
+            return marco, manual
+        ruido = self.canal.posiciones(8 * len(marco), self.semilla_canal + indice, desde_bit=8)
+        marco = canal.inyectar(marco, ruido)
+        cuenta = Counter(manual + ruido)
+        return marco, sorted(p for p, n in cuenta.items() if n % 2)
+
     # --- recepción ---
     def recibir(self, marco: bytes, procesar) -> tuple[dict, Exception | None]:
         """Canal → decodificar → procesar → entrada de registro.
@@ -256,7 +281,7 @@ class CapaFec:
         lanza ValueError, NO se llama a procesar (no se escribe a la TUN) y el estado es "invalido".
         Devuelve (entrada, excepción o None); el shim cuenta el error si hay excepción.
         """
-        recibido, bits = aplicar_canal(marco, self._consumir())
+        recibido, bits = self._aplicar_canales(marco)
         base = dict(secuencia=None, lado=self.lado, t=self._reloj(), codigo=self.codigo.nombre,
                     codec_id=None, codec=None, bytes_comprimido=None, bytes_fec=len(marco),
                     bytes_ip=None, bits_inyectados=bits, palabras=0, sindromes_no_cero=0,
@@ -310,7 +335,8 @@ class CapaFec:
 
     def describir_codigo(self) -> dict:
         c = self.codigo
-        return {"codigo": c.nombre, "n": c.n, "k": c.k, "P": c.P, "H": c.H}
+        return {"codigo": c.nombre, "n": c.n, "k": c.k, "P": c.P, "H": c.H,
+                "canal": self.canal.nombre if self.canal is not None else None}
 
     def responder(self, linea: str) -> dict:
         """Una línea de comando -> respuesta (dict). Nunca lanza."""
