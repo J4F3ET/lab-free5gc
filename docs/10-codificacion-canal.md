@@ -1003,3 +1003,14 @@ fijo, `FEC` toma cualquier nombre de código o `auto`.
   elegir código, no una medida del BER real.
 - **Sin medición en el laboratorio** en esta entrega: la prueba de que el lazo funciona en el enlace 5G
   real queda pendiente.
+
+## 14. Reenvío por NACK (`REENVIO=1`)
+
+SECDED detecta los dobles errores pero no los corrige. Con `REENVIO=1` el receptor, ante una palabra no corregible, **descarta el paquete** (no lo entrega) y manda al emisor un **NACK** con la secuencia. El emisor guarda los últimos 128 marcos limpios y reenvía el pedido.
+
+- NACK: byte `0xFE`, n (1..8), n secuencias de 16 bits, CRC8. Sin protección FEC; se manda de inmediato.
+- Límites: máximo 2 reenvíos por secuencia y 8 reenvíos por segundo (evita tormentas con canal malo).
+- Solo actúa donde hay detección: `secded_8_4` y `secded_16_11`. Hamming y repetición corrigen mal los dobles errores en silencio (estado `corregido_mal`); ahí recupera TCP.
+- Métricas: `lab5g_cmp_fec_reenvio_total{lado,tipo}` con nack_enviados, nack_recibidos, reenviados, sin_copia, descartados_limite, nack_malos.
+- Medido en el laboratorio (24-nov-2026, `secded_8_4`): con BSC 3e-3 el archivo llegó idéntico con 9 NACK y 10 reenvíos; con BSC 1e-2 casi todos los paquetes (≈2800 palabras) traen algún doble error, se descartan casi todos y la transferencia no termina: el reenvío ayuda con ruido moderado, no extremo.
+- Limitación: con compresores con estado (`deflate_flujo`) un reenvío llega fuera de orden y su descompresión puede fallar.
