@@ -1,5 +1,11 @@
 # 12 — Plan de la siguiente entrega (miércoles 25-11-2026)
 
+**Estado (23-11-2026)**
+
+| Hecho | Falta |
+|---|---|
+| SECDED (8,4), canales BSC y de ráfagas, banco offline con la curva BER, página «Laboratorio de síndrome» y tablero `lab5g-cmp-fec` (7 paneles). 157 pruebas OK en local. | Verificación en el laboratorio (SECDED y canales aleatorios no se han probado allí) y despliegue en `cmp-ue` y `cmp-dn`. |
+
 Alcance acordado: **Hamming y SECDED, canales aleatorios (BSC y ráfagas) y curva BER**.
 Todo protege **dentro de un paquete**, así que no depende de otros paquetes ni
 interfiere con la compresión con estado. Parte de lo que ya existe: código lineal

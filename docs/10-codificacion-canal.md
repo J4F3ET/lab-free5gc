@@ -18,7 +18,8 @@ síndrome. La teoría sigue la notación del apunte de clase del 9 de noviembre 
 - [7. Relación con la compresión](#7-relación-con-la-compresión)
 - [8. Estado del arte](#8-estado-del-arte)
 - [9. Hoja de ruta: siguiente entrega](#9-hoja-de-ruta-siguiente-entrega)
-- [10. Cómo probar](#10-cómo-probar)
+- [10. Resultados del banco offline](#10-resultados-del-banco-offline)
+- [11. Cómo probar](#11-cómo-probar)
 
 ---
 
@@ -30,37 +31,46 @@ detectarse y, si el error es de un bit y el código lo permite, corregirse en
 
 **Alcance: lo que sí entra en esta entrega**
 
-- Códigos de bloque lineales vistos en clase, en dos instancias:
+- Códigos de bloque lineales vistos en clase, en tres instancias:
   - **Repetición (5,1)**: cada bit se envía cinco veces.
   - **Hamming (7,4)**: cuatro bits de mensaje y tres de paridad.
+  - **SECDED (8,4)** (Hamming extendido de Hsiao): corrige 1 error y detecta 2 sin
+    corregirlos mal ([§2.9](#29-secded-84)).
 - Decodificación por **síndrome**, tal como aparece en el apunte.
-- **Inyección de error solo manual**: la página de envío pide voltear de 1 a 8
-  bits del siguiente marco que reciba `cmp-dn`. No hay canal aleatorio.
+- **Inyección de error**: manual (la página de envío pide voltear de 1 a 8 bits del
+  siguiente marco que reciba `cmp-dn`) y **canales aleatorios** BSC y de ráfagas
+  (Gilbert-Elliott), activados con la variable `CANAL` ([§4](#canales-aleatorios)).
+- **Banco offline** que mide el BER residual de cada código frente al BER de
+  entrada ([§10](#10-resultados-del-banco-offline)).
 - Integración en el shim (`shim.py`), servidor de línea y endpoints HTTP, página
   «Laboratorio de síndrome» y métricas `lab5g_cmp_fec_*`.
 
-**Siguiente entrega (no implementado aquí):** SECDED, CRC, entrelazado,
-Reed-Solomon, paridad entre paquetes, modelos de canal aleatorios (BSC, ráfagas
-Gilbert-Elliott, borrado) y RaptorQ. Ver [§9](#9-hoja-de-ruta-siguiente-entrega).
+**Siguiente entrega (no implementado aquí):** CRC, entrelazado, Reed-Solomon,
+paridad entre paquetes (XOR), RaptorQ y el canal de borrado de paquetes. Ver
+[§9](#9-hoja-de-ruta-siguiente-entrega).
 
 **Estado de la implementación**
 
-El código tiene pruebas unitarias (98 pruebas en los archivos de
-[§10](#10-cómo-probar), ejecutadas en un PC con Windows) y **se probó de extremo a
-extremo en el laboratorio real el 22-11-2026** con `FEC=hamming_7_4` en `cmp-ue` y
-`cmp-dn`: inyección de 1 y 2 bits, síndromes observados, archivo de vuelta con
-SHA idéntico, métricas en el pushgateway y consultas del tablero contestadas por
-Prometheus. Los resultados y las reservas están en [§10](#10-cómo-probar).
+El código tiene 157 pruebas unitarias (en los archivos de [§11](#11-cómo-probar),
+ejecutadas en un PC con Windows con 157 OK) y **se probó de extremo a extremo en el
+laboratorio real el 22-11-2026** con `FEC=hamming_7_4` en `cmp-ue` y `cmp-dn`:
+inyección de 1 y 2 bits, síndromes observados, archivo de vuelta con SHA idéntico,
+métricas en el pushgateway y consultas del tablero contestadas por Prometheus.
+**SECDED (8,4) y los canales aleatorios están implementados, con pruebas y con el
+banco offline, pero aún no se han probado en el laboratorio** (ver
+[docs/12](12-plan-siguiente-entrega.md)). Los resultados y las reservas están en
+[§11](#11-cómo-probar).
 
 | Pieza | Estado |
 |---|---|
-| `compresion/fec.py` (códigos de repetición y Hamming, `CodigoLineal`, `codificar`/`decodificar` sobre bytes) | Implementado y probado con pruebas unitarias; los ejemplos de clase son pruebas exactas |
-| `compresion/canal.py` (`inyectar` y `elegir_posiciones`) | Implementado y probado con pruebas unitarias |
+| `compresion/fec.py` (códigos de repetición, Hamming y SECDED (8,4), `CodigoLineal`, `codificar`/`decodificar` sobre bytes) | Implementado y probado con pruebas unitarias; los ejemplos de clase son pruebas exactas; SECDED con pruebas de corrección de 1 bit y de detección de 2 |
+| `compresion/canal.py` (`inyectar`, `elegir_posiciones`, canales `bsc` y `rafaga`, `parse_canal`) | Implementado y probado con pruebas unitarias; no probado aún en el laboratorio |
 | `compresion/registro_fec.py` (`RegistroFec`, `CapaFec`, `mtu_con_fec`, `aplicar_canal`) | Implementado y probado con pruebas unitarias (sin TUN ni sockets) |
-| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** (22-11) |
+| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** (22-11) con Hamming; las variables `CANAL` y `CANAL_SEMILLA`, y SECDED, aún no |
 | Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); probados en el laboratorio con `/enviar` y `/fec/inyectar` |
 | Métricas `lab5g_cmp_fec_*` | Verificadas en el pushgateway y en Prometheus (22-11) |
-| Tablero de Grafana | **Construido** (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus, pero no se ha visto renderizado en un Grafana) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
+| Tablero de Grafana | **Construido**, con 7 elementos (un texto y 6 paneles, incluidos «BER de entrada del canal» y «Sobrecoste de la protección») (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus, pero no se ha visto renderizado en un Grafana) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
+| Banco offline (`compresion/banco_fec.py`, `python compresion/evaluar.py fec`) y `compresion/resultados/fec.md` | Implementado y probado con pruebas unitarias; las cifras de [§10](#10-resultados-del-banco-offline) salen de ese archivo |
 
 ---
 
@@ -159,13 +169,50 @@ recupera $\mathbf c$.
 - La matriz de ejemplo de $2\times5$ de la página 4 no se lee bien en las fotos
   y no se usa.
 
+### 2.9 SECDED (8,4)
+
+SECDED (8,4) es el código de Hsiao: la misma forma $H=[I_4:P^{T}]$, pero con las cuatro
+filas de $P$ de peso 3. Así cada columna de $P^{T}$ tiene peso 3 y las 8 columnas de
+$H$ son distintas y de peso impar (cuatro de peso 1 y cuatro de peso 3). Su distancia
+mínima es $d_{min}=4$: corrige 1 error y detecta 2.
+
+$$P=\begin{bmatrix}1&1&1&0\\1&1&0&1\\1&0&1&1\\0&1&1&1\end{bmatrix}\qquad
+H=\begin{bmatrix}1&0&0&0&1&1&1&0\\0&1&0&0&1&1&0&1\\0&0&1&0&1&0&1&1\\0&0&0&1&0&1&1&1\end{bmatrix}$$
+
+Regla del decodificador, según el peso del síndrome $\mathbf s\neq 0$:
+
+| Síndrome | Significa | Acción |
+|---|---|---|
+| $\mathbf s=0$ | Sin error | Entregar |
+| $\mathbf s\neq 0$ de **peso impar** | Un error: coincide con una columna de $H$ | Corregir ese bit |
+| $\mathbf s\neq 0$ de **peso par** | Dos errores: nunca coincide con una columna | **Detectar, no corregir** |
+
+¿Por qué los dobles dan siempre peso par? La suma de dos columnas de peso impar tiene
+peso par. Como las columnas son distintas, esa suma nunca es cero, y por tanto nunca
+coincide con una columna, que son todas de peso impar.
+
+**Contraste con Hamming (7,4) con dos errores.** Con la palabra
+$\mathbf c=[1\,0\,0\,1\,0\,1\,1]$ del ejemplo de [§2.7](#27-ejemplo-2-hamming-74) y errores
+en los bits 1 y 2, $\mathbf r=[0\,1\,0\,1\,0\,1\,1]$ y $\mathbf s=\mathbf r\,H^{T}=110$,
+que es la columna 4 de $H$. Hamming corrige el bit 4, que estaba bien, y queda con tres
+errores sin aviso. Con SECDED, el mensaje $\mathbf m=[1\,0\,1\,1]$ se codifica en
+$\mathbf c=[0\,0\,1\,0\,1\,0\,1\,1]$. Con errores en los bits 1 y 5,
+$\mathbf r=[1\,0\,1\,0\,0\,0\,1\,1]$ y $\mathbf s=0110$: peso 2 y sin columna igual, así
+que se **detecta** el doble error y no se toca ningún bit.
+
+- **Costo:** $n/k=2$, el doble de bits que el mensaje. Con $n=8$ el MTU de `cmp0` baja
+  a **677** (`mtu_con_fec`, [§3.1](#31-mtu-de-cmp0-con-fec)).
+- **Activación:** `FEC=secded_8_4` (id 3 en el marco, [§3](#3-dónde-encaja-en-el-proyecto)).
+  Las pruebas cubren que todo error de un bit se corrige para cualquier mensaje y que los
+  dobles dan síndrome de peso par, sin corrección.
+
 ---
 
 ## 3. Dónde encaja en el proyecto
 
 La protección va **dentro de la sesión PDU**, entre el marco comprimido y el
 socket del shim. No modifica el `Compresor` ni el bandido UCB. Se activa con la
-variable de entorno `FEC` (`hamming_7_4` o `repeticion_5_1`; vacía = sin FEC), que
+variable de entorno `FEC` (`secded_8_4`, `hamming_7_4` o `repeticion_5_1`; vacía = sin FEC), que
 `docker-compose.yaml` pasa igual a `cmp-ue` y `cmp-dn`.
 
 ```
@@ -178,14 +225,14 @@ variable de entorno `FEC` (`hamming_7_4` o `repeticion_5_1`; vacía = sin FEC), 
           ▼
        marco = [1 B id del CÓDIGO FEC][palabras]  ──▶ sendto (shim) ─▶ uesimtun0 ─▶ gNB ─▶ GTP-U ─▶ UPF ─▶ ...
                                                                                                 │
- ... ─▶ recvfrom ─▶ [canal: voltea los bits armados] ─▶ FEC: decodifica por síndrome ─▶ Descompresor ─▶ TUN
+ ... ─▶ recvfrom ─▶ [canal: voltea la armada manual y, si hay, el canal aleatorio] ─▶ FEC: decodifica por síndrome ─▶ Descompresor ─▶ TUN
 ```
 
 **Formato del marco en el cable**
 
 | Parte | Tamaño | Protegida por FEC |
 |---|---|---|
-| Id del **código FEC** (1 = repetición (5,1), 2 = Hamming (7,4)) | 1 B (byte 0) | **No.** Viaja sin protección |
+| Id del **código FEC** (1 = repetición (5,1), 2 = Hamming (7,4), 3 = SECDED (8,4)) | 1 B (byte 0) | **No.** Viaja sin protección |
 | Palabras código del contenido | variable | Sí |
 
 El **contenido codificado** (lo que entra a la FEC) es:
@@ -210,11 +257,13 @@ que este caso se comprueba con pruebas unitarias y no desde la página.
 **Módulos**
 
 - `compresion/fec.py`: códigos de bloque lineales (`CodigoLineal`; instancias
-  `REPETICION_5_1` y `HAMMING_7_4`), con `codificar`, `decodificar` por síndrome y
+  `REPETICION_5_1`, `HAMMING_7_4` y `SECDED_8_4`), con `codificar`, `decodificar` por síndrome y
   `buscar` (por objeto, id o nombre). Es el punto de enchufe de las siguientes
   entregas.
-- `compresion/canal.py`: `inyectar` (voltea los bits indicados) y
-  `elegir_posiciones` (elige posiciones al azar, con semilla opcional).
+- `compresion/canal.py`: `inyectar` (voltea los bits indicados), `elegir_posiciones`
+  (elige posiciones al azar, con semilla opcional), los canales aleatorios `bsc` y
+  `rafaga` (Gilbert-Elliott) y `parse_canal`, que lee la variable `CANAL`
+  ([§4](#canales-aleatorios)).
 - `compresion/registro_fec.py`: `RegistroFec` (anillo con los últimos 200
   paquetes, id incremental desde 1), `CapaFec` (secuencia, canal armado, registro,
   contadores y comandos), `mtu_con_fec` y `aplicar_canal`. Es puro: no abre TUN ni
@@ -222,8 +271,10 @@ que este caso se comprueba con pruebas unitarias y no desde la página.
 - `compresion/shim.py`: crea la `CapaFec` si `FEC` está definida, abre `cmp0` con
   el MTU que corresponde y sirve la línea de comandos.
 - `compresion/envio.py`: endpoints HTTP y página de la [§5](#5-visualización-laboratorio-de-síndrome).
-- Pruebas: `test_fec.py`, `test_registro_fec.py` y `test_envio_fec.py` (más
-  `test_compresores.py` y `test_reproductores.py`, que no son de FEC).
+- Pruebas: `test_fec.py`, `test_registro_fec.py`, `test_envio_fec.py`,
+  `test_tablero_fec.py`, `test_canal.py`, `test_canal_capa.py` y `test_banco_fec.py`
+  (más `test_compresores.py` y `test_reproductores.py`, que no son de FEC; la lista
+  completa está en [§11](#11-cómo-probar)).
 
 ### 3.1 MTU de cmp0 con FEC
 
@@ -235,7 +286,7 @@ $$\text{bloques}=\left\lfloor\frac{8\,(1464-28-1)}{n}\right\rfloor\qquad
 L_{max}=\left\lfloor\frac{\text{bloques}\cdot k-32}{8}\right\rfloor\qquad
 \text{MTU}=L_{max}-36$$
 
-Resultado: **780** con Hamming (7,4) y **247** con repetición (5,1). Sin FEC sigue
+Resultado: **780** con Hamming (7,4), **677** con SECDED (8,4) y **247** con repetición (5,1). Sin FEC sigue
 valiendo `CMP_MTU` (1400 por defecto).
 
 ### 3.2 Costo de CPU
@@ -248,8 +299,19 @@ allí puede ser mayor.
 
 ### 3.3 Configuración y avisos
 
-- `ue` y `dn` deben tener el **mismo** `FEC`. Si difieren, los marcos de un lado no
-  se decodifican en el otro (estado `invalido`).
+- `ue` y `dn` deben tener el **mismo** `FEC`, `CANAL` y `CANAL_SEMILLA`. Si `FEC`
+  difiere, los marcos de un lado no se decodifican en el otro (estado `invalido`). Si
+  `CANAL` o la semilla difieren, cada lado recibe errores distintos y el experimento no
+  es reproducible.
+- `FEC` admite `secded_8_4`, `hamming_7_4` o `repeticion_5_1`. `CANAL` admite `bsc:P`
+  (por ejemplo `bsc:1e-3`) o `rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO` (por ejemplo
+  `rafaga:0.3,0.01,0.2`). Un valor de `CANAL` mal escrito hace terminar el shim al
+  arrancar, igual que `FEC`. Con `FEC` apagada, `CANAL` se ignora y el shim lo avisa.
+  El canal solo tiene efecto con `FEC` activa.
+- `CANAL_SEMILLA` (entero, por defecto 1) es la semilla del canal. El marco $n$ que
+  recibe un lado usa la semilla `CANAL_SEMILLA` + $n$.
+- Para cambiar `FEC` o `CANAL` hay que fijar las variables con `lab5g.sh env-set` y
+  reiniciar `cmp-ue` y `cmp-dn`, como indica la página de envío.
 - Un valor de `FEC` que no existe hace **terminar el shim al arrancar** con un mensaje claro
   (`validar_codigo`, antes de esperar a `uesimtun0`).
 - Los keepalive no pasan por la FEC.
@@ -311,8 +373,28 @@ Si el shim no responde (sin FEC o `cmp-dn` caído), los endpoints `/fec/*` devue
 errores mientras la FEC esté activa. Debe exponerse solo en la LAN o la tailnet,
 **nunca por Funnel**.
 
-El error se aplica por orden manual, no por canal aleatorio. El canal aleatorio es
-parte de la siguiente entrega.
+### Canales aleatorios
+
+Además de la orden manual, la variable `CANAL` activa un canal que voltea bits al azar
+en el mismo punto (recepción de `cmp-dn`, antes de decodificar), solo con `FEC` activa:
+
+- **`bsc:P`** (canal binario simétrico): cada bit de las palabras código se voltea con
+  probabilidad $P$, de forma independiente. Son errores sueltos, como en el modelo de
+  clase.
+- **`rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO`** (Gilbert-Elliott): dos estados. En el
+  estado bueno no hay errores; en el malo, cada bit se voltea con $P_{MALO}$. En cada bit
+  se decide el error con la probabilidad del estado actual y después se cambia de estado
+  con $P_{BUENO\to MALO}$ o $P_{MALO\to BUENO}$. Los errores salen agrupados, que es lo
+  que Hamming y SECDED no aguantan. El canal empieza en el estado bueno.
+
+**Combinación con la manual.** El canal se aplica después de la armada manual, sobre el
+mismo marco, por XOR. Un bit que voltean las dos fuentes queda sin cambio, y el registro
+solo cuenta los bits que cambiaron de valor neto. Ese es el número que suma a
+`lab5g_cmp_fec_bits_inyectados_total`. El byte 0 (id del código FEC) no se toca.
+
+**Determinismo.** La semilla del marco $n$ es `CANAL_SEMILLA` + $n$, donde $n$ es el
+número de marcos que el lado ha recibido. Con la misma semilla y el mismo orden de
+marcos salen los mismos errores, así que un experimento se puede repetir.
 
 ---
 
@@ -326,7 +408,8 @@ de paridad sombreada. Si el shim no tiene FEC, lo indica y la pestaña de envío
 sigue funcionando.
 
 **Inyección.** Botones para armar 1 bit, 2 bits o un bit exacto (entero $\ge 8$), y
-una línea que dice qué hay armado.
+una línea que dice qué hay armado. La pestaña también muestra el canal aleatorio activo
+(`CANAL`), si lo hay.
 
 **Nivel 1: línea y tabla de paquetes.** Una casilla por paquete y una tabla (últimos
 100, con filtro por estado) con: id, lado, secuencia, códec elegido por el bandido
@@ -342,7 +425,8 @@ volteados. Estados:
   `corregido` (íntegro), `no_corregible` ni `invalido`. El contador `corregidas` de
   palabras no cambia; solo cambia el estado del paquete;
 - **no corregible**: síndrome que no coincide con ninguna columna de $H$
-  (por ejemplo, repetición (5,1) con 2 o más errores en una palabra; ojo: $d_{min}=5$ permitiría corregir 2 con una tabla de síndromes completa, pero este decodificador solo corrige un bit por palabra);
+  (por ejemplo, repetición (5,1) con 2 o más errores en una palabra; ojo: $d_{min}=5$ permitiría corregir 2 con una tabla de síndromes completa, pero este decodificador solo corrige un bit por palabra). Con SECDED (8,4), los dobles errores de una palabra
+  caen aquí y la página los muestra como «doble detectado»;
 - **inválido**: el marco no se pudo decodificar (id de código alterado, largo
   inconsistente). No se entrega a la TUN.
 
@@ -380,66 +464,108 @@ con los síndromes y las posiciones.
 
 ## 6. Grafana (tablero `lab5g-cmp-fec`)
 
-Regla del proyecto: pocos paneles y cada uno con su explicación. Cada panel se
-describe con **Significado / Cómo funciona / Eje X / Eje Y / A qué responde**.
+Regla del proyecto: pocos paneles y cada uno con su explicación. Cada panel se describe
+con **Significado / Cómo funciona / Eje X / Eje Y / A qué responde**, y ese mismo texto
+aparece en su **ⓘ** en Grafana.
+
 **El tablero está construido:** `lab5g-cmp-fec`, «Codificación de canal (síndrome)»,
 generado por `observability/grafana/dashboards_compresion.py` en
 `observability/grafana/provisioning/dashboards/json/lab5g-cmp-fec.json` (se provisiona
-solo). Tiene un texto de ayuda y cuatro paneles (los 2, 3 y 4 de abajo tal cual; el 1
-se construyó como «Qué pasó con los paquetes», barras por estado, porque no hay
-contadores por etapa). Menús `lado` y `codigo`. **No se ha visto aún en un Grafana real.**
+solo). Tiene menús `lado` y `codigo`, y siete elementos en cuatro filas: un texto de
+ayuda y seis paneles. **No se ha visto aún en un Grafana real.**
 
-**Métricas ya implementadas** en `shim.py`, empujadas al pushgateway cada 10 s, con
-las etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **Ya se ven
-en el pushgateway real (22-11).** Solo aparecen si el shim tiene FEC activa.
+| Fila | Elemento | Tipo |
+|---|---|---|
+| 1 | Cómo leer este tablero | Texto |
+| 2 | Qué pasó con los paquetes | Barras horizontales |
+| 2 | Estados en el tiempo | Barras apiladas |
+| 3 | Síndromes observados | Barras |
+| 3 | Códec del bandido por estado | Mapa de calor |
+| 4 | BER de entrada del canal | Serie (escala logarítmica) |
+| 4 | Sobrecoste de la protección | Serie |
+
+**Métricas ya implementadas** en `shim.py`, empujadas al pushgateway cada 10 s, con las
+etiquetas `lado` y `codigo` (nombre del código FEC) en todas. **Ya se ven en el
+pushgateway real (22-11).** Solo aparecen si el shim tiene FEC activa.
 
 | Métrica | Etiquetas extra | Qué cuenta |
 |---|---|---|
 | `lab5g_cmp_fec_paquetes_total` | `estado`, `codec` | Paquetes recibidos por estado (limpio, corregido, corregido_mal, no_corregible, invalido) y códec. La etiqueta `codec` pertenece a un conjunto cerrado precargado a 0: los nombres registrados, `n/a` (marco `invalido`) y `desconocido` (id sin nombre registrado, p. ej. un bit volteado en el byte 0; un `corregido_mal` con id de códec corrupto se etiqueta `codec="desconocido"`, aunque el registro de la página conserva el `codec_id` numérico real) |
 | `lab5g_cmp_fec_sindrome_total` | `sindrome` | Palabras por valor de síndrome distinto de cero |
-| `lab5g_cmp_fec_bits_inyectados_total` | ninguna | Bits volteados por la inyección |
+| `lab5g_cmp_fec_bits_inyectados_total` | ninguna | Bits volteados por la inyección manual y por el canal aleatorio |
 | `lab5g_cmp_fec_palabras_total` | ninguna | Palabras código decodificadas |
 | `lab5g_cmp_fec_bytes_total` | `tipo` (`comprimido`, `fec`) | Bytes emitidos antes y después de añadir la paridad |
 
-En estado `invalido` no se registra el síndrome del paquete (el decodificador falla antes de producirlo), así que no suma a `lab5g_cmp_fec_sindrome_total`.
+En estado `invalido` no se registra el síndrome del paquete (el decodificador falla antes
+de producirlo), así que no suma a `lab5g_cmp_fec_sindrome_total`.
 
-El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (recibidos, entregados) que las métricas actuales no tienen; en su lugar el tablero muestra los paquetes por estado.
+El embudo por etapa del diseño inicial no se construyó, porque no hay contadores por
+etapa. «Qué pasó con los paquetes» muestra los paquetes por estado en su lugar.
 
-**Panel 1. Embudo del flujo**
+**Cómo leer este tablero (texto).** Explica la idea del síndrome, los estados y el
+significado de «doble detectado» con SECDED. No tiene datos.
 
-- **Significado:** cuántos paquetes llegan a cada etapa, desde el envío hasta la
-  entrega.
-- **Cómo funciona:** barras con el total de paquetes en cada etapa (codificados,
-  recibidos, decodificados, entregados).
-- **Eje X:** etapa.
-- **Eje Y:** número de paquetes.
-- **A qué responde:** dónde se pierde un paquete, si en la red o en la decodificación.
+**Qué pasó con los paquetes**
 
-**Panel 2. Paquetes por estado en el tiempo**
-
-- **Significado:** la evolución de limpios, corregidos, corregidos mal y no corregibles.
-- **Cómo funciona:** serie temporal apilada.
-- **Eje X:** tiempo.
-- **Eje Y:** paquetes por ventana.
-- **A qué responde:** si la tasa de corrección sube o baja al inyectar más errores.
-
-**Panel 3. Síndromes por valor**
-
-- **Significado:** qué síndromes aparecen y con qué frecuencia.
-- **Cómo funciona:** histograma de los valores de $\mathbf s$.
-- **Eje X:** valor del síndrome (los 7 no nulos posibles en Hamming (7,4)).
-- **Eje Y:** número de paquetes.
-- **A qué responde:** si los errores caen donde el código los corrige o si hay
-  síndromes que apuntan a columnas incorrectas.
-
-**Panel 4. Códec del bandido × estado**
-
-- **Significado:** qué códec elige el bandido y cómo le va a cada uno con la FEC.
-- **Cómo funciona:** mapa de calor, códec en el eje Y y estado en el X.
+- **Significado:** cuántos paquetes recibidos cayeron en cada estado en el rango de
+  tiempo elegido.
+- **Cómo funciona:** `increase()` del contador `lab5g_cmp_fec_paquetes_total` sumado por
+  estado, con un color fijo por estado.
 - **Eje X:** estado del paquete.
-- **Eje Y:** códec.
-- **A qué responde:** si el bandido sigue eligiendo códecs frágiles con errores
-  presentes.
+- **Eje Y:** número de paquetes en el rango de tiempo.
+- **A qué responde:** cómo le va al código con el canal actual. Si «corregido» crece al
+  inyectar errores, la FEC trabaja; «corregido_mal» es lo que corrigió mal, y
+  «no_corregible» lo que se le escapa.
+
+**Estados en el tiempo**
+
+- **Significado:** cuántos paquetes por minuto llegan en cada estado, a lo largo del
+  tiempo.
+- **Cómo funciona:** `rate()` del contador por estado, multiplicado por 60, en barras
+  apiladas. La altura total es el tráfico recibido.
+- **Eje X:** hora.
+- **Eje Y:** paquetes por minuto, apilados por estado.
+- **A qué responde:** cuándo se inyectaron errores y cómo respondió el código.
+
+**Síndromes observados**
+
+- **Significado:** cuántas palabras código dieron cada valor de síndrome distinto de cero.
+- **Cómo funciona:** `increase()` de `lab5g_cmp_fec_sindrome_total` por valor. Cada valor
+  (en binario) es una columna de $H$, y $\mathbf s=0$ no se cuenta.
+- **Eje X:** valor del síndrome $\mathbf s$, en binario.
+- **Eje Y:** número de palabras en el rango de tiempo.
+- **A qué responde:** si los errores caen siempre en el mismo bit (un síndrome domina) o
+  se reparten.
+
+**Códec del bandido por estado**
+
+- **Significado:** qué códec eligió el bandido y en qué estado terminaron sus paquetes.
+- **Cómo funciona:** mapa de calor. Cada celda es el `increase()` de paquetes por códec
+  (fila) y estado (columna); más color, más paquetes.
+- **Eje X:** estado del paquete.
+- **Eje Y:** códec que eligió el bandido.
+- **A qué responde:** si el bandido sigue eligiendo códecs frágiles cuando hay errores.
+
+**BER de entrada del canal**
+
+- **Significado:** fracción de los bits del aire que el canal volteó, incluidas las
+  inyecciones manuales.
+- **Cómo funciona:** bits invertidos (`lab5g_cmp_fec_bits_inyectados_total`) entre 8
+  veces los bytes con paridad (`lab5g_cmp_fec_bytes_total` con `tipo="fec"`).
+- **Eje X:** hora.
+- **Eje Y:** fracción de bits, en escala logarítmica.
+- **A qué responde:** qué nivel de ruido ve el código. Con `CANAL=bsc:P` la gráfica debe
+  quedarse cerca de $P$.
+
+**Sobrecoste de la protección**
+
+- **Significado:** bytes que salen al aire por cada byte comprimido.
+- **Cómo funciona:** cociente de los `increase()` de bytes con `tipo="fec"` entre los de
+  `tipo="comprimido"`. Hamming (7,4) ≈ 1,75; SECDED (8,4) ≈ 2; repetición (5,1) = 5, más
+  la cabecera del marco.
+- **Eje X:** hora.
+- **Eje Y:** veces (1 = sin redundancia).
+- **A qué responde:** si la redundancia se come lo que ahorró la compresión.
 
 ---
 
@@ -452,7 +578,7 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
   decodificado desincroniza a los siguientes. La FEC corrige errores de bit, pero no
   arregla un paquete que se pierde entero.
 - **Costo de la FEC.** Hamming (7,4) envía $n/k = 7/4 = 1{,}75$ veces los bytes,
-  es decir, un 75 % más. La repetición (5,1) envía 5 veces los bytes.
+  es decir, un 75 % más. SECDED (8,4) envía 2 veces los bytes (un 100 % más). La repetición (5,1) envía 5 veces los bytes.
 - **Cuenta honesta.** La compresión medida ahorra alrededor de un 21 % del
   tráfico ([docs/08 §4.2](08-compresion-paquetes.md)). Si se aplica Hamming (7,4)
   encima, el resultado neto es $0{,}79 \times 1{,}75 \approx 1{,}38$ veces los bytes
@@ -464,14 +590,14 @@ El panel 1 de diseño (embudo por etapa) necesitaría contadores por etapa (reci
 - **Límite de Hamming (7,4).** Con dos errores, el síndrome nunca vale 0, así que
   el error se nota. Pero en Hamming (7,4) cada síndrome no nulo coincide con la
   columna de algún bit, y la suma de dos columnas es siempre una tercera columna.
-  El decodificador **corrige mal sin avisar** en el contador de síndromes: el estado queda `corregido` si el paquete aun así se reconstruye, y `corregido_mal` si sale no íntegro (la descompresión falla o la TUN lo rechaza; entonces suma además a `lab5g_cmp_errores`). Nota: el estado `corregido_mal` se añadió tras la verificación del 22-11; antes el tablero contaba esos paquetes como corrección exitosa. Esta es la razón de la siguiente
-  entrega (SECDED, §9).
+  El decodificador **corrige mal sin avisar** en el contador de síndromes: el estado queda `corregido` si el paquete aun así se reconstruye, y `corregido_mal` si sale no íntegro (la descompresión falla o la TUN lo rechaza; entonces suma además a `lab5g_cmp_errores`). Nota: el estado `corregido_mal` se añadió tras la verificación del 22-11; antes el tablero contaba esos paquetes como corrección exitosa. SECDED (8,4) ([§2.9](#29-secded-84)) lo
+  resuelve: detecta esos dobles en vez de corregirlos mal, a costo de 2 veces los bytes.
 
 ---
 
 ## 8. Estado del arte
 
-Esta sección es investigación de referencia. No se implementa en esta entrega.
+Esta sección es investigación de referencia. Solo están implementadas en esta entrega las filas marcadas como tales.
 Las fuentes son las indicadas; las afirmaciones sin fuente son de conocimiento
 general y no contienen cifras.
 
@@ -480,8 +606,8 @@ general y no contienen cifras.
 | Técnica | Dónde se usa | Cómo funciona | Relación con la compresión del proyecto |
 |---|---|---|---|
 | Repetición | Canales muy ruidosos y enlaces de control simples | Cada bit se envía varias veces y se vota por mayoría | Es el código más caro. Aquí es el caso de referencia (5,1) |
-| Hamming (7,4) | Memoria ECC de corrección de un bit | Paridad con síndrome; corrige 1 error, detecta 2 | Es la entrega actual. Su costo (+75 %) supera el ahorro de la compresión |
-| SECDED (Hamming extendido) | Memoria ECC de servidor | Añade un bit de paridad global: detecta 2 errores sin corregir mal | Es el primer paso de la siguiente entrega |
+| Hamming (7,4) | Memoria ECC de corrección de un bit | Paridad con síndrome; corrige 1 error, detecta 2 | Implementado en esta entrega. Su costo (+75 %) supera el ahorro de la compresión |
+| SECDED (Hamming extendido) | Memoria ECC de servidor | Añade un bit de paridad global: detecta 2 errores sin corregir mal | Implementado en esta entrega ([§2.9](#29-secded-84)) |
 | CRC | Casi todos los protocolos: Ethernet, 5G (en bloques de transporte) | Polinomio sobre el mensaje; detecta ráfagas de error, no corrige | Es barato y no añade bytes grandes; es lo que conviene junto a la compresión con estado |
 
 ### 8.2 Códigos para ráfagas, borrado y paquetes
@@ -490,7 +616,7 @@ general y no contienen cifras.
 |---|---|---|---|
 | Reed-Solomon | Discos ópticos, códigos QR, transmisión satelital | Códigos sobre símbolos de varios bits; corrige ráfagas y pérdidas de símbolos conocidos | Corrige ráfagas, que Hamming no. Su costo depende de cuánta redundancia se elija |
 | Paridad entre paquetes (XOR) | Multimedia en tiempo real y RAID | Un paquete de paridad es la XOR de un grupo; recupera uno perdido | Opera sobre el flujo y no sobre cada paquete. Compatible con la compresión, pero añade latencia del grupo |
-| RaptorQ (RFC 6330) | Distribución por broadcast y multicast | Código fuente sin tasa fija: se generan paquetes de reparación según se necesiten | Pensado para pérdidas de paquetes, no de bits. Encaja con el tráfico de borrado de la siguiente entrega |
+| RaptorQ (RFC 6330) | Distribución por broadcast y multicast | Código fuente sin tasa fija: se generan paquetes de reparación según se necesiten | Pensado para pérdidas de paquetes, no de bits. Encaja con el borrado de paquetes, pendiente ([§9](#9-hoja-de-ruta-siguiente-entrega)) |
 
 ### 8.3 Códigos del estándar 5G y decodificadores modernos
 
@@ -518,16 +644,20 @@ errores por debajo.
 
 Todo lo siguiente queda fuera de esta entrega:
 
-- **SECDED (8,4):** detecta dos errores sin corregirlos mal. Corrige un error y
-  da aviso con dos.
 - **CRC:** detección de error de bloque para el marco completo.
 - **Entrelazado:** reparte los bits de un paquete entre varios paquetes para que
   una ráfaga quede repartida.
 - **Reed-Solomon:** corrección de ráfagas y de símbolos perdidos.
 - **XOR entre paquetes:** recuperación de paquetes perdidos del flujo.
-- **Modelos de canal aleatorios:** BSC (error independiente por bit), ráfagas
-  Gilbert-Elliott y borrado de paquetes.
+- **Borrado de paquetes:** un canal que pierde paquetes enteros. Los canales BSC y de
+  ráfagas ya están en [§4](#canales-aleatorios).
 - **RaptorQ:** código de fuente para pérdidas de paquetes.
+
+**Por qué los códigos entre paquetes van al final.** XOR entre paquetes, Reed-Solomon
+entre paquetes y RaptorQ reconstruyen un paquete perdido a partir de otros. Ese paquete
+recuperado llega tarde, y `deflate_flujo` necesita los paquetes en orden
+([§7](#7-relación-con-la-compresión)). Hamming, SECDED y CRC trabajan dentro de un
+paquete y no tienen ese problema.
 
 **Cómo se enchufan.** Cada código nuevo implementa la interfaz `CodigoCanal` de
 `compresion/fec.py`. El shim no cambia: solo elige qué código usar. Cada modelo
@@ -536,44 +666,114 @@ punto que la inyección manual.
 
 ---
 
-## 10. Cómo probar
+## 10. Resultados del banco offline
 
-Desde la raíz del repositorio, con Python 3. Son los cinco archivos que corre el
-paso «Pruebas de compresion» del workflow
-[`deploy.yml`](../.github/workflows/deploy.yml):
+Fuente: [`compresion/resultados/fec.md`](../compresion/resultados/fec.md), generado por
+`python compresion/evaluar.py fec` (`compresion/banco_fec.py`). Son 300 cargas aleatorias
+de 200 B por código y punto, con semilla 1. El canal es BSC independiente por bit
+(barrido de $p$) y Gilbert-Elliott (ráfagas). El byte del id de código nunca se voltea.
+Todas las cifras de esta sección salen de ese archivo.
+
+**BER de entrada contra BER residual (canal BSC)**
+
+| $p$ | BER de entrada | Sin código | Repetición (5,1) | Hamming (7,4) | SECDED (8,4) |
+|---|---|---|---|---|---|
+| $10^{-3}$ | 9.60e-04 | 9.60e-04 | 2.08e-06 | 0 | 4.17e-06 |
+| $3\cdot10^{-3}$ | 3.08e-03 | 3.08e-03 | 3.37e-03 | 3.43e-03 | 6.88e-05 |
+| $10^{-2}$ | 1.01e-02 | 1.01e-02 | 1.04e-02 | 1.09e-02 | 1.07e-02 |
+| $3\cdot10^{-2}$ | 2.99e-02 | 2.99e-02 | 6.65e-02 | 8.35e-02 | 8.87e-02 |
+| $10^{-1}$ | 1.00e-01 | 1.00e-01 | 5.11e-01 | 4.87e-01 | 5.75e-01 |
+
+Lectura:
+
+- **Con $p$ pequeño, los códigos bajan el BER.** A $p=10^{-3}$, Hamming (7,4) lo deja en 0
+  y SECDED (8,4) en 4.17e-06, a cambio de enviar 1,75 y 2 veces los bits.
+- **El cruce.** A $p=3\cdot10^{-3}$, Hamming (7,4) y repetición (5,1) ya empeoran el BER
+  residual frente al de entrada (3.43e-03 y 3.37e-03 frente a 3.08e-03). SECDED (8,4)
+  todavía mejora ahí (6.88e-05), pero a $p=10^{-2}$ los tres quedan por encima del BER de
+  entrada, SECDED incluido (1.07e-02 frente a 1.01e-02).
+- **Límite de Hamming con dos errores.** A $p=3\cdot10^{-2}$, Hamming (7,4) deja 277 de
+  300 paquetes corregidos mal y sin aviso. SECDED (8,4) marca 275 como no corregibles y no
+  deja ninguno corregido mal (0). Repetición (5,1) también detecta sin corregir mal: 281
+  no corregibles y 0 corregidos mal.
+- **Efecto de la ráfaga.** Con ráfagas (Gilbert-Elliott con 0.3, 0.01, 0.2), el BER de
+  entrada es 1.39e-02 sin código y entre 1.41e-02 y 1.43e-02 con los códigos. Ningún
+  código baja el BER residual, que queda en: repetición (5,1) da 9.67e-02, Hamming (7,4) 8.43e-02 y SECDED (8,4) 5.59e-02. Hamming
+  falla en 2.52e-02 de sus palabras, frente a 2.07e-03 con errores independientes al BER
+  más cercano ($p=10^{-2}$). SECDED tiene más palabras fallidas observadas (2.90e-02),
+  pero ningún paquete corregido mal sin aviso, frente a 278 de Hamming. Los errores
+  agrupados caen varios en la misma palabra, que es justo lo que el código no aguanta.
+- **Advertencia de método.** Un paquete inválido cuenta todos sus bits de datos como
+  erróneos, y un paquete no corregible se entrega con errores. Por eso, a $p$ alto, el BER
+  residual de un código puede superar al de entrada aunque el decodificador haya avisado.
+  Es un límite de la métrica, no una mejora del código.
+
+---
+
+## 11. Cómo probar
+
+Desde la raíz del repositorio, con Python 3. Son los nueve archivos que corre el paso
+«Pruebas de compresion» del workflow [`deploy.yml`](../.github/workflows/deploy.yml), en
+el mismo orden:
 
 ```bash
-python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py
+python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py
 ```
 
 | Archivo | Qué cubre | Pruebas |
 |---|---|---|
-| `compresion/test_fec.py` | Códigos de repetición y Hamming; ejemplos exactos de clase; marco y síndromes | 18 |
-| `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 24 |
-| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar` y resumen de paquetes | 18 |
 | `compresion/test_compresores.py` | Compresión (no es de FEC) | 32 |
 | `compresion/test_reproductores.py` | Reproductores de tráfico (no es de FEC) | 6 |
+| `compresion/test_fec.py` | Códigos de repetición, Hamming y SECDED; ejemplos exactos de clase; corrección de 1 bit y detección de 2 en SECDED; marco y síndromes | 24 |
+| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar`, resumen de paquetes y pestaña de síndrome | 24 |
+| `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 28 |
+| `compresion/test_tablero_fec.py` | Tablero `lab5g-cmp-fec`: cantidad de paneles, paneles de BER y sobrecoste, consultas PromQL, UID únicos | 9 |
+| `compresion/test_canal.py` | Canales BSC y ráfaga: determinismo por semilla, frecuencias, `parse_canal` | 18 |
+| `compresion/test_canal_capa.py` | Canal dentro de la capa FEC: semilla por marco, combinación XOR con la armada manual | 7 |
+| `compresion/test_banco_fec.py` | Banco offline: determinismo, BER, categorías, SECDED dirigido, tabla Markdown | 9 |
+| **Total** | | **157** |
 
-**Resultado ejecutado en un PC con Windows:** 98 pruebas OK en total. Son
-pruebas unitarias; ninguna toca la TUN ni el laboratorio.
+**Resultado ejecutado en un PC con Windows (23-11-2026):** 157 pruebas OK. Son pruebas
+unitarias; ninguna toca la TUN ni el laboratorio.
 
 **Probado en el laboratorio (22-11-2026, `FEC=hamming_7_4`; verificación independiente):**
 
-- `cmp-ue` y `cmp-dn` con el mismo `FEC` y `PUERTO_FEC`; MTU de `cmp0` = 780; las matrices P y H de `/fec/codigo` coinciden con el apunte del 9-nov.
-- Inyección de 1 bit: el síndrome es la columna de $H$ de la posición (bit en la palabra 12, posición 5 → $s=011$, como el ejemplo de clase), estado `corregido`, archivo de 20 KB de vuelta con SHA idéntico, `lab5g_cmp_errores` sin crecer.
-- Inyección de 2 bits en la misma palabra: se ve la limitación. Ejemplo: posiciones 1 y 2 dan $s=110$, la columna 4, y se «corrige» el bit equivocado; el paquete puede salir no íntegro. Si el error cae en el campo de largo, el marco queda `invalido`.
+- `cmp-ue` y `cmp-dn` con el mismo `FEC` y `PUERTO_FEC`; MTU de `cmp0` = 780; las matrices
+  P y H de `/fec/codigo` coinciden con el apunte del 9-nov.
+- Inyección de 1 bit: el síndrome es la columna de $H$ de la posición (bit en la palabra
+  12, posición 5 → $s=011$, como el ejemplo de clase), estado `corregido`, archivo de 20 KB
+  de vuelta con SHA idéntico, `lab5g_cmp_errores` sin crecer.
+- Inyección de 2 bits en la misma palabra: se ve la limitación. Ejemplo: posiciones 1 y 2
+  dan $s=110$, la columna 4, y se «corrige» el bit equivocado; el paquete puede salir no
+  íntegro. Si el error cae en el campo de largo, el marco queda `invalido`.
 - Resumen exacto de `/enviar` por `CONTADORES` (`resumen_fuente: contadores`, `truncado: false`).
-- Métricas `lab5g_cmp_fec_*` en el pushgateway (series precargadas a 0) y consultas `increase()` de los paneles contestadas por Prometheus. Grafana estaba apagado: el tablero no se ha visto renderizado.
+- Métricas `lab5g_cmp_fec_*` en el pushgateway (series precargadas a 0) y consultas
+  `increase()` de los paneles contestadas por Prometheus. Grafana estaba apagado: el tablero
+  no se ha visto renderizado.
 - Tráfico normal: `cmp-gen` sigue enviando, sin errores nuevos sin inyección.
-- Casos de la verificación del 22-11: 1 bit en la posición 82 → $s=011$, `corregido`; 2 bits en 71 y 72 (nibble del id de códec) → `corregido_mal`; 2 bits en 15 y 16 (campo de secuencia) → `corregido` íntegro pero con secuencia falsa (nadie lo detecta: el receptor no compara con el original); 2 bits en 43 y 44 (campo de largo) → `invalido`.
+- Casos de la verificación del 22-11: 1 bit en la posición 82 → $s=011$, `corregido`; 2 bits
+  en 71 y 72 (nibble del id de códec) → `corregido_mal`; 2 bits en 15 y 16 (campo de
+  secuencia) → `corregido` íntegro pero con secuencia falsa (nadie lo detecta: el receptor
+  no compara con el original); 2 bits en 43 y 44 (campo de largo) → `invalido`.
+
+**Pendiente en el laboratorio:** SECDED (8,4) (`FEC=secded_8_4`) y los canales aleatorios
+(`CANAL`) no se han probado todavía. Ver [docs/12](12-plan-siguiente-entrega.md).
 
 **Reservas observadas (pendientes):**
 
-- La orden de inyección la gasta el siguiente marco que recibe `cmp-dn`, normalmente de `cmp-gen`.
-- Una ráfaga de 64 marcos `invalido` justo tras activar `FEC` en `cmp-dn`: durante el cambio los dos lados llevaban valores distintos. Cambiar `FEC` siempre en ambos lados.
-- ~~Un paquete `corregido` con `integro=false` contaba como corrección en el tablero.~~ Resuelto tras la verificación del 22-11 con el estado `corregido_mal` (desplegado y verificado en el lab real el 22-11). Sigue pendiente la limitación de fondo: con 2 errores Hamming (7,4) no puede corregir (SECDED, §9), y un `corregido` íntegro puede seguir llevando datos distintos al original, porque el receptor no compara.
-- La memoria de `cmp-ue` subió de ~23 a ~47 MiB de 64 y parecía estabilizarse; vigilar con `docker stats` y subir el tope si llega cerca.
-- Costo de CPU en el LXC 110: sin cuello de botella visible (carga ~1-2), pero no se midió con tráfico alto.
+- La orden de inyección la gasta el siguiente marco que recibe `cmp-dn`, normalmente de
+  `cmp-gen`.
+- Una ráfaga de 64 marcos `invalido` justo tras activar `FEC` en `cmp-dn`: durante el
+  cambio los dos lados llevaban valores distintos. Cambiar `FEC` siempre en ambos lados.
+- ~~Un paquete `corregido` con `integro=false` contaba como corrección en el tablero.~~
+  Resuelto tras la verificación del 22-11 con el estado `corregido_mal` (desplegado y
+  verificado en el lab real el 22-11). Sigue pendiente la limitación de fondo: con 2 errores
+  Hamming (7,4) no puede corregir (SECDED, [§2.9](#29-secded-84)), y un `corregido` íntegro
+  puede seguir llevando datos distintos al original, porque el receptor no compara.
+- La memoria de `cmp-ue` subió de ~23 a ~47 MiB de 64 y parecía estabilizarse; vigilar con
+  `docker stats` y subir el tope si llega cerca.
+- Costo de CPU en el LXC 110: sin cuello de botella visible (carga ~1-2), pero no se midió
+  con tráfico alto.
 
 ---
 
