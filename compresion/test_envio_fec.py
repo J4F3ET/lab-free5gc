@@ -345,5 +345,51 @@ class CanalYSecded(Base):
         self.assertNotIn("j.canal)}", lab)                      # nada de plantillas HTML con datos del shim
 
 
+class Automatico(Base):
+    """FEC=auto: /fec/codigo pasa tal cual los campos del shim y la pestaña los muestra si existen."""
+
+    AUTO = {**CODIGO, "codigo": "secded_8_4", "auto": True, "codigo_activo": "secded_8_4", "ber_estimado": 0.0012,
+            "escalera": ["hamming_15_11", "secded_16_11", "secded_8_4"]}
+
+    def con_codigo(self, codigo):
+        viejo = self.shim.codigo
+        self.shim.codigo = codigo
+        try:
+            return self.pedir("/fec/codigo")
+        finally:
+            self.shim.codigo = viejo
+
+    def test_codigo_auto_pasa_los_campos_nuevos(self):
+        st, b = self.con_codigo(self.AUTO)
+        j = json.loads(b)
+        self.assertEqual(st, 200)
+        self.assertEqual((j["auto"], j["codigo_activo"], j["ber_estimado"], j["escalera"]),
+                         (True, "secded_8_4", 0.0012, ["hamming_15_11", "secded_16_11", "secded_8_4"]))
+
+    def test_codigo_fijo_no_trae_campos_auto(self):
+        st, b = self.con_codigo(CODIGO)                  # auto=false: la respuesta es la de siempre
+        j = json.loads(b)
+        self.assertEqual((st, j["codigo"]), (200, "hamming74"))
+        self.assertNotIn("auto", j)
+        self.assertNotIn("escalera", j)
+
+    def test_codigo_auto_sin_campos_nuevos_no_rompe_la_pagina(self):
+        # shim intermedio que dice auto=true pero aún sin BER ni escalera: el JS usa .get-equivalentes (||)
+        st, b = self.con_codigo({**CODIGO, "auto": True})
+        self.assertEqual(st, 200)
+        self.assertIsNone(json.loads(b).get("ber_estimado"))
+        html = self.pedir("/")[1].decode()
+        self.assertIn("(j.escalera||[]).join(' → ')||'—'", html)
+        self.assertIn("typeof j.ber_estimado==='number'", html)
+
+    def test_pagina_muestra_modo_automatico_y_nota(self):
+        html = self.pedir("/")[1].decode()
+        for t in ("Modo automático: código activo ", "BER estimado ", "(escalera: ",
+                  "El receptor mide el BER con los síndromes y se lo informa al emisor cada ~2 s, con histéresis",
+                  "j.auto?bloqueAuto(j):null", "lab.codigo.auto&&++lab.n%8===0"):
+            self.assertIn(t, html, t)
+        self.assertIn("const piezas=[", html)
+
+
 if __name__ == "__main__":
     unittest.main()

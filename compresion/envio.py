@@ -537,7 +537,7 @@ const ETQ={limpio:'limpio',corregido:'corregido',corregido_mal:'corrigió mal',n
 let secded=false;   // código activo = SECDED (8,4): su «no_corregible» es «doble detectado» (el valor interno no cambia)
 function etiqueta(est){ return secded&&est==='no_corregible'?'doble detectado':ETQ[est]; }
 function marcarSecded(){ const o=document.querySelector('#filtro option[value="no_corregible"]'); if(o) o.textContent=secded?'doble detectado':'no corregible'; }
-const lab={paquetes:[],ultimo:0,codigo:null,sel:null,timer:null};
+const lab={paquetes:[],ultimo:0,codigo:null,sel:null,timer:null,n:0};
 function vista(cual){ const l=cual==='lab';
   $('#vista-envio').hidden=l; $('#vista-lab').hidden=!l;
   $('#t-envio').classList.toggle('sel',!l); $('#t-lab').classList.toggle('sel',l);
@@ -554,10 +554,15 @@ async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren();
   secded=String(j.codigo).startsWith('secded'); marcarSecded();
   const canal=j.canal?'Canal aleatorio: '+String(j.canal):'Canal aleatorio: apagado (solo inyección manual)';
   const G=j.P.map((fila,i)=>fila.concat(Array.from({length:k},(_,c)=>c===i?1:0)));
-  cont.append(h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad) · ${canal}`)),
+  const piezas=[h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad) · ${canal}`)),
     matriz('G = [P : I_k]  (k×n)',G,c=>c<r), matriz('H = [I : Pᵀ]  ((n−k)×n)',j.H,c=>c>=r),
     h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).'),
-    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null); }
+    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null,j.auto?bloqueAuto(j):null]; cont.append(...piezas.filter(Boolean)); }
+/* FEC=auto: el shim informa código activo, BER estimado (síndromes) y la escalera; campos ausentes = null */
+function bloqueAuto(j){ const ber=typeof j.ber_estimado==='number'?j.ber_estimado.toExponential(2):'—';
+  const esc=(j.escalera||[]).join(' → ')||'—';
+  return h('div',{class:'aviso'},`Modo automático: código activo ${j.codigo_activo||j.codigo}, BER estimado ${ber} (escalera: ${esc}).`,
+    h('br'),'El receptor mide el BER con los síndromes y se lo informa al emisor cada ~2 s, con histéresis: el código sube al instante y baja solo tras 3 informes con BER bajo.'); }
 function columnasH(){ const H=lab.codigo&&lab.codigo.H; if(!H) return {}; const m={};
   for(let j=0;j<H[0].length;j++){ m[H.map(f=>f[j]).join('')]=j; } return m; }
 function estadoPaq(p){ return ETQ[p.estado]?p.estado:'invalido'; }
@@ -578,6 +583,7 @@ async function labSondear(){ let j;
   const nuevos=(j.paquetes||[]).filter(p=>p.id>lab.ultimo);
   if(nuevos.length){ lab.paquetes=lab.paquetes.concat(nuevos).slice(-1000); lab.ultimo=Math.max(...nuevos.map(p=>p.id)); }
   const a=$('#armada'); a.textContent=j.armada?('Armada: '+JSON.stringify(j.armada)):'Sin error armado: el tráfico pasa limpio.';
+  if(lab.codigo&&lab.codigo.auto&&++lab.n%8===0) labCodigo();   // en auto el código activo cambia: refresca cada ~12 s
   labRender(); }
 async function labInyectar(cuerpo){ const a=$('#armada');
   try{ const r=await fetch('fec/inyectar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});

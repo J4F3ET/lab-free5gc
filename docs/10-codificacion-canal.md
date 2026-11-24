@@ -713,12 +713,12 @@ Lectura:
 
 ## 11. Cómo probar
 
-Desde la raíz del repositorio, con Python 3. Son los nueve archivos que corre el paso
+Desde la raíz del repositorio, con Python 3. Son los trece archivos que corre el paso
 «Pruebas de compresion» del workflow [`deploy.yml`](../.github/workflows/deploy.yml), en
 el mismo orden:
 
 ```bash
-python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py compresion/test_sumidero.py compresion/test_bandido_aire.py
+python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py compresion/test_sumidero.py compresion/test_bandido_aire.py compresion/test_adaptativo.py compresion/test_adaptativo_capa.py
 ```
 
 | Archivo | Qué cubre | Pruebas |
@@ -726,7 +726,7 @@ python3 -m unittest compresion/test_compresores.py compresion/test_reproductores
 | `compresion/test_compresores.py` | Compresión (no es de FEC) | 32 |
 | `compresion/test_reproductores.py` | Reproductores de tráfico (no es de FEC) | 6 |
 | `compresion/test_fec.py` | Códigos de repetición, Hamming (7,4) y (15,11) y SECDED (8,4) y (16,11), con tablas compactas; ejemplos exactos de clase; corrección de 1 bit y detección de 2 en SECDED; marco y síndromes | 38 |
-| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar`, resumen de paquetes y pestaña de síndrome | 24 |
+| `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar`, resumen de paquetes, pestaña de síndrome y modo automático (`FEC=auto`) | 28 |
 | `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 28 |
 | `compresion/test_tablero_fec.py` | Tablero `lab5g-cmp-fec`: cantidad de paneles, paneles de BER y sobrecoste, consultas PromQL, UID únicos | 9 |
 | `compresion/test_canal.py` | Canales BSC y ráfaga: determinismo por semilla, frecuencias, `parse_canal` | 18 |
@@ -734,9 +734,11 @@ python3 -m unittest compresion/test_compresores.py compresion/test_reproductores
 | `compresion/test_banco_fec.py` | Banco offline con 6 códigos: determinismo, BER, categorías, SECDED dirigido, bytes en el cable, tabla Markdown | 13 |
 | `compresion/test_sumidero.py` | Sumidero TCP de `cmp-dn`: cierra conexiones colgadas y sigue escuchando sin hilos | 3 |
 | `compresion/test_bandido_aire.py` | Recompensa del bandido en bytes del aire | 9 |
-| **Total** | | **187** |
+| `compresion/test_adaptativo.py` | Estimador del BER, política con histéresis, informe de 12 B (magia, CRC8) | 24 |
+| `compresion/test_adaptativo_capa.py` | Capa FEC en modo auto: arranque en secded (8,4), histéresis ida y vuelta, informes malos, MTU de la escalera, marca 0xFF, contadores y texto de la pestaña | 16 |
+| **Total** | | **231** |
 
-**Resultado ejecutado en un PC con Windows (24-11-2026):** 187 pruebas OK. Son pruebas
+**Resultado ejecutado en un PC con Windows (24-11-2026):** 231 pruebas OK. Son pruebas
 unitarias; ninguna toca la TUN ni el laboratorio.
 
 **Probado en el laboratorio (22-11-2026, `FEC=hamming_7_4`; verificación independiente):**
@@ -889,3 +891,115 @@ reconstruidos con 1 % de pérdida: todas dan ~3,8 % (entrenamiento) y 3,6 % (pru
 `deflate_flujo` 8 paquetes seguidos, que es una explicación probable (suben el ahorro de 19,16 % a
 20,58 % a cambio de más paquetes dañados por cada pérdida); no se comprobó repitiendo `ajustar` sin
 ráfagas, así que es una hipótesis.
+
+---
+
+## 13. Código adaptativo (FEC=auto) (24-11-2026)
+
+Lo de esta sección cierra la entrega que §12.3 dejó pendiente: el emisor elige el código
+según el BER que mide el receptor. Solo hay pruebas unitarias; **no se midió en el laboratorio
+en esta entrega**.
+
+### 13.1 Motivación
+
+El mejor código depende del ruido (§12.3): Hamming (15,11) es el más barato y basta mientras
+$p \le 10^{-3}$; cuando el BER sube hacia $3\cdot10^{-3}$ solo SECDED (8,4) sigue mejorando el BER.
+Con un código fijo hay que pagar siempre la paridad del peor caso o aceptar el BER del peor canal.
+`FEC=auto` recorre una escalera de menos a más protección:
+
+`hamming_15_11` → `secded_16_11` → `secded_8_4`. Arranca en `secded_8_4` (el más protector: arranque conservador).
+
+### 13.2 Estimador del BER a partir de síndromes
+
+El receptor no conoce los bits enviados, pero el decodificador sí ve los síndromes. Por lote de
+palabras decodificadas:
+
+$$\text{bits\_mal} \approx \#\{s \ne 0\} + \#\{\text{no corregibles}\}$$
+
+(cada no corregible implica al menos 2 bits), y
+
+$$\text{BER}_{\text{lote}} = \frac{\text{bits\_mal}}{\text{palabras}\cdot n},\qquad
+\text{BER} \leftarrow (1-\alpha)\,\text{BER} + \alpha\,\text{BER}_{\text{lote}},\quad \alpha = 0{,}2.$$
+
+Es una **estimación que se queda corta**: con Hamming, dos errores en una palabra dan un síndrome
+distinto de cero y se cuentan como uno; y errores de peso 3 o más pueden dar síndrome cero sin
+que nadie lo vea. Por eso el BER estimado se lee como orden de magnitud.
+
+### 13.3 Tabla de umbrales
+
+| BER estimado | Código activo |
+|---|---|
+| $\le 10^{-3}$ | `hamming_15_11` |
+| $\le 2\cdot10^{-3}$ | `secded_16_11` |
+| resto | `secded_8_4` |
+
+Los umbrales son inclusivos (`ber <= umbral`). Está en `TABLA_AUTO` (`compresion/registro_fec.py`).
+
+### 13.4 Histéresis
+
+- **Subir protección:** inmediato, en cuanto un informe supera el umbral del escalón actual.
+- **Bajar protección:** solo tras 3 informes seguidos con BER < 0,5 × el umbral del escalón
+  inmediatamente inferior. En la práctica: bajar de `secded_8_4` a `secded_16_11` exige BER < $10^{-3}$;
+  bajar de `secded_16_11` a `hamming_15_11` exige BER < $5\cdot10^{-4}$.
+
+Un informe que no cumple la condición de bajada reinicia el contador. Así el código no oscila
+cuando el BER anda justo en un umbral.
+
+### 13.5 Informe del receptor al emisor
+
+El receptor manda un informe cuando hay muestras nuevas, como mucho cada 2 s
+(`INTERVALO_INFORME`). El informe viaja **sin FEC**, en un marco de 13 B:
+
+| Campo | Bytes | Contenido |
+|---|---|---|
+| marca | 1 | `0xFF` (`MARCA_INFORME`). No pasa por el decodificador; el KEEPALIVE también es `0xFF` pero de 1 B |
+| magia | 2 | `F0 52` |
+| BER × 10⁹ | 4 | uint32 |
+| muestras | 3 | 24 bits (se satura en 2²⁴−1) |
+| secuencia | 2 | uint16 |
+| CRC8 | 1 | polinomio 0x07, valor inicial 0, sobre los 11 B anteriores |
+
+Un informe con magia, largo o CRC malos se cuenta como «malo» y **no cambia el código**. Un
+informe perdido solo retrasa la decisión.
+
+### 13.6 MTU
+
+`cmp0` en auto usa el **mínimo** de la escalera: `mtu_auto()` = **677 B**. Así cabe cualquier código
+al que el sistema pueda cambiar sin renegociar el MTU del túnel. Es menos que con un código fijo
+(p. ej. 1011 B con Hamming (15,11), §12.1).
+
+### 13.7 Cómo activarlo
+
+```bash
+printf 'auto' | lab5g.sh env-set FEC
+```
+
+y reiniciar `cmp-ue` y `cmp-dn`, como indica la pestaña de síndrome (§5). Para volver a un código
+fijo, `FEC` toma cualquier nombre de código o `auto`.
+
+### 13.8 Qué se ve
+
+- **Pestaña «Laboratorio de síndrome»** (§5): con `auto` aparece el aviso «Modo automático: código
+  activo X, BER estimado Y (escalera: …)» y la nota sobre el informe cada ~2 s con histéresis. La
+  matriz y el código se refrescan cada ~12 s porque el código activo cambia. Con `auto` apagado la
+  pantalla es la de siempre.
+- **Métricas** (`lab5g-cmp-fec`):
+  - `lab5g_cmp_fec_ber_estimado`: el BER que usa la política.
+  - `lab5g_cmp_fec_codigo_activo{codigo=…}`: 1 en el código vigente.
+  - `lab5g_cmp_fec_informes_total`: enviados, recibidos y malos.
+  - `lab5g_cmp_fec_cambios_codigo_total`: cambios de código del receptor.
+
+  Los paquetes ya en vuelo se etiquetan con el código real de su marco, no con el vigente.
+
+### 13.9 Limitaciones
+
+- **Informe sin FEC:** un informe corrupto se descarta por CRC y no se corrige; el código se
+  mantiene hasta el siguiente informe bueno.
+- **Cada sentido decide por separado:** el código de la bajada (cmp-dn → UE) y el de la subida
+  (UE → cmp-dn) son independientes. Cada receptor informa al emisor del otro sentido.
+- **Lazo de realimentación con retardo de ~2–6 s** (intervalo de informe, tránsito por el túnel,
+  histéresis). Ráfagas de ruido más cortas que eso no se siguen; la protección llega tarde.
+- **Estimador:** subestima el BER en los casos de §13.2. Su valor es un orden de magnitud para
+  elegir código, no una medida del BER real.
+- **Sin medición en el laboratorio** en esta entrega: la prueba de que el lazo funciona en el enlace 5G
+  real queda pendiente.

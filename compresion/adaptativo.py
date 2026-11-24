@@ -59,11 +59,13 @@ def _entero_en_rango(nombre: str, valor, maximo: int) -> int:
 class Estimador:
     """Media móvil exponencial del BER del canal, estimada desde el receptor."""
 
-    def __init__(self, alfa: float = 0.2):
+    def __init__(self, alfa: float = 0.02):
         if isinstance(alfa, bool) or not isinstance(alfa, (int, float)) or not 0 < alfa <= 1:
             raise ValueError(f"alfa debe estar en (0, 1], no {alfa!r}")
         self._alfa = float(alfa)
         self._ber = 0.0
+        self._bits_mal = 0.0     # errores vistos, con olvido exponencial por lote
+        self._bits_vistos = 0.0  # bits observados, con el mismo olvido
         self._muestras = 0
 
     def observar(self, palabras: int, sindromes_no_cero: int, no_corregibles: int, n: int) -> None:
@@ -76,8 +78,12 @@ class Estimador:
         if palabras == 0:
             return
         bits_mal = sindromes_no_cero + no_corregibles
-        lote = min(1.0, bits_mal / (palabras * n))
-        self._ber = (1.0 - self._alfa) * self._ber + self._alfa * lote
+        # Cociente de sumas con olvido (no media de cocientes): un lote pequeno sin errores
+        # no arrastra la estimacion hacia 0 y el BER medio no queda sesgado a la baja.
+        olvido = 1.0 - self._alfa
+        self._bits_mal = olvido * self._bits_mal + bits_mal
+        self._bits_vistos = olvido * self._bits_vistos + palabras * n
+        self._ber = min(1.0, self._bits_mal / self._bits_vistos)
         self._muestras += palabras
 
     @property
