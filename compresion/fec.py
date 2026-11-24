@@ -2,7 +2,7 @@
 
   mensaje m (k bits) ; paridad b = m·P  (P es k×(n-k)) ; G = [P : I_k] (k×n)
   palabra código c = m·G = [b : m]  (sistemático, paridad primero)
-  H = [I_{n-k} : Pᵀ] ((n-k)×n) ; H·Gᵀ = 0 (mod 2)
+  H = [I_{n-k} : P^T] ((n-k)×n) ; H·Gᵀ = 0 (mod 2)
   recibido r = c + e ; síndrome s = r·Hᵀ = e·Hᵀ
   s = 0 -> sin error ; s ≠ 0 -> error ; si es de un solo bit en la posición i,
   s es la columna i de H y se corrige volteando el bit i.
@@ -16,19 +16,32 @@ peso 3), así que d_min = 4: corrige 1 error y detecta 2. Con 2 errores el sínd
 (distinto de cero) y nunca coincide con una columna: el estado es "no_corregible" (doble detectado),
 en vez de corregir mal como Hamming (7,4).
 
+Hamming (15,11): r = 4, las 15 columnas de H son todos los vectores no nulos de 4 bits (las 4 de
+I_4 y las 11 de peso ≥ 2 de P^T), d_min = 3: como Hamming (7,4), corrige 1 y corrige MAL con 2.
+
+SECDED (16,11): r = 5, columnas de H de peso impar y distintas (las 5 de I_5, de peso 1, y las 11
+de P^T, de peso 3 o 5), d_min = 4: corrige 1 y con 2 errores da "no_corregible" con síndrome de peso par.
+
 Marco en bytes:  [1 B id de código][palabras código empaquetadas MSB-first, relleno de ceros]
 Lo codificado es  [2 B secuencia !H][2 B largo de datos !H][datos].
 El id de código viaja SIN proteger: un error ahí hace fallar la decodificación (ValueError
 o basura); proteger ese byte queda para una entrega posterior.
+
+Tablas de decodificación: indexadas por la palabra recibida como entero (arreglos compactos de
+enteros, no diccionarios de cadenas): 2^n × (msg + síndrome + posición + estado) bytes, p. ej.
+≈0.4 MB para n = 16 (el diccionario anterior ocupaba ≈20 MB).
 """
 from __future__ import annotations
 
 import struct
+from array import array
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol
 
 MAX_POSICIONES = 64  # tope de posiciones_corregidas guardadas en Resultado
+
+ESTADO_LIMPIO, ESTADO_CORREGIDO, ESTADO_NO_CORREGIBLE = 0, 1, 2
 
 
 @dataclass
@@ -84,6 +97,16 @@ def _a_bytes(texto: str) -> bytes:
 
 def _de_bytes(datos: bytes) -> str:
     return format(int.from_bytes(datos, "big"), f"0{8 * len(datos)}b") if datos else ""
+
+
+def _a_entero(bits) -> int:
+    """Lista de bits (primero = MSB) -> entero."""
+    return int(_bits_a_texto(bits), 2) if len(bits) else 0
+
+
+def _tipo(bits: int) -> str:
+    """Código de tipo de array más pequeño que cabe un valor de `bits` bits."""
+    return "B" if bits <= 8 else "H" if bits <= 16 else "L"
 
 
 class CodigoLineal:
@@ -146,18 +169,53 @@ class CodigoLineal:
 
     # --- tablas para la API rápida ---
     def _tablas(self):
+        """Tablas compactas indexadas por la palabra como entero (bit más significativo = posición 0).
+
+        Devuelve (enc, msg, syn, pos, est):
+          enc[m]  palabra código (n bits) del mensaje m (k bits)
+          msg[r]  mensaje decodificado (k bits) tras corregir la palabra r
+          syn[r]  síndrome de r como entero (fila 0 de H = bit más significativo)
+          pos[r]  posición del bit volteado; SIN_POS si no hay corrección
+          est[r]  0 "limpio", 1 "corregido", 2 "no_corregible"
+        """
         if self._tab is None:
-            k, n = self.k, self.n
-            enc = {}
+            k, n, nk = self.k, self.n, self.nk
+            size = 1 << n
+            mascara = (1 << k) - 1
+            sin_pos = (1 << (8 * array(_tipo(n)).itemsize)) - 1
+
+            enc = array(_tipo(n), [0]) * (1 << k)
             for v in range(1 << k):
                 m = [(v >> (k - 1 - i)) & 1 for i in range(k)]
-                enc[_bits_a_texto(m)] = _bits_a_texto(self.codificar_palabra(m))
-            dec = {}  # palabra(str) -> (mensaje str, estado, síndrome str, posición)
-            for v in range(1 << n):
-                r = [(v >> (n - 1 - i)) & 1 for i in range(n)]
-                p = self.corregir_palabra(r)
-                dec[_bits_a_texto(r)] = (_bits_a_texto(p.m), p.estado, _bits_a_texto(p.sindrome), p.posicion)
-            self._tab = (enc, {w: x[0] for w, x in dec.items()}, dec)
+                enc[v] = _a_entero(self.codificar_palabra(m))
+
+            # columna i de H como entero; colbit[b] es la columna de la posición n-1-b (bit b del entero)
+            columnas = [_a_entero([self.H[f][i] for f in range(nk)]) for i in range(n)]
+            colbit = [columnas[n - 1 - b] for b in range(n)]
+            pos_de_col = {c: i for i, c in enumerate(columnas)}  # el último gana, como en posicion_error
+
+            syn = array(_tipo(nk), [0]) * size
+            for r in range(1, size):
+                bajo = r & -r
+                syn[r] = syn[r ^ bajo] ^ colbit[bajo.bit_length() - 1]
+
+            msg = array(_tipo(k), [0]) * size
+            pos = array(_tipo(n), [sin_pos]) * size
+            est = bytearray(size)
+            for r in range(size):
+                s = syn[r]
+                if s == 0:
+                    msg[r] = r & mascara
+                    continue
+                p = pos_de_col.get(s)
+                if p is None:
+                    est[r] = ESTADO_NO_CORREGIBLE
+                    msg[r] = r & mascara
+                else:
+                    est[r] = ESTADO_CORREGIDO
+                    pos[r] = p
+                    msg[r] = (r ^ (1 << (n - 1 - p))) & mascara
+            self._tab = (enc, msg, syn, pos, est, sin_pos)
         return self._tab
 
     # --- API sobre bytes ---
@@ -171,8 +229,9 @@ class CodigoLineal:
         enc = self._tablas()[0]
         bits = _de_bytes(struct.pack("!HH", secuencia, len(datos)) + bytes(datos))
         bits += "0" * (-len(bits) % self.k)
-        k = self.k
-        palabras = "".join(map(enc.__getitem__, [bits[i:i + k] for i in range(0, len(bits), k)]))
+        k, n = self.k, self.n
+        formato = f"0{n}b"
+        palabras = "".join([format(enc[int(bits[i:i + k], 2)], formato) for i in range(0, len(bits), k)])
         return bytes([self.id]) + _a_bytes(palabras)
 
     def decodificar(self, marco: bytes) -> tuple[bytes, Resultado]:
@@ -180,36 +239,37 @@ class CodigoLineal:
             raise ValueError("marco vacío")
         if marco[0] != self.id:
             raise ValueError(f"id {marco[0]} no corresponde a {self.nombre!r} (id {self.id})")
-        n, k = self.n, self.k
-        _, dec_m, dec = self._tablas()
+        n, k, nk = self.n, self.k, self.nk
+        _, msg, syn, pos, est, sin_pos = self._tablas()
         bits = _de_bytes(marco[1:])
         total = len(bits) // n
         if total * k < 32:
             raise ValueError("marco demasiado corto para la cabecera")
-        todas = [bits[i:i + n] for i in range(0, total * n, n)]
-        mensaje = "".join(map(dec_m.__getitem__, todas))
+        todas = [int(bits[i:i + n], 2) for i in range(0, total * n, n)]
+        mensaje = "".join([format(msg[w], f"0{k}b") for w in todas])
         secuencia, largo = int(mensaje[:16], 2), int(mensaje[16:32], 2)
         nbloques = -(-(32 + 8 * largo) // k)
         if nbloques > total or len(marco) != 1 + -(-(nbloques * n) // 8):
             raise ValueError("largo inconsistente con el tamaño del marco")
         palabras = todas[:nbloques]
         res = Resultado(secuencia, largo, nbloques, 0, 0, 0, bits_codificados=nbloques * n)
-        corregibles = set()
+        hay_corregibles = False
         for w, cnt in Counter(palabras).items():
-            _, estado, s, _pos = dec[w]
-            if estado == "limpio":
+            e = est[w]
+            if e == ESTADO_LIMPIO:
                 continue
+            s = format(syn[w], f"0{nk}b")
             res.sindromes_no_cero += cnt
             res.sindromes[s] = res.sindromes.get(s, 0) + cnt
-            if estado == "corregido":
+            if e == ESTADO_CORREGIDO:
                 res.corregidas += cnt
-                corregibles.add(w)
+                hay_corregibles = True
             else:
                 res.no_corregibles += cnt
-        if corregibles:
+        if hay_corregibles:
             for i, w in enumerate(palabras):
-                if w in corregibles:
-                    res.posiciones_corregidas.append((i, dec[w][3]))
+                if est[w] == ESTADO_CORREGIDO:
+                    res.posiciones_corregidas.append((i, pos[w]))
                     if len(res.posiciones_corregidas) >= MAX_POSICIONES:
                         break
         datos = _a_bytes(mensaje[32:32 + 8 * largo])
@@ -219,8 +279,17 @@ class CodigoLineal:
 REPETICION_5_1 = CodigoLineal("repeticion_5_1", [[1, 1, 1, 1]], id_codigo=1)
 HAMMING_7_4 = CodigoLineal("hamming_7_4", [[1, 1, 0], [0, 1, 1], [1, 1, 1], [1, 0, 1]], id_codigo=2)
 SECDED_8_4 = CodigoLineal("secded_8_4", [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]], id_codigo=3)
+# Filas de P = las 11 columnas de P^T de H: vectores de 4 bits de peso ≥ 2 (las 4 de I_4 son de peso 1).
+HAMMING_15_11 = CodigoLineal("hamming_15_11", [
+    [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 1, 0], [1, 0, 0, 1], [1, 0, 1, 0], [1, 1, 0, 0],
+    [0, 1, 1, 1], [1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 0], [1, 1, 1, 1]], id_codigo=4)
+# Filas de P: 11 vectores de 5 bits de peso impar distintos (10 de peso 3 y uno de peso 5).
+SECDED_16_11 = CodigoLineal("secded_16_11", [
+    [0, 0, 1, 1, 1], [0, 1, 0, 1, 1], [0, 1, 1, 0, 1], [0, 1, 1, 1, 0], [1, 0, 0, 1, 1], [1, 0, 1, 0, 1],
+    [1, 0, 1, 1, 0], [1, 1, 0, 0, 1], [1, 1, 0, 1, 0], [1, 1, 1, 0, 0], [1, 1, 1, 1, 1]], id_codigo=5)
 
-CODIGOS: dict[int, CodigoLineal] = {c.id: c for c in (REPETICION_5_1, HAMMING_7_4, SECDED_8_4)}
+CODIGOS: dict[int, CodigoLineal] = {c.id: c for c in (
+    REPETICION_5_1, HAMMING_7_4, SECDED_8_4, HAMMING_15_11, SECDED_16_11)}
 
 
 def buscar(codigo) -> CodigoLineal:

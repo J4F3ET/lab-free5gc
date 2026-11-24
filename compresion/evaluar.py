@@ -9,6 +9,7 @@ evaluar.py — Compara las opciones de compresión sobre tráfico 5G de prueba, 
   python evaluar.py informacion [--publicar URL]  # original/comprimido/recuperado e I(O;R) (informacion.py)
   python evaluar.py bandido             # qué decide el bandido y por qué: brazos, contextos, arrepentimiento
   python evaluar.py fec [--sin-archivos]  # BER residual por código FEC, offline (banco_fec.py) -> resultados/fec.md
+  python evaluar.py aire                # malla del bandido con recompensa en bytes del aire, por factor FEC -> resultados/aire.md
 
 Entrenamiento (semilla 1, textos TEXTOS_ENTRENO) y prueba (semilla 2, TEXTOS_PRUEBA) no
 comparten paquetes: lo que se mide es sobre tráfico que el modelo nunca vio. Es justo lo
@@ -29,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import trafico as T
 import compresores as C
-from bandido import EmisorAdaptativo
+from bandido import BRAZOS_RED, RAFAGA_RED, EmisorAdaptativo, aire as aire_bytes
 
 DIR = Path(__file__).resolve().parent
 MODELO = DIR / "modelo.json"
@@ -432,11 +433,120 @@ def bandido():
     print(md)
 
 
+FACTORES_FEC = {"1,0 (sin FEC)": 1.0, "1,364 (Hamming 15/11)": 1.364, "1,75 (Hamming 7/4)": 1.75,
+                "2,0 (SECDED 8/4)": 2.0}
+
+
+def aire_malla():
+    """Malla del bandido con la recompensa en bytes del aire (bandido.recompensa_aire) -> resultados/aire.md.
+
+    Afina con ENTRENAMIENTO (semilla 1) y reporta en PRUEBA (semilla 2); en prueba solo se miden la línea
+    base y la configuración elegida de cada factor FEC. Criterio de elección por factor, en este orden:
+      1. % mal con 1 % de pérdida ≤ 2 % (el mismo límite de ajustar);
+      2. ahorro en el aire a no más de 0,5 puntos del mejor;
+      3. de esas, la que menos intenta comprimir (menos CPU).
+    La línea base es la configuración actual (γ 0,999, c 0,02, recompensa vieja de carga, costo 0,01); la
+    recompensa vieja no depende de f, así que sus decisiones son las mismas para todos los factores y solo
+    cambian los bytes contados en el aire."""
+    import balance as BAL
+    m = C.Modelo.cargar(MODELO) if MODELO.exists() else entrenar()
+    entren = T.intercalar(T.conjunto(1, P_FLUJO, F_CLASE, prueba=False), 3)
+    prueba = T.intercalar(T.conjunto(2, P_FLUJO, F_CLASE, prueba=True), 3)
+    actual = {"gamma": 0.999, "c": 0.02}
+
+    def fabrica(kw):
+        return lambda: (lambda e: (lambda p: e.enviar(p)[0]))(EmisorAdaptativo(m, reinicio_flujo=16, **kw))
+
+    def medir(mz, kw, f):
+        em = EmisorAdaptativo(m, reinicio_flujo=16, **kw)
+        crudo = out = aire_out = aire_base = 0
+        for _, _, p in mz:
+            marco, _ = em.enviar(p)
+            crudo += len(p); out += len(marco)
+            aire_out += aire_bytes(len(marco), f); aire_base += aire_bytes(len(p), f)
+        n = len(mz)
+        intentos = sum(e[0] for c, e in em.por_brazo.items() if c != C.NINGUNO)
+        respaldos = sum(e[1] for e in em.por_brazo.values())
+        cpu = sum(e[4] for e in em.por_brazo.values())
+        return {"ahorro_aire": _pct(aire_base, aire_out), "ahorro_carga": _pct(crudo, out),
+                "bytes_aire": round(aire_out), "bytes_aire_base": round(aire_base), "intentos": intentos,
+                "respaldos": respaldos, "cpu_us": round(1e6 * cpu / n, 1),
+                "ninguno": em.elegidos.get(C.NINGUNO, 0), "mal_pct": round(BAL.pct_mal(m, mz, fabrica(kw)), 2)}
+
+    # ---- ENTRENAMIENTO: malla por factor ----
+    malla = {}
+    for nf, f in FACTORES_FEC.items():
+        filas = []
+        base = medir(entren, actual, f)
+        filas.append(dict(base, f=nf, politica="actual (recompensa vieja)", gamma=0.999, c=0.02, costo="0.01"))
+        for g in (0.995, 0.999):
+            for c in (0.005, 0.01, 0.02):
+                for costo in (0.002, 0.005, 0.01):
+                    kw = {"gamma": g, "c": c, "factor_fec": f, "costo_cpu": costo}
+                    filas.append(dict(medir(entren, kw, f), f=nf, politica="aire", gamma=g, c=c, costo=str(costo)))
+                    print(filas[-1], flush=True)
+        malla[nf] = filas
+
+    # ---- elección por factor, solo con ENTRENAMIENTO ----
+    elegidos = {}
+    for nf, filas in malla.items():
+        aire_filas = [r for r in filas if r["politica"] == "aire"]
+        ok = [r for r in aire_filas if r["mal_pct"] <= 2.0] or aire_filas
+        mejor = max(r["ahorro_aire"] for r in ok)
+        cerca = [r for r in ok if r["ahorro_aire"] >= mejor - 0.5]
+        elegidos[nf] = min(cerca, key=lambda r: (r["intentos"], -r["ahorro_aire"]))
+
+    # ---- PRUEBA: solo la línea base y la elegida de cada factor ----
+    prueba_filas = []
+    for nf, f in FACTORES_FEC.items():
+        base_p = medir(prueba, actual, f)
+        el = elegidos[nf]
+        kw = {"gamma": el["gamma"], "c": el["c"], "factor_fec": f, "costo_cpu": float(el["costo"].replace(",", "."))}
+        el_p = medir(prueba, kw, f)
+        prueba_filas.append(dict(base_p, f=nf, politica="sin compresión", gamma="—", c="—", costo="—",
+                                 ahorro_aire=0.0, ahorro_carga=0.0, bytes_aire=base_p["bytes_aire_base"],
+                                 intentos=0, respaldos=0, cpu_us=0.0, mal_pct=0.0, delta=0.0))
+        prueba_filas.append(dict(base_p, f=nf, politica="actual (recompensa vieja)", gamma=0.999, c=0.02,
+                                 costo="0.01", delta=0.0))
+        prueba_filas.append(dict(el_p, f=nf, politica="elegida con entrenamiento", gamma=el["gamma"], c=el["c"],
+                                 costo=el["costo"], delta=round(el_p["ahorro_aire"] - base_p["ahorro_aire"], 2)))
+
+    # ---- salida ----
+    n_tr, n_pr = len(entren), len(prueba)
+    md = ("# Recompensa en bytes del aire (generado por `evaluar.py aire`)\n\n"
+          f"Entrenamiento: {n_tr} paquetes (semilla 1). Prueba: {n_pr} paquetes (semilla 2). Brazos: "
+          f"{', '.join(C.CODECS[b] for b in BRAZOS_RED)}; reinicio de flujo 16; ráfaga {RAFAGA_RED}.\n\n"
+          "aire(L) = 33 + f·(4 + L) bytes por paquete, con L = bytes del marco que sale del emisor (incluye la "
+          "cabecera ROHC y el id de códec). «ahorro aire %» compara con no comprimir (paquete crudo) con el mismo f. "
+          "«ahorro carga %» = 1 − bytes del marco / bytes crudos, sin el overhead fijo ni la paridad.\n\n"
+          "Criterio de elección (solo entrenamiento): % mal con 1 % de pérdida ≤ 2; de esas, ahorro en el aire a no "
+          "más de 0,5 puntos del mejor; de esas, la que menos intenta comprimir. La línea base usa la recompensa "
+          "vieja (de carga, costo fijo 0,01) y sus decisiones no dependen de f.\n\n"
+          "## 1. Malla en ENTRENAMIENTO\n\n")
+    cols = ["f", "politica", "gamma", "c", "costo", "ahorro_aire", "ahorro_carga", "bytes_aire", "intentos",
+            "respaldos", "ninguno", "cpu_us", "mal_pct"]
+    cab = ["f (factor FEC)", "política", "γ", "c", "costo CPU", "ahorro aire %", "ahorro carga %", "bytes en el aire",
+           "intentos", "respaldos", "veces ninguno", "CPU µs/paq", "% mal con 1 % pérdida"]
+    todas = [r for filas in malla.values() for r in filas]
+    md += tabla_md(todas, cols, cab)
+    md += "\n## 2. Prueba (solo línea base y elegida)\n\n"
+    md += tabla_md(prueba_filas, cols[:2] + ["gamma", "c", "costo", "ahorro_aire", "ahorro_carga", "bytes_aire",
+                                              "intentos", "respaldos", "cpu_us", "mal_pct", "delta"],
+                   ["f (factor FEC)", "política", "γ", "c", "costo CPU", "ahorro aire %", "ahorro carga %",
+                    "bytes en el aire", "intentos", "respaldos", "CPU µs/paq", "% mal con 1 % pérdida",
+                    "Δ ahorro aire vs. línea base (puntos)"])
+    md += "\nElegido con entrenamiento por factor: " + "; ".join(
+        f"{nf}: γ = {r['gamma']}, c = {r['c']}, costo = {r['costo']}" for nf, r in elegidos.items()) + ".\n"
+    SALIDA.mkdir(exist_ok=True)
+    (SALIDA / "aire.md").write_text(md, encoding="utf-8")
+    print(md)
+
+
 if __name__ == "__main__":
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
-    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion", "bandido", "fec"])
+    ap.add_argument("accion", choices=["entrenar", "ajustar", "comparar", "balance", "informacion", "bandido", "fec", "aire"])
     ap.add_argument("--publicar", metavar="URL", help="informacion: subir al pushgateway (p. ej. http://10.100.205.14:9091)")
     ap.add_argument("--sin-archivos", action="store_true", help="informacion y fec: no escribir resultados/ (contenedor de solo lectura)")
     a = ap.parse_args()
@@ -445,4 +555,5 @@ if __name__ == "__main__":
     elif a.accion == "fec":
         fec_banco(not a.sin_archivos)
     else:
-        {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance, "bandido": bandido}[a.accion]()
+        {"entrenar": entrenar, "ajustar": ajustar, "comparar": comparar, "balance": balance, "bandido": bandido,
+         "aire": aire_malla}[a.accion]()

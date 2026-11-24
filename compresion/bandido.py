@@ -158,6 +158,50 @@ def recompensa(largo_carga: int, largo_salida: int, codec: int,
     return max(-1.0, ahorro - t_cpu * velocidad_bps / (8 * largo_carga))
 
 
+# Bytes fijos por paquete en el aire, fuera de la carga: IP+UDP del túnel (28 B) + 1 B de id de FEC.
+# Ver recompensa_aire: el encabezado de 4 B (secuencia y largo) va dentro del paréntesis, multiplicado por f.
+OVERHEAD_AIRE = 33
+
+
+def aire(largo_carga: int, factor_fec: float, overhead_fijo: int = OVERHEAD_AIRE) -> float:
+    """Bytes que ocupa un paquete en el aire: overhead_fijo + factor_fec · (4 + largo_carga).
+
+    factor_fec = n/k del código FEC (1,0 sin FEC; 1,364 Hamming 15/11; 1,75 Hamming 7/4; 2,0 SECDED 8/4):
+    la paridad crece con la carga, así que se multiplica. El 4 de dentro del paréntesis son la secuencia
+    y el largo, que también van codificados.
+
+    Desglose elegido: 33 = 28 (IP+UDP) + 1 (id FEC) + 4. Los 4 B de secuencia/largo están contados DOS
+    veces (una en el 33 y otra dentro de f·(4+L)): es un error por exceso de 4 B por paquete. Lo
+    correcto estricto sería overhead_fijo = 29. Se deja 33 porque es lo que se pidió, y el efecto en
+    el ahorro relativo es mínimo (y el mismo para todos los códecs)."""
+    return overhead_fijo + factor_fec * (4 + largo_carga)
+
+
+def recompensa_aire(largo_carga: int, largo_salida: int, codec: int, factor_fec: float,
+                    overhead_fijo: int = OVERHEAD_AIRE, costo_cpu: float = COSTO_CPU) -> float:
+    """Recompensa en BYTES DEL AIRE (no solo de carga). Opcional: no reemplaza a recompensa().
+
+        ahorro_aire = 1 − aire(largo_salida) / aire(largo_carga)     (acotado a [−1, 1])
+        r = ahorro_aire − (0 si codec == NINGUNO, si no costo_cpu / factor_fec)
+
+    Por qué: el ahorro de carga ignora la paridad FEC (que escala con f) y el overhead fijo por
+    paquete. Con f = 2 un byte de carga ahorrado vale dos bytes en el aire, así que el costo de CPU
+    relativo baja en la misma proporción: por eso el costo se divide entre f.
+
+    Diferencia con recompensa() sin velocidad (con f = 1 y overhead_fijo = 0 NO coincide):
+      · el denominador y el numerador llevan el 4 B de secuencia/largo, así que el ahorro relativo
+        es algo menor en paquetes chicos (1 − (4+Ls)/(4+Lc) en vez de (Lc − Ls)/Lc);
+      · el costo de CPU se mantiene en costo_cpu / 1 = 0,01 cuando f = 1, igual que antes.
+    Para paquetes grandes las dos recompensas se parecen; en chicos la de aire es más conservadora.
+    Con 'ninguno' devuelve 0 siempre (no hay nada que ahorrar ni CPU que cobrar)."""
+    if largo_carga == 0 or codec == NINGUNO:
+        return 0.0
+    a_c = aire(largo_carga, factor_fec, overhead_fijo)
+    a_s = aire(largo_salida, factor_fec, overhead_fijo)
+    ahorro = max(-1.0, min(1.0, 1.0 - a_s / a_c))
+    return ahorro - costo_cpu / factor_fec
+
+
 class EmisorAdaptativo:
     """El emisor completo que usa la red: ROHC-lite + códec de carga elegido por el bandido.
 
@@ -174,7 +218,13 @@ class EmisorAdaptativo:
     def __init__(self, modelo, reinicio_flujo: int = 16, gamma: float = GAMMA_RED, c: float = C_RED,
                  brazos=BRAZOS_RED, velocidad_bps: float | None = None, factor_cpu: float = 1.0,
                  perdida_iot: dict | None = None, sombra_cada: int = 0, sombra_codecs=None,
-                 contexto_fn=contexto, rafaga: int = RAFAGA_RED):
+                 contexto_fn=contexto, rafaga: int = RAFAGA_RED, factor_fec: float | None = None,
+                 costo_cpu: float = COSTO_CPU, overhead_fijo: int = OVERHEAD_AIRE):
+        # factor_fec = f (None = recompensa antigua, de carga). Si se da, la recompensa es en bytes del
+        # aire (recompensa_aire) con costo_cpu y overhead_fijo; velocidad_bps no puede combinarse con ella.
+        if factor_fec is not None and velocidad_bps is not None:
+            raise ValueError("factor_fec (recompensa en aire) y velocidad_bps (latencia) no se combinan")
+        self.factor_fec, self.costo_cpu, self.overhead_fijo = factor_fec, costo_cpu, overhead_fijo
         # sombra_cada = K > 0: 1 de cada K paquetes se mide además con sombra_codecs (por defecto,
         # los códecs sin pérdida que no están marcados `lento`). 0 = sin sombra (las evaluaciones
         # fuera de línea no la necesitan: ya corren cada algoritmo por separado).
@@ -244,7 +294,10 @@ class EmisorAdaptativo:
             conf()
         # Se premia (y se cobra el costo de CPU a) el brazo ELEGIDO aunque haya caído al
         # respaldo "ninguno": intentarlo gastó CPU igual, y así aprende que ahí no sirve.
-        r = recompensa(len(carga), len(d), elegido, t_cpu, self.velocidad_bps)
+        if self.factor_fec is not None:
+            r = recompensa_aire(len(carga), len(d), elegido, self.factor_fec, self.overhead_fijo, self.costo_cpu)
+        else:
+            r = recompensa(len(carga), len(d), elegido, t_cpu, self.velocidad_bps)
         self.bandido.actualizar(ctx, elegido, r)
         e = self.por_brazo[elegido]
         e[0] += 1; e[1] += cod != elegido; e[2] += len(carga); e[3] += len(d); e[4] += t_cpu; e[5] += r
