@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
-from registro_fec import CapaFec, emitir_marco, es_informe, recibir_marco, validar_codigo
+from registro_fec import CapaFec, emitir_marco, es_informe, es_nack, recibir_marco, validar_codigo
 from canal import parse_canal
 from sumidero import servir_sumidero_tcp
 
@@ -193,9 +193,13 @@ def main() -> None:
             semilla_canal = int(os.environ.get("CANAL_SEMILLA") or "1")
         except ValueError:
             sys.exit(f"[cmp-{lado}] CANAL_SEMILLA={os.environ.get('CANAL_SEMILLA')!r} debe ser un entero")
-        capa = CapaFec(os.environ["FEC"], lado, canal=canal_ruido, semilla_canal=semilla_canal)
+        # REENVIO=1: si el receptor ve un doble error (no corregible), descarta y pide reenvío por NACK.
+        capa = CapaFec(os.environ["FEC"], lado, canal=canal_ruido, semilla_canal=semilla_canal,
+                       reenvio=os.environ.get("REENVIO") == "1")
     elif os.environ.get("CANAL"):
         print(f"[cmp-{lado}] aviso: CANAL={os.environ['CANAL']!r} se ignora porque FEC está apagado", flush=True)
+    if capa is None and os.environ.get("REENVIO") == "1":
+        print(f"[cmp-{lado}] aviso: REENVIO=1 se ignora porque FEC está apagado", flush=True)
     modelo = Modelo.cargar(os.environ.get("MODELO", Path(__file__).with_name("modelo.json")))
     if lado == "ue":
         esperar_interfaz("uesimtun0")  # sin sesión PDU no hay por dónde mandar nada
@@ -250,7 +254,9 @@ def main() -> None:
             marco, origen = sock.recvfrom(65535)
             if lado == "dn":
                 par = origen  # la dirección del UE tras el NAT del UPF
-            if marco != KEEPALIVE and capa is not None and capa.auto and es_informe(marco):
+            if marco != KEEPALIVE and capa is not None and es_nack(marco):
+                capa.recibir_nack(marco)          # NACK: pide reenvío; no es un marco FEC ni cuenta como error
+            elif marco != KEEPALIVE and capa is not None and capa.auto and es_informe(marco):
                 capa.recibir_informe(marco[1:])   # informe del receptor: no es un marco FEC ni cuenta como error
             elif marco != KEEPALIVE and capa:
                 def escribir(pkt: bytes) -> None:
@@ -274,6 +280,11 @@ def main() -> None:
             inf = capa.informe_pendiente(ahora)
             if inf:
                 sock.sendto(inf, par)
+            for reenvio_marco in capa.reenvios_pendientes():   # solo con REENVIO=1 (lo pedido por NACK)
+                sock.sendto(reenvio_marco, par)
+            nack = capa.nack_pendiente()                       # solo con REENVIO=1
+            if nack:
+                sock.sendto(nack, par)
         if lado == "ue" and ahora - ultimo_ka > 15:
             sock.sendto(KEEPALIVE, par); ultimo_ka = ahora
         if ahora - ultimo_pub > 10:
