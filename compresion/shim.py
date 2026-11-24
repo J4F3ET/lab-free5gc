@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
-from registro_fec import CapaFec, emitir_marco, mtu_con_fec, recibir_marco, validar_codigo
+from registro_fec import CapaFec, emitir_marco, es_informe, recibir_marco, validar_codigo
 from canal import parse_canal
 from sumidero import servir_sumidero_tcp
 
@@ -201,7 +201,7 @@ def main() -> None:
         esperar_interfaz("uesimtun0")  # sin sesión PDU no hay por dónde mandar nada
     # Con FEC el marco crece n/k: el MTU de cmp0 baja para que quepa en uesimtun0 (ver registro_fec.py)
     tun = abrir_tun("cmp0", "10.99.0.1" if lado == "ue" else "10.99.0.2",
-                    mtu_con_fec(capa.codigo) if capa else MTU)
+                    capa.mtu() if capa else MTU)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip_de("uesimtun0") if lado == "ue" else "0.0.0.0", PUERTO))
     par = (os.environ.get("PAR", "10.100.204.30"), PUERTO) if lado == "ue" else None
@@ -250,7 +250,9 @@ def main() -> None:
             marco, origen = sock.recvfrom(65535)
             if lado == "dn":
                 par = origen  # la dirección del UE tras el NAT del UPF
-            if marco != KEEPALIVE and capa:
+            if marco != KEEPALIVE and capa is not None and capa.auto and es_informe(marco):
+                capa.recibir_informe(marco[1:])   # informe del receptor: no es un marco FEC ni cuenta como error
+            elif marco != KEEPALIVE and capa:
                 def escribir(pkt: bytes) -> None:
                     os.write(tun, pkt)
                     met.c["marco_rx"] += len(marco); met.c["orig_rx"] += len(pkt)
@@ -268,6 +270,10 @@ def main() -> None:
                     met.c["errores"] += 1
                     if met.c["errores"] < 20:
                         print(f"[cmp-{lado}] no se pudo descomprimir: {e!r}", flush=True)
+        if capa is not None and par is not None:   # solo en auto devuelve algo: el informe del receptor
+            inf = capa.informe_pendiente(ahora)
+            if inf:
+                sock.sendto(inf, par)
         if lado == "ue" and ahora - ultimo_ka > 15:
             sock.sendto(KEEPALIVE, par); ultimo_ka = ahora
         if ahora - ultimo_pub > 10:
