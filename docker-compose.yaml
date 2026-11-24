@@ -395,6 +395,7 @@ services:
       FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
       CANAL: "${CANAL:-}"                               # vacio = sin canal aleatorio; bsc:P | rafaga:P_MALO,PBM,PMB (requiere FEC)
       CANAL_SEMILLA: "${CANAL_SEMILLA:-1}"              # semilla del canal aleatorio (igual en ue y dn para reproducir)
+      REENVIO: "${REENVIO:-}"                           # 1 = pedir reenvio (NACK) ante doble error detectado; vacio = apagado (requiere FEC)
       PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]
@@ -429,6 +430,7 @@ services:
       FEC: "${FEC:-}"                                   # vacio = sin FEC; hamming_7_4 | repeticion_5_1 (igual en ue y dn)
       CANAL: "${CANAL:-}"                               # vacio = sin canal aleatorio; bsc:P | rafaga:P_MALO,PBM,PMB (requiere FEC)
       CANAL_SEMILLA: "${CANAL_SEMILLA:-1}"              # semilla del canal aleatorio (igual en ue y dn para reproducir)
+      REENVIO: "${REENVIO:-}"                           # 1 = pedir reenvio (NACK) ante doble error detectado; vacio = apagado (requiere FEC)
       PUERTO_FEC: "${PUERTO_FEC:-7702}"                 # comandos FEC, solo 127.0.0.1
     volumes: [ ./compresion:/cmp:ro ]
     cap_add: [ NET_ADMIN ]
