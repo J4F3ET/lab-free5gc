@@ -56,17 +56,17 @@ ejecutadas en un PC con Windows con 157 OK) y **se probó de extremo a extremo e
 laboratorio real el 22-11-2026** con `FEC=hamming_7_4` en `cmp-ue` y `cmp-dn`:
 inyección de 1 y 2 bits, síndromes observados, archivo de vuelta con SHA idéntico,
 métricas en el pushgateway y consultas del tablero contestadas por Prometheus.
-**SECDED (8,4) y los canales aleatorios están implementados, con pruebas y con el
-banco offline, pero aún no se han probado en el laboratorio** (ver
-[docs/12](12-plan-siguiente-entrega.md)). Los resultados y las reservas están en
+**SECDED (8,4) y el canal aleatorio BSC también se probaron en el laboratorio el
+23-11-2026** (`FEC=secded_8_4`, `CANAL=bsc:1e-3`); el canal de ráfagas solo está probado
+con pruebas unitarias y en el banco offline. Los resultados y las reservas están en
 [§11](#11-cómo-probar).
 
 | Pieza | Estado |
 |---|---|
 | `compresion/fec.py` (códigos de repetición, Hamming y SECDED (8,4), `CodigoLineal`, `codificar`/`decodificar` sobre bytes) | Implementado y probado con pruebas unitarias; los ejemplos de clase son pruebas exactas; SECDED con pruebas de corrección de 1 bit y de detección de 2 |
-| `compresion/canal.py` (`inyectar`, `elegir_posiciones`, canales `bsc` y `rafaga`, `parse_canal`) | Implementado y probado con pruebas unitarias; no probado aún en el laboratorio |
+| `compresion/canal.py` (`inyectar`, `elegir_posiciones`, canales `bsc` y `rafaga`, `parse_canal`) | Implementado y probado con pruebas unitarias; `bsc` probado en el laboratorio (23-11); `rafaga` solo con pruebas unitarias y banco offline |
 | `compresion/registro_fec.py` (`RegistroFec`, `CapaFec`, `mtu_con_fec`, `aplicar_canal`) | Implementado y probado con pruebas unitarias (sin TUN ni sockets) |
-| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** (22-11) con Hamming; las variables `CANAL` y `CANAL_SEMILLA`, y SECDED, aún no |
+| Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** con Hamming (22-11), con SECDED y con `CANAL=bsc:1e-3` (23-11) |
 | Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); probados en el laboratorio con `/enviar` y `/fec/inyectar` |
 | Métricas `lab5g_cmp_fec_*` | Verificadas en el pushgateway y en Prometheus (22-11) |
 | Tablero de Grafana | **Construido**, con 7 elementos (un texto y 6 paneles, incluidos «BER de entrada del canal» y «Sobrecoste de la protección») (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus, pero no se ha visto renderizado en un Grafana) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
@@ -756,8 +756,40 @@ unitarias; ninguna toca la TUN ni el laboratorio.
   secuencia) → `corregido` íntegro pero con secuencia falsa (nadie lo detecta: el receptor
   no compara con el original); 2 bits en 43 y 44 (campo de largo) → `invalido`.
 
-**Pendiente en el laboratorio:** SECDED (8,4) (`FEC=secded_8_4`) y los canales aleatorios
-(`CANAL`) no se han probado todavía. Ver [docs/12](12-plan-siguiente-entrega.md).
+**Probado en el laboratorio (23-11-2026, `FEC=secded_8_4`):** MTU de `cmp0` = 677, como da la
+fórmula de §3.1. Con `cmp-gen` detenido y un archivo de 6000 B por `/enviar`:
+
+| Caso (posiciones de bit del marco) | Resultado |
+|---|---|
+| Sin errores | 26 paquetes `limpio` |
+| 1 bit (107, palabra 12) | `corregido`, síndrome `0001` |
+| 2 bits en la misma palabra (104 y 108) | `no_corregible` (**doble detectado**), síndrome `0110` (peso par); no se corrige ningún bit |
+| 2 bits en palabras distintas (105 y 170) | 2 palabras `corregido`, síndromes `0100` y `0010` |
+| Archivo completo sin error inyectado | `identico: true`, mismo SHA a la ida y a la vuelta |
+
+El síndrome `0110` coincide con el cálculo a mano de [§2.9](#29-secded-84): es la suma de
+dos columnas de $H$ de peso impar, y por eso nunca coincide con una columna.
+
+**Probado en el laboratorio (23-11-2026, canal aleatorio `CANAL=bsc:1e-3`, `FEC=secded_8_4`):**
+tres envíos de un archivo de 20 KB con el generador activo; los tres volvieron con SHA
+idéntico. Resumen de `/enviar` por envío:
+
+| Envío | Paquetes | Con error del canal | Síndromes ≠ 0 | Corregidas | No corregibles | Corregidos mal |
+|---|---|---|---|---|---|---|
+| 1 | 84 | 69 | 234 | 233 | 1 | 0 |
+| 2 | 71 | 56 | 286 | 286 | 0 | 0 |
+| 3 | 337 | 262 | 1396 | 1384 | 12 | 15 |
+
+Con $p=10^{-3}$ casi todas las palabras con error se corrigen; las que tienen dos errores
+se detectan, y con tres o más errores en una palabra SECDED puede corregir mal (los
+«corregidos mal» del tercer envío), como predice $d_{min}=4$.
+
+**Consultas de los tableros:** las 96 consultas de los cuatro tableros contestan con
+datos en el Prometheus real, incluidas las 10 del tablero de síndrome. Que se vean
+**renderizados** en un Grafana sigue sin comprobarse por pantalla.
+
+**Grafana ligero (PR #14):** con los 17 plugins no usados desactivados, un
+`docker start grafana` simple tarda unos 10 s en servir (health 200 local y por el Funnel).
 
 **Reservas observadas (pendientes):**
 
