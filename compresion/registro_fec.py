@@ -20,6 +20,13 @@ y debe caber en  mtu_enlace − 28 (IP+UDP del túnel). Despejando L:
     bloques = floor(8·(mtu_enlace − 28 − 1) / n) ;  L_max = floor((bloques·k − 32) / 8)
 y el MTU de cmp0 es  L_max − margen  (margen 36 B, el mismo que hoy: 1464−28=1436 → 1400).
 Hamming (7,4): 780 ; repetición (5,1): 247. Sin FEC no se usa: sigue valiendo CMP_MTU.
+
+Modo auto (FEC=auto). El emisor elige el código de ESCALERA_AUTO según el BER que mide el receptor
+(adaptativo.py). El receptor manda un informe de 13 bytes (MARCA_INFORME + 12 B de adaptativo) como
+mucho cada INTERVALO_INFORME s y solo si hay palabras nuevas; el emisor aplica la política al
+informe. Un marco que empieza por 0xFF es siempre un informe: ningún id de código vale 0xFF y el
+KEEPALIVE de shim.py es de 1 byte (el shim lo filtra antes). El MTU de cmp0 en auto es el mínimo de
+la escalera (mtu_auto), así cabe cualquier código que se elija.
 """
 from __future__ import annotations
 
@@ -27,6 +34,7 @@ import threading
 import time
 from collections import deque
 
+import adaptativo
 import canal
 import fec
 from collections import Counter
@@ -42,6 +50,16 @@ CLAVES_CONTADORES = ("paquetes", "con_error_inyectado", "sindromes_no_cero", "co
 # «corregido») pero el paquete no se pudo reconstruir (integro=False), p. ej. 2 errores en Hamming (7,4).
 ESTADOS = ("limpio", "corregido", "corregido_mal", "no_corregible", "invalido")
 
+# --- modo auto ---
+# Escalera de códigos que el emisor puede elegir. Sin repetición (5,1) ni Hamming (7,4): el MTU de
+# cmp0 en auto es el mínimo de la escalera (mtu_auto), y con (5,1) bajaría a 247 B.
+ESCALERA_AUTO = ("hamming_15_11", "secded_16_11", "secded_8_4")
+# (umbral superior de BER, código): de menos a más protección. Umbrales inclusivos; ver adaptativo.Politica.
+TABLA_AUTO = ((1e-3, "hamming_15_11"), (2e-3, "secded_16_11"), (float("inf"), "secded_8_4"))
+CODIGO_INICIAL_AUTO = "secded_8_4"   # el más protector de la escalera: arranque conservador
+MARCA_INFORME = 0xFF                 # primer byte de un informe; no es id de código (1..5) ni el KEEPALIVE
+INTERVALO_INFORME = 2.0              # s mínimos entre dos informes del receptor
+
 
 def mtu_con_fec(codigo, mtu_enlace: int = MTU_ENLACE, tunel: int = TUNEL, margen: int = MARGEN) -> int:
     """MTU de cmp0 con FEC activo (ver la fórmula en el docstring del módulo)."""
@@ -50,10 +68,26 @@ def mtu_con_fec(codigo, mtu_enlace: int = MTU_ENLACE, tunel: int = TUNEL, margen
     return max(68, (bloques * c.k - 32) // 8 - margen)
 
 
+def mtu_auto(mtu_enlace: int = MTU_ENLACE, tunel: int = TUNEL, margen: int = MARGEN) -> int:
+    """MTU de cmp0 en modo auto: el menor de la escalera, para que quepa cualquier código de ella."""
+    return min(mtu_con_fec(c, mtu_enlace, tunel, margen) for c in ESCALERA_AUTO)
+
+
 def tamano_en_cable(codigo, largo: int) -> int:
     """Bytes del marco FEC para `largo` bytes comprimidos."""
     c = fec.buscar(codigo)
     return 1 + -(-(-(-(32 + 8 * largo) // c.k) * c.n) // 8)
+
+
+def es_auto(valor) -> bool:
+    """¿El valor de FEC pide el modo auto? (sin distinguir mayúsculas ni espacios)"""
+    return isinstance(valor, str) and valor.strip().lower() == "auto"
+
+
+def es_informe(marco: bytes) -> bool:
+    """Un marco que empieza por MARCA_INFORME es un informe. El KEEPALIVE (1 byte, 0xFF) también lo
+    cumple: el shim lo descarta antes de preguntar."""
+    return len(marco) > 0 and marco[0] == MARCA_INFORME
 
 
 class RegistroFec:
@@ -157,11 +191,14 @@ def info_codec(marco_comprimido: bytes) -> tuple[int, str, bool]:
 
 
 def validar_codigo(valor) -> fec.CodigoLineal:
-    """Código FEC por nombre/id o ValueError con mensaje claro (para fallar al arrancar el shim)."""
+    """Código FEC por nombre/id o ValueError con mensaje claro (para fallar al arrancar el shim).
+    «auto» es válido: devuelve el código inicial de la escalera (el que usa CapaFec al arrancar)."""
+    if es_auto(valor):
+        return fec.buscar(CODIGO_INICIAL_AUTO)
     try:
         return fec.buscar(valor)
     except ValueError:
-        validos = ", ".join(c.nombre for c in fec.CODIGOS.values())
+        validos = ", ".join([c.nombre for c in fec.CODIGOS.values()] + ["auto"])
         raise ValueError(f"FEC={valor!r} no es un código válido; usa uno de: {validos} (o vacío para apagarlo)") from None
 
 
@@ -197,13 +234,24 @@ def estado_de(res: fec.Resultado) -> str:
 
 
 class CapaFec:
-    """Estado FEC de un lado del shim: código, secuencia, armada, registro y contadores."""
+    """Estado FEC de un lado del shim: código, secuencia, armada, registro y contadores.
+
+    `codigo="auto"` activa el modo auto (ver el docstring del módulo): el código vigente cambia con los
+    informes del receptor y los contadores se etiquetan con el código real de cada marco."""
 
     def __init__(self, codigo, lado: str, capacidad: int = 200, reloj=time.time,
                  canal=None, semilla_canal: int = 1):
         """`canal`: objeto de canal.parse_canal (o None = sin canal aleatorio). Cada marco recibido usa
         la semilla `semilla_canal + n`, con n = marcos recibidos hasta entonces: determinista."""
-        self.codigo = fec.buscar(codigo)
+        self.auto = es_auto(codigo)
+        self.codigo = fec.buscar(CODIGO_INICIAL_AUTO if self.auto else codigo)
+        self.politica = adaptativo.Politica(TABLA_AUTO, inicial=CODIGO_INICIAL_AUTO) if self.auto else None
+        self.estimador = adaptativo.Estimador() if self.auto else None
+        self.informes = {"enviados": 0, "recibidos": 0, "malos": 0}   # solo en auto
+        self.cambios_codigo = 0
+        self._t_informe: float | None = None
+        self._muestras_informadas = 0
+        self._secuencia_informe = 0
         self.lado = lado
         self.registro = RegistroFec(capacidad)
         self.secuencia = 0
@@ -213,33 +261,73 @@ class CapaFec:
         self._marcos_rx = 0
         self._cerrojo = threading.Lock()
         self._reloj = reloj
-        self.c_paquetes: dict[tuple[str, str], int] = {}   # (estado, codec) -> n
-        self.c_sindrome: dict[str, int] = {}
-        self.c_bits = 0
-        self.c_palabras = 0
-        self.c_bytes = {"comprimido": 0, "fec": 0}
+        # Contadores por código: (codigo, estado, codec) -> n ; (codigo, síndrome) -> n ; codigo -> filas.
+        self._paq: dict[tuple[str, str, str], int] = {}     # (codigo, estado, codec) -> n
+        self._sind: dict[tuple[str, str], int] = {}         # (codigo, síndrome) -> n
+        self.c_codigo: dict[str, dict[str, int]] = {}
         self._precargar()
 
+    def _fila(self, codigo: str) -> dict[str, int]:
+        return self.c_codigo.setdefault(codigo, {"bits": 0, "palabras": 0, "comprimido": 0, "fec": 0})
+
+    @property
+    def c_paquetes(self) -> dict[tuple[str, str], int]:
+        """Agregado por (estado, codec), todos los códigos juntos."""
+        total: dict[tuple[str, str], int] = {}
+        for (_cod, e, n), v in self._paq.items():
+            total[(e, n)] = total.get((e, n), 0) + v
+        return total
+
+    @property
+    def c_sindrome(self) -> dict[str, int]:
+        """Agregado por síndrome, todos los códigos juntos."""
+        total: dict[str, int] = {}
+        for (_cod, k), v in self._sind.items():
+            total[k] = total.get(k, 0) + v
+        return total
+
+    @property
+    def c_bits(self) -> int:
+        return sum(f["bits"] for f in self.c_codigo.values())
+
+    @property
+    def c_palabras(self) -> int:
+        return sum(f["palabras"] for f in self.c_codigo.values())
+
+    @property
+    def c_bytes(self) -> dict[str, int]:
+        return {t: sum(f[t] for f in self.c_codigo.values()) for t in ("comprimido", "fec")}
+
     def _precargar(self) -> None:
-        """Crea a 0 todas las series posibles (estado × códec y síndromes no nulos). Un contador
-        que nace ya valiendo 1 hace que increase()/rate() de Prometheus no cuenten el primer
-        evento: con las series en 0 desde el arranque, la primera inyección se ve en Grafana."""
+        """Crea a 0 todas las series posibles (estado × códec y síndromes no nulos) de cada código
+        posible (toda la escalera en auto; el código fijo si no). Un contador que nace ya valiendo 1
+        hace que increase()/rate() de Prometheus no cuenten el primer evento: con las series en 0
+        desde el arranque, la primera inyección se ve en Grafana."""
         from compresores import CODECS, CODECS_CON_PERDIDA
         codecs = sorted(set(CODECS.values()) | set(CODECS_CON_PERDIDA.values())) + [CODEC_NA, CODEC_DESCONOCIDO]
-        for e in ESTADOS:
-            for c in codecs:
-                self.c_paquetes[(e, c)] = 0
-        r = self.codigo.n - self.codigo.k
-        for v in range(1, 2 ** r):
-            self.c_sindrome[format(v, f"0{r}b")] = 0
+        codigos = ESCALERA_AUTO if self.auto else (self.codigo.nombre,)
+        for nombre in codigos:
+            c = fec.buscar(nombre)
+            self._fila(c.nombre)
+            for e in ESTADOS:
+                for cod in codecs:
+                    self._paq[(c.nombre, e, cod)] = 0
+            r = c.n - c.k
+            for v in range(1, 2 ** r):
+                self._sind[(c.nombre, format(v, f"0{r}b"))] = 0
+
+    def mtu(self) -> int:
+        """MTU de cmp0 para este lado: el de la escalera en auto, el del código fijo si no."""
+        return mtu_auto() if self.auto else mtu_con_fec(self.codigo)
 
     # --- emisión ---
     def emitir(self, marco_comprimido: bytes) -> bytes:
         """Codifica con FEC (secuencia propia mod 65536) y cuenta los bytes de ambos tamaños."""
         marco = fec.codificar(marco_comprimido, self.codigo, self.secuencia)
         self.secuencia = (self.secuencia + 1) & 0xFFFF
-        self.c_bytes["comprimido"] += len(marco_comprimido)
-        self.c_bytes["fec"] += len(marco)
+        fila = self._fila(self.codigo.nombre)
+        fila["comprimido"] += len(marco_comprimido)
+        fila["fec"] += len(marco)
         return marco
 
     # --- inyección manual ---
@@ -273,16 +361,25 @@ class CapaFec:
         return marco, sorted(p for p, n in cuenta.items() if n % 2)
 
     # --- recepción ---
+    def _codigo_del_marco(self, marco: bytes) -> str:
+        """Código que indica el byte 0 del marco en modo auto. Fuera de auto, o con id desconocido,
+        el vigente (como siempre)."""
+        if self.auto and marco and marco[0] in fec.CODIGOS:
+            return fec.CODIGOS[marco[0]].nombre
+        return self.codigo.nombre
+
     def recibir(self, marco: bytes, procesar) -> tuple[dict, Exception | None]:
         """Canal → decodificar → procesar → entrada de registro.
 
         `procesar(marco_comprimido) -> int` descomprime, escribe a la TUN y devuelve el tamaño del
         paquete IP; si lanza, la entrada queda con integro=False y bytes_ip=None. Si decodificar
         lanza ValueError, NO se llama a procesar (no se escribe a la TUN) y el estado es "invalido".
+        En auto, el estimador del BER se alimenta con cada marco decodificado (con su código real).
         Devuelve (entrada, excepción o None); el shim cuenta el error si hay excepción.
         """
         recibido, bits = self._aplicar_canales(marco)
-        base = dict(secuencia=None, lado=self.lado, t=self._reloj(), codigo=self.codigo.nombre,
+        nombre = self._codigo_del_marco(recibido)
+        base = dict(secuencia=None, lado=self.lado, t=self._reloj(), codigo=nombre,
                     codec_id=None, codec=None, bytes_comprimido=None, bytes_fec=len(marco),
                     bytes_ip=None, bits_inyectados=bits, palabras=0, sindromes_no_cero=0,
                     corregidas=0, no_corregibles=0, sindromes={}, posiciones_corregidas=[],
@@ -291,6 +388,8 @@ class CapaFec:
             comprimido, res = fec.decodificar(recibido)
         except ValueError as e:
             return self._cerrar(base), e
+        if self.auto:
+            self.estimador.observar(res.palabras, res.sindromes_no_cero, res.no_corregibles, fec.buscar(nombre).n)
         cid, cnombre, _hc = info_codec(comprimido) if comprimido else (None, None, False)
         base.update(secuencia=res.secuencia, codec_id=cid, codec=cnombre,
                     bytes_comprimido=len(comprimido), palabras=res.palabras,
@@ -312,25 +411,76 @@ class CapaFec:
 
     def _cerrar(self, base: dict) -> dict:
         entrada = self.registro.anotar(**base)
-        k = (entrada["estado"], etiqueta_codec(entrada["codec_id"]))
-        self.c_paquetes[k] = self.c_paquetes.get(k, 0) + 1
+        cod = entrada["codigo"]
+        k = (cod, entrada["estado"], etiqueta_codec(entrada["codec_id"]))
+        self._paq[k] = self._paq.get(k, 0) + 1
         for s, v in entrada["sindromes"].items():
-            self.c_sindrome[s] = self.c_sindrome.get(s, 0) + v
-        self.c_bits += len(entrada["bits_inyectados"])
-        self.c_palabras += entrada["palabras"]
+            ks = (cod, s)
+            self._sind[ks] = self._sind.get(ks, 0) + v
+        fila = self._fila(cod)
+        fila["bits"] += len(entrada["bits_inyectados"])
+        fila["palabras"] += entrada["palabras"]
         return entrada
+
+    # --- informes del receptor (solo auto) ---
+    def informe_pendiente(self, ahora: float) -> bytes | None:
+        """Informe (MARCA_INFORME + 12 B) que el receptor debe mandar ahora, o None. Solo en auto: si
+        pasaron ≥ INTERVALO_INFORME s desde el último y hay palabras medidas desde ese último.
+        `ahora` lo pone el llamador (reloj del shim, o un reloj simulado en las pruebas)."""
+        if not self.auto:
+            return None
+        with self._cerrojo:
+            muestras = self.estimador.muestras
+            if muestras <= self._muestras_informadas:
+                return None
+            if self._t_informe is not None and ahora - self._t_informe < INTERVALO_INFORME:
+                return None
+            self._t_informe = ahora
+            self._muestras_informadas = muestras
+            self._secuencia_informe = (self._secuencia_informe + 1) & 0xFFFF
+            self.informes["enviados"] += 1
+            ber_x1e9 = min(round(self.estimador.ber * 1e9), 0xFFFFFFFF)
+            secuencia = self._secuencia_informe
+        cuerpo = adaptativo.codificar_informe(ber_x1e9, min(muestras, 0xFFFFFF), secuencia)
+        return bytes([MARCA_INFORME]) + cuerpo
+
+    def recibir_informe(self, datos: bytes) -> bool:
+        """Aplica un informe recibido (SIN la marca). True si era válido; False si era malo (cuenta en
+        `malos` y no cambia el código) o si no estamos en auto. Nunca lanza."""
+        if not self.auto:
+            return False
+        try:
+            ber_x1e9, _muestras, _secuencia = adaptativo.decodificar_informe(datos)
+        except ValueError:
+            with self._cerrojo:
+                self.informes["malos"] += 1
+            return False
+        with self._cerrojo:
+            anterior = self.codigo.nombre
+            self.codigo = fec.buscar(self.politica.decidir(ber_x1e9 / 1e9))
+            if self.codigo.nombre != anterior:
+                self.cambios_codigo += 1
+            self.informes["recibidos"] += 1
+        return True
 
     # --- métricas y comandos ---
     def texto(self, l: str) -> str:
         """Métricas Prometheus (l = 'lado="ue"')."""
-        c = f'{l},codigo="{self.codigo.nombre}"'
-        s = "".join(f'lab5g_cmp_fec_paquetes_total{{{c},estado="{e}",codec="{n}"}} {v}\n'
-                    for (e, n), v in self.c_paquetes.items())
-        s += "".join(f'lab5g_cmp_fec_sindrome_total{{{c},sindrome="{k}"}} {v}\n'
-                     for k, v in self.c_sindrome.items())
-        s += f"lab5g_cmp_fec_bits_inyectados_total{{{c}}} {self.c_bits}\n"
-        s += f"lab5g_cmp_fec_palabras_total{{{c}}} {self.c_palabras}\n"
-        s += "".join(f'lab5g_cmp_fec_bytes_total{{{c},tipo="{t}"}} {v}\n' for t, v in self.c_bytes.items())
+        s = "".join(f'lab5g_cmp_fec_paquetes_total{{{l},codigo="{cod}",estado="{e}",codec="{n}"}} {v}\n'
+                    for (cod, e, n), v in list(self._paq.items()))
+        s += "".join(f'lab5g_cmp_fec_sindrome_total{{{l},codigo="{cod}",sindrome="{k}"}} {v}\n'
+                     for (cod, k), v in list(self._sind.items()))
+        for cod, fila in list(self.c_codigo.items()):
+            s += f'lab5g_cmp_fec_bits_inyectados_total{{{l},codigo="{cod}"}} {fila["bits"]}\n'
+            s += f'lab5g_cmp_fec_palabras_total{{{l},codigo="{cod}"}} {fila["palabras"]}\n'
+            s += "".join(f'lab5g_cmp_fec_bytes_total{{{l},codigo="{cod}",tipo="{t}"}} {fila[t]}\n'
+                         for t in ("comprimido", "fec"))
+        if self.auto:
+            s += f"lab5g_cmp_fec_ber_estimado{{{l}}} {self.estimador.ber}\n"
+            s += "".join(f'lab5g_cmp_fec_codigo_activo{{{l},codigo="{c}"}} {int(c == self.codigo.nombre)}\n'
+                         for c in ESCALERA_AUTO)
+            s += f"lab5g_cmp_fec_cambios_codigo_total{{{l}}} {self.cambios_codigo}\n"
+            s += "".join(f'lab5g_cmp_fec_informes_total{{{l},tipo="{t}"}} {v}\n' for t, v in self.informes.items())
         return s
 
     def describir_codigo(self) -> dict:
@@ -355,7 +505,10 @@ class CapaFec:
             if verbo == "INYECTAR":
                 return {"ok": True, "armada": self.armar(json.loads(resto))}
             if verbo == "CODIGO":
-                return self.describir_codigo()
+                return {**self.describir_codigo(), "auto": self.auto,
+                        "ber_estimado": self.estimador.ber if self.auto else None,
+                        "codigo_activo": self.codigo.nombre,
+                        "escalera": list(ESCALERA_AUTO) if self.auto else None}
             return {"ok": False, "error": f"comando desconocido: {verbo[:20]!r}"}
         except Exception as e:  # JSONDecodeError, RecursionError por JSON anidado... el hilo no debe morir
             if not isinstance(e, (ValueError, TypeError)):   # los de validación son rutina; el resto, no
