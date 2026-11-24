@@ -12,7 +12,8 @@ implementó dentro del proyecto de compresión de paquetes sobre free5GC:
   $\mathbf b=\mathbf m P$, $G=[P:I_k]$, $\mathbf c=\mathbf m G$, $H=[I_{n-k}:P^T]$,
   con la comprobación $HG^T=0$ al construirlo.
 - Dos instancias vistas en clase: **repetición (5,1)** y **Hamming (7,4)**
-  (distancia mínima 3: detecta 2 errores y corrige 1).
+  (distancia mínima 3: detecta 2 errores y corrige 1), y una tercera añadida después:
+  **SECDED (8,4)** (distancia mínima 4: corrige 1 y detecta 2 sin corregir mal; ver §6).
 - Una **capa FEC** entre el marco comprimido y el socket UDP del túnel
   (`compresion/shim.py`). Está apagada por defecto (`FEC` vacío = bytes idénticos
   a antes).
@@ -22,8 +23,8 @@ implementó dentro del proyecto de compresión de paquetes sobre free5GC:
 - **Visualización** en la app (pestaña «Laboratorio de síndrome») y en Grafana
   (tablero «Codificación de canal (síndrome)»).
 
-Fuera de esta entrega, solo documentado como siguiente paso: SECDED, CRC,
-Reed-Solomon, XOR entre paquetes, RaptorQ, LDPC/Polar y canales aleatorios.
+Quedan solo documentados como siguiente paso: CRC, entrelazado, Reed-Solomon,
+XOR entre paquetes, RaptorQ y LDPC/Polar (ver §6 para lo que sí entró después).
 
 ## 2. En la app: pestaña «Laboratorio de síndrome»
 
@@ -125,10 +126,60 @@ primer evento.
 - Un paquete `no_corregible` se entrega igual a la TUN.
 - El costo de CPU de la FEC está medido en un PC, no en el LXC 110 (más lento).
 - La página de envío no tiene login: no debe exponerse por Funnel.
-- Se inyecta solo a mano. No hay canal aleatorio todavía.
+- Con SECDED, tres o más errores en una palabra todavía pueden corregirse mal; el
+  canal de ráfagas solo se probó con pruebas unitarias y en el banco offline, no en el lab.
 
-## 6. Siguiente entrega
+## 6. Ampliación del 23-11: SECDED, canales aleatorios y curva BER
 
-SECDED y CRC (detectar 2 y corregir 1), Reed-Solomon y XOR entre paquetes (pérdida
-de paquetes enteros), RaptorQ, y estado del arte de 5G NR (LDPC para datos, Polar
-para control). Detalle y fuentes en [docs/10 §8-9](10-codificacion-canal.md).
+**SECDED (8,4).** Es un Hamming con un bit de paridad extra (código de Hsiao): las 8
+columnas de $H$ son distintas y de peso impar, así que $d_{min}=4$. Regla: $\mathbf s=0$,
+sin error; $\mathbf s$ de peso impar, un error y se corrige; $\mathbf s$ de peso par, **dos
+errores y no se corrige** («doble detectado»). Cuesta el doble de bytes (MTU de `cmp0` 677).
+Entró en el motor genérico solo con una matriz $P$ nueva.
+
+**Canales aleatorios.** Variable `CANAL`: `bsc:P` (cada bit se voltea con probabilidad
+$P$) o `rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO` (Gilbert-Elliott, errores agrupados),
+con semilla `CANAL_SEMILLA`. Se aplican al recibir, antes de decodificar, y se suman a la
+inyección manual.
+
+**Curva BER (banco offline, `compresion/resultados/fec.md`).** BER residual contra BER de
+entrada, 300 paquetes de 200 B por punto:
+
+| BER de entrada | Sin código | Repetición (5,1) | Hamming (7,4) | SECDED (8,4) |
+|---|---|---|---|---|
+| 9,6e-04 | 9,6e-04 | 2,1e-06 | 0 | 4,2e-06 |
+| 3,1e-03 | 3,1e-03 | 3,4e-03 | 3,4e-03 | 6,9e-05 |
+| 1,0e-02 | 1,0e-02 | 1,0e-02 | 1,1e-02 | 1,1e-02 |
+| 3,0e-02 | 3,0e-02 | 6,7e-02 | 8,4e-02 | 8,9e-02 |
+
+Lectura: con ruido bajo ($\le 10^{-3}$) los códigos casi eliminan los errores. Por encima
+de unos $3\cdot10^{-3}$ los códigos cortos dejan de ayudar, porque aparecen palabras con
+dos o más errores. Hamming las corrige mal sin avisar (a $p=3\cdot10^{-2}$, 277 de 300
+paquetes); SECDED las detecta. La probabilidad teórica de palabra fallida coincide con la
+observada. Con errores en ráfaga todos los códigos pierden eficacia. Advertencia de método:
+un paquete inválido cuenta todos sus bits de datos como erróneos y uno no corregible se
+entrega con errores, por eso a $p$ alto el BER residual supera al de entrada.
+
+**Verificado en el lab real (23-11), `FEC=secded_8_4`:**
+
+| Caso | Resultado |
+|---|---|
+| 1 bit | `corregido`, síndrome `0001` |
+| 2 bits en la misma palabra | `no_corregible` («doble detectado»), síndrome `0110` (peso par); no corrige ningún bit |
+| 2 bits en palabras distintas | 2 palabras `corregido` |
+| Canal `bsc:1e-3`, 3 archivos de 20 KB | los 3 con SHA idéntico; 234 a 1396 síndromes por envío, casi todos corregidos |
+
+**En la app y en Grafana:** la pestaña muestra el canal activo y «doble detectado» con
+SECDED. El tablero suma dos paneles: «BER de entrada del canal» y «Sobrecoste de la
+protección» (7 elementos en total). Las 96 consultas de los cuatro tableros devuelven
+datos en Prometheus; el tablero de síndrome sigue sin verse renderizado en pantalla.
+
+**Por qué no se hizo XOR, Reed-Solomon ni RaptorQ entre paquetes:** reconstruyen un
+paquete perdido a partir de otros, y ese paquete llega tarde; los códecs con estado (como
+`deflate_flujo`) necesitan los paquetes en orden y se desincronizarían.
+
+## 7. Siguiente entrega
+
+CRC-32 del marco (saber con certeza si el paquete llegó íntegro), entrelazado
+(ráfagas), borrado de paquetes, Reed-Solomon y XOR entre paquetes (pérdida de paquetes
+enteros), RaptorQ, y estado del arte de 5G NR (LDPC para datos, Polar para control). Detalle y fuentes en [docs/10 §8-9](10-codificacion-canal.md).
