@@ -20,6 +20,7 @@ síndrome. La teoría sigue la notación del apunte de clase del 9 de noviembre 
 - [9. Hoja de ruta: siguiente entrega](#9-hoja-de-ruta-siguiente-entrega)
 - [10. Resultados del banco offline](#10-resultados-del-banco-offline)
 - [11. Cómo probar](#11-cómo-probar)
+- [12. Banda en el aire: códigos más baratos y el bandido](#12-banda-en-el-aire-códigos-más-baratos-y-el-bandido-24-11-2026)
 
 ---
 
@@ -51,8 +52,8 @@ paridad entre paquetes (XOR), RaptorQ y el canal de borrado de paquetes. Ver
 
 **Estado de la implementación**
 
-El código tiene 157 pruebas unitarias (en los archivos de [§11](#11-cómo-probar),
-ejecutadas en un PC con Windows con 157 OK) y **se probó de extremo a extremo en el
+El código tiene 187 pruebas unitarias (en los archivos de [§11](#11-cómo-probar),
+ejecutadas en un PC con Windows con 187 OK) y **se probó de extremo a extremo en el
 laboratorio real el 22-11-2026** con `FEC=hamming_7_4` en `cmp-ue` y `cmp-dn`:
 inyección de 1 y 2 bits, síndromes observados, archivo de vuelta con SHA idéntico,
 métricas en el pushgateway y consultas del tablero contestadas por Prometheus.
@@ -717,23 +718,25 @@ Desde la raíz del repositorio, con Python 3. Son los nueve archivos que corre e
 el mismo orden:
 
 ```bash
-python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py
+python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py compresion/test_sumidero.py compresion/test_bandido_aire.py
 ```
 
 | Archivo | Qué cubre | Pruebas |
 |---|---|---|
 | `compresion/test_compresores.py` | Compresión (no es de FEC) | 32 |
 | `compresion/test_reproductores.py` | Reproductores de tráfico (no es de FEC) | 6 |
-| `compresion/test_fec.py` | Códigos de repetición, Hamming y SECDED; ejemplos exactos de clase; corrección de 1 bit y detección de 2 en SECDED; marco y síndromes | 24 |
+| `compresion/test_fec.py` | Códigos de repetición, Hamming (7,4) y (15,11) y SECDED (8,4) y (16,11), con tablas compactas; ejemplos exactos de clase; corrección de 1 bit y detección de 2 en SECDED; marco y síndromes | 38 |
 | `compresion/test_envio_fec.py` | Validación de `/fec/inyectar`, `X-Inyectar`, resumen de paquetes y pestaña de síndrome | 24 |
 | `compresion/test_registro_fec.py` | `CapaFec`, `RegistroFec`, canal armado, `mtu_con_fec`, métricas, comandos y bucle UDP en loopback | 28 |
 | `compresion/test_tablero_fec.py` | Tablero `lab5g-cmp-fec`: cantidad de paneles, paneles de BER y sobrecoste, consultas PromQL, UID únicos | 9 |
 | `compresion/test_canal.py` | Canales BSC y ráfaga: determinismo por semilla, frecuencias, `parse_canal` | 18 |
 | `compresion/test_canal_capa.py` | Canal dentro de la capa FEC: semilla por marco, combinación XOR con la armada manual | 7 |
-| `compresion/test_banco_fec.py` | Banco offline: determinismo, BER, categorías, SECDED dirigido, tabla Markdown | 9 |
-| **Total** | | **157** |
+| `compresion/test_banco_fec.py` | Banco offline con 6 códigos: determinismo, BER, categorías, SECDED dirigido, bytes en el cable, tabla Markdown | 13 |
+| `compresion/test_sumidero.py` | Sumidero TCP de `cmp-dn`: cierra conexiones colgadas y sigue escuchando sin hilos | 3 |
+| `compresion/test_bandido_aire.py` | Recompensa del bandido en bytes del aire | 9 |
+| **Total** | | **187** |
 
-**Resultado ejecutado en un PC con Windows (23-11-2026):** 157 pruebas OK. Son pruebas
+**Resultado ejecutado en un PC con Windows (24-11-2026):** 187 pruebas OK. Son pruebas
 unitarias; ninguna toca la TUN ni el laboratorio.
 
 **Probado en el laboratorio (22-11-2026, `FEC=hamming_7_4`; verificación independiente):**
@@ -815,3 +818,74 @@ izquierda (`1` en vez de `0001`).
 
 **Anterior:** [09 — Arranque seguro y recuperación](09-arranque-seguro.md) ·
 **Volver al** [README](../README.md)
+
+---
+
+## 12. Banda en el aire: códigos más baratos y el bandido (24-11-2026)
+
+Objetivo acordado: **priorizar el ancho de banda en el aire sobre la velocidad**, contando los
+bits de paridad. Todo lo de esta sección se midió offline (`banco_fec.py`, `evaluar.py aire`);
+**nada de esto se desplegó en el lab**: los códigos nuevos solo se activan con `FEC=hamming_15_11`
+o `FEC=secded_16_11`.
+
+### 12.1 Dos códigos más
+
+| Código | id | $n,k$ | $d_{min}$ | Con 2 errores en una palabra | MTU de `cmp0` |
+|---|---|---|---|---|---|
+| Hamming (15,11) | 4 | 15, 11 | 3 | corrige mal, sin avisar | 1011 |
+| SECDED (16,11) | 5 | 16, 11 | 4 | **detecta**, no corrige | 945 |
+
+Son solo matrices $P$ nuevas del mismo motor ($P$ de 11×4 con los 11 vectores de peso $\ge2$, y de
+11×5 con los 10 de peso 3 y el de peso 5). Para que cupieran en `cmp-ue` (64 MB) hubo que rehacer las
+tablas de decodificación como arreglos de enteros: de ~10 y ~20 MB a ~0,2 y ~0,4 MB, con el mismo
+comportamiento (1200 marcos con errores comparados con la versión anterior: 0 diferencias).
+
+### 12.2 Banda medida por código
+
+Factor cable/carga (incluye id, secuencia, largo y los 28 B de IP+UDP), de `resultados/fec.md` §4:
+
+| Carga que entra a la FEC | Rep. (5,1) | Hamming (7,4) | Hamming (15,11) | SECDED (8,4) | SECDED (16,11) |
+|---|---|---|---|---|---|
+| 200 B | 5,25 | 1,93 | **1,55** | 2,19 | 1,64 |
+| 780 B | 5,06 | 1,80 | **1,41** | 2,05 | 1,50 |
+| 1400 B | 5,04 | 1,78 | **1,39** | 2,03 | 1,48 |
+
+Con la compresión incluida (flujo mezclado de prueba, `resultados/aire.md`), los bytes en el aire
+frente a mandar todo crudo y sin FEC quedan en: solo compresión ≈ 0,79; con Hamming (15,11) ≈ 1,06;
+con Hamming (7,4) ≈ 1,35; con SECDED (8,4) ≈ 1,53. Es decir, la paridad cuesta mucho más que lo que
+la compresión ahorra, y **elegir el código mueve la banda 10 veces más que ajustar el bandido**.
+
+### 12.3 El precio en errores (canal BSC)
+
+BER residual de `resultados/fec.md` §1 (BER de entrada = $p$ aprox.):
+
+| $p$ | Hamming (7,4) | Hamming (15,11) | SECDED (8,4) | SECDED (16,11) |
+|---|---|---|---|---|
+| $10^{-3}$ | 0 | 1,5e-05 | 4,2e-06 | 6,3e-06 |
+| $3\cdot10^{-3}$ | 3,4e-03 | 3,6e-03 | **6,9e-05** | 3,5e-03 |
+| $10^{-2}$ | 1,1e-02 | 2,2e-02 | 1,1e-02 | 1,8e-02 |
+
+Lectura: con ruido bajo ($\le10^{-3}$) cualquiera sirve y Hamming (15,11) es el más barato. Con
+$p=3\cdot10^{-3}$ solo SECDED (8,4) sigue mejorando el BER; los demás ya dejan más errores que los
+de entrada. Con ráfagas (errores agrupados) ningún código corto rinde bien. Conclusión práctica:
+**el código ideal depende del ruido**: barato cuando el canal está limpio y fuerte cuando está sucio.
+Esa elección adaptativa (estimar el BER por los síndromes y cambiar de código) es la palanca real
+de banda y queda como siguiente entrega, porque el emisor necesita saber lo que mide el receptor.
+
+### 12.4 El bandido: recompensa en bytes del aire
+
+`bandido.recompensa_aire()` cuenta la paridad ($f=n/k$) y el overhead fijo de cada paquete
+($33+f\,(4+L)$ bytes) y escala el costo de CPU con $1/f$. Se barrió $\gamma$, $c$ y el costo de CPU
+para $f\in\{1; 1{,}364; 1{,}75; 2\}$ (72 configuraciones de entrenamiento y 8 de prueba,
+`resultados/aire.md`). Resultado: **la mejora en bytes del aire es 0,00 puntos en todos los $f$**. Lo
+único que cambia es la CPU: por ejemplo con $f=1$, $\gamma=0{,}999$, $c=0{,}005$ y costo 0,01 hace
+1231 intentos de comprimir en vez de 1526 (y 35 respaldos en vez de 329) con los mismos bytes.
+La razón es que el bandido ya ahorra 20,58 % frente a 20,84 % del oráculo (arrepentimiento de 0,26
+puntos), y que 4 de las 6 clases de tráfico de prueba no comprimen con ningún códec.
+
+**Observación sobre robustez.** Ninguna configuración cumple hoy el límite de 2 % de paquetes mal
+reconstruidos con 1 % de pérdida: todas dan ~3,8 % (entrenamiento) y 3,6 % (prueba), mientras
+`ajuste.md` (8-11) decía 1,91 %. Las ráfagas del bandido se añadieron el 21-11 y mantienen
+`deflate_flujo` 8 paquetes seguidos, que es una explicación probable (suben el ahorro de 19,16 % a
+20,58 % a cambio de más paquetes dañados por cada pérdida); no se comprobó repitiendo `ajustar` sin
+ráfagas, así que es una hipótesis.
