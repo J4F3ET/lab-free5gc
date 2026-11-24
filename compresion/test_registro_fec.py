@@ -93,6 +93,17 @@ class TestEmision(unittest.TestCase):
             self.assertGreater(tamano_en_cable(c, mtu + 36 + 16), 1464 - 28)
         self.assertEqual((mtu_con_fec(HAM), mtu_con_fec(REP)), (780, 247))
 
+    def test_mtu_secded_segun_la_formula_de_docs(self):
+        # docs/10-codificacion-canal.md §3.1: bloques = floor(8·(1464-28-1)/n); L_max = floor((bloques·k-32)/8); MTU = L_max-36
+        sec = fec.SECDED_8_4
+        bloques = 8 * (1464 - 28 - 1) // sec.n
+        l_max = (bloques * sec.k - 32) // 8
+        esperado = l_max - 36
+        self.assertEqual(mtu_con_fec(sec), esperado)
+        self.assertEqual(esperado, 677)
+        self.assertLessEqual(tamano_en_cable(sec, esperado + 36), 1464 - 28)
+        self.assertGreater(tamano_en_cable(sec, esperado + 36 + 16), 1464 - 28)
+
 
 class TestRecepcion(unittest.TestCase):
     def setUp(self):

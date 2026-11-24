@@ -11,6 +11,11 @@ Hamming (7,4) tiene d_min = 3: detecta 2 errores y corrige 1. Con 2 errores el d
 de 1 bit SÍ ve s ≠ 0 pero corrige MAL (voltea un tercer bit y entrega otra palabra código);
 queda contado como "corregido", no se oculta: ver test_fec.py.
 
+SECDED (8,4) de Hsiao: las 8 columnas de H son distintas y de peso impar (4 de peso 1 y 4 de
+peso 3), así que d_min = 4: corrige 1 error y detecta 2. Con 2 errores el síndrome tiene peso par
+(distinto de cero) y nunca coincide con una columna: el estado es "no_corregible" (doble detectado),
+en vez de corregir mal como Hamming (7,4).
+
 Marco en bytes:  [1 B id de código][palabras código empaquetadas MSB-first, relleno de ceros]
 Lo codificado es  [2 B secuencia !H][2 B largo de datos !H][datos].
 El id de código viaja SIN proteger: un error ahí hace fallar la decodificación (ValueError
@@ -52,7 +57,7 @@ class Resultado:
 class CodigoCanal(Protocol):
     """Interfaz mínima de un código de canal sobre bytes.
 
-    Siguiente entrega: SECDED, CRC y Reed-Solomon implementan esto sin tocar el resto.
+    SECDED ya está implementado; CRC y Reed-Solomon siguen pendientes y se añadirán sin tocar el resto.
     """
     nombre: str
     n: int
@@ -213,8 +218,9 @@ class CodigoLineal:
 
 REPETICION_5_1 = CodigoLineal("repeticion_5_1", [[1, 1, 1, 1]], id_codigo=1)
 HAMMING_7_4 = CodigoLineal("hamming_7_4", [[1, 1, 0], [0, 1, 1], [1, 1, 1], [1, 0, 1]], id_codigo=2)
+SECDED_8_4 = CodigoLineal("secded_8_4", [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]], id_codigo=3)
 
-CODIGOS: dict[int, CodigoLineal] = {c.id: c for c in (REPETICION_5_1, HAMMING_7_4)}
+CODIGOS: dict[int, CodigoLineal] = {c.id: c for c in (REPETICION_5_1, HAMMING_7_4, SECDED_8_4)}
 
 
 def buscar(codigo) -> CodigoLineal:

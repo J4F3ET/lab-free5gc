@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import canal
 import fec
-from fec import HAMMING_7_4 as HAM, REPETICION_5_1 as REP
+from fec import HAMMING_7_4 as HAM, REPETICION_5_1 as REP, SECDED_8_4 as SEC
 
 AMBOS = (REP, HAM)
 
@@ -99,8 +99,11 @@ class Bytes(unittest.TestCase):
         return random.Random(semilla).randbytes(n)
 
     def test_ids_estables_y_busqueda(self):
-        self.assertEqual({i: c.nombre for i, c in fec.CODIGOS.items()}, {1: "repeticion_5_1", 2: "hamming_7_4"})
+        self.assertEqual({i: c.nombre for i, c in fec.CODIGOS.items()},
+                         {1: "repeticion_5_1", 2: "hamming_7_4", 3: "secded_8_4"})
         self.assertIs(fec.buscar("hamming_7_4"), HAM)
+        self.assertIs(fec.buscar("secded_8_4"), SEC)
+        self.assertIs(fec.buscar(3), SEC)
         self.assertIs(fec.buscar(1), REP)
         with self.assertRaises(ValueError):
             fec.buscar("nada")
@@ -192,6 +195,63 @@ class Bytes(unittest.TestCase):
             print(f"\n[{c.nombre}] codificar 1400 B: {(t1 - t0) * 1e3:.2f} ms; "
                   f"decodificar: {(t2 - t1) * 1e3:.2f} ms", file=sys.stderr)
             self.assertLess(t2 - t0, 0.1)
+
+
+class Secded(unittest.TestCase):
+    """SECDED (8,4) de Hsiao: d_min = 4, corrige 1 error y detecta 2 sin corregir mal."""
+
+    def test_matriz_y_registro(self):
+        for h in SEC.H:
+            for g in SEC.G:
+                self.assertEqual(sum(a * b for a, b in zip(h, g)) % 2, 0)
+        self.assertEqual((SEC.n, SEC.k, SEC.id, SEC.nombre), (8, 4, 3, "secded_8_4"))
+        self.assertIs(fec.CODIGOS[3], SEC)
+
+    def test_un_error_se_corrige_para_todo_mensaje(self):
+        for v in range(16):
+            m = bits(v, 4)
+            c = SEC.codificar_palabra(m)
+            self.assertEqual(SEC.sindrome(c), (0, 0, 0, 0))
+            for i in range(8):
+                p = SEC.corregir_palabra(volteado(c, i))
+                self.assertEqual((p.c_corregida, p.m, p.posicion, p.estado), (c, m, i, "corregido"))
+
+    def test_dos_errores_no_corregibles_con_sindrome_de_peso_par(self):
+        for v in range(16):
+            c = SEC.codificar_palabra(bits(v, 4))
+            for i, j in itertools.combinations(range(8), 2):
+                p = SEC.corregir_palabra(volteado(c, i, j))
+                self.assertEqual((p.estado, p.posicion, p.c_corregida), ("no_corregible", None, volteado(c, i, j)))
+                self.assertTrue(any(p.sindrome))
+                self.assertEqual(sum(p.sindrome) % 2, 0)
+                self.assertIsNone(SEC.posicion_error(p.sindrome))
+
+    def test_distancia_minima_4(self):
+        for v in range(1, 16):
+            c = SEC.codificar_palabra(bits(v, 4))
+            self.assertGreaterEqual(sum(c), 4, bin(v))
+
+    def test_ida_y_vuelta_sin_errores(self):
+        for largo in (0, 1, 2, 1400):
+            d = random.Random(11).randbytes(largo)
+            marco = fec.codificar(d, SEC, secuencia=7)
+            salida, r = fec.decodificar(marco)
+            self.assertEqual(salida, d)
+            self.assertEqual((r.corregidas, r.no_corregibles, r.sindromes_no_cero), (0, 0, 0))
+
+    def test_canal_un_bit_se_corrige_dos_bits_no(self):
+        d = random.Random(5).randbytes(60)
+        marco = fec.codificar(d, SEC, secuencia=2)
+        # byte 0 = id; la palabra i empieza en el bit 8 + 8*i, bit j de la palabra = bit 8 + 8*i + j
+        una = canal.inyectar(marco, [8 + 3 * 8 + 5])
+        salida, r = fec.decodificar(una)
+        self.assertEqual(salida, d)
+        self.assertEqual((r.corregidas, r.no_corregibles), (1, 0))
+        dos = canal.inyectar(marco, [8 + 3 * 8 + 0, 8 + 3 * 8 + 1])
+        _, r = fec.decodificar(dos)
+        self.assertGreaterEqual(r.no_corregibles, 1)
+        self.assertEqual(r.corregidas, 0)
+        self.assertEqual(r.posiciones_corregidas, [])
 
 
 class Canal(unittest.TestCase):
