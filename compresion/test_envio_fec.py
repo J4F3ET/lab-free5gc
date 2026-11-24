@@ -391,5 +391,26 @@ class Automatico(Base):
         self.assertIn("const piezas=[", html)
 
 
+class Reenviados(Base):
+    def test_pagina_tiene_clase_opcion_y_color_de_reenviado(self):
+        html = self.pedir("/")[1].decode()
+        for t in ("#linea button.reenviado{background:var(--c-reenv)}", "--c-reenv:#1c6fd1", "--c-reenv:#5aa9ff",
+                  '<option value="reenviado">reenviado</option>', "pasaFiltro(p,f)",
+                  "' ↻ reenviado (NACK)'", "azul: reenviado (llegó porque el receptor pidió el NACK)",
+                  "Paquete reenviado: llegó porque el receptor pidió el reenvío (NACK) de la secuencia ${p.secuencia}",
+                  "· reenviados ${Number(r.fec.resumen.reenviados||0)}"):
+            self.assertIn(t, html, t)
+
+    def test_resumen_reenviados_es_opcional(self):
+        ok = paquete(1)
+        marcado = {**paquete(2), "reenviado": True}
+        self.assertEqual(envio.resumen_fec([ok, marcado])["reenviados"], 1)
+        self.assertNotIn("reenviados", envio.resumen_fec([ok]))            # compatibilidad: sin clave si no hubo
+        a = {k: 0 for k in envio.CLAVES_RESUMEN}
+        d = {k: 3 for k in envio.CLAVES_RESUMEN}
+        self.assertNotIn("reenviados", envio.resumen_diferencia(a, d))     # shim viejo sin el contador
+        self.assertEqual(envio.resumen_diferencia({**a, "reenviados": 2}, {**d, "reenviados": 7})["reenviados"], 5)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1014,3 +1014,4 @@ SECDED detecta los dobles errores pero no los corrige. Con `REENVIO=1` el recept
 - Métricas: `lab5g_cmp_fec_reenvio_total{lado,tipo}` con nack_enviados, nack_recibidos, reenviados, sin_copia, descartados_limite, nack_malos.
 - Medido en el laboratorio (24-nov-2026, `secded_8_4`): con BSC 3e-3 el archivo llegó idéntico con 9 NACK y 10 reenvíos; con BSC 1e-2 casi todos los paquetes (≈2800 palabras) traen algún doble error, se descartan casi todos y la transferencia no termina: el reenvío ayuda con ruido moderado, no extremo.
 - Limitación: con compresores con estado (`deflate_flujo`) un reenvío llega fuera de orden y su descompresión puede fallar.
+- En el laboratorio de síndrome, la página marca en azul los paquetes que llegaron por reenvío y filtra por ellos («reenviado»); el contador «reenviados» de la tarjeta FEC cuenta esos mismos paquetes.
