@@ -49,9 +49,9 @@ class Estimador(unittest.TestCase):
     def test_media_movil_exponencial_por_lote(self):
         e = adaptativo.Estimador(alfa=0.2)
         e.observar(100, 15, 0, 15)   # lote = 15 / 1500 = 0.01
-        self.assertAlmostEqual(e.ber, 0.2 * 0.01, places=12)
-        e.observar(100, 0, 0, 15)    # lote = 0
-        self.assertAlmostEqual(e.ber, 0.8 * 0.002, places=12)
+        self.assertAlmostEqual(e.ber, 0.01, places=12)
+        e.observar(100, 0, 0, 15)    # lote sin errores: los 15 errores previos pesan 0.8
+        self.assertAlmostEqual(e.ber, 0.8 * 15 / (0.8 * 1500 + 1500), places=12)
 
     def test_converge_a_1e3_con_bsc_real(self):
         # Codifica con hamming_15_11, inyecta BSC(1e-3) con semilla y decodifica con fec real.
