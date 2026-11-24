@@ -32,6 +32,7 @@ from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
 from registro_fec import CapaFec, emitir_marco, mtu_con_fec, recibir_marco, validar_codigo
 from canal import parse_canal
+from sumidero import servir_sumidero_tcp
 
 TUNSETIFF, IFF_TUN, IFF_NO_PI = 0x400454CA, 0x0001, 0x1000
 PUERTO = int(os.environ.get("PUERTO", "7700"))
@@ -61,9 +62,7 @@ def sumideros() -> None:
     def tcp(p):
         s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("0.0.0.0", p)); s.listen(16)
-        while True:
-            c, _ = s.accept()
-            threading.Thread(target=lambda c=c: [None for _ in iter(lambda: c.recv(65535), b"")], daemon=True).start()
+        servir_sumidero_tcp(s)
 
     for p in PUERTOS_SUMIDERO_UDP:
         threading.Thread(target=udp, args=(p,), daemon=True).start()
