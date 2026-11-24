@@ -69,7 +69,7 @@ con pruebas unitarias y en el banco offline. Los resultados y las reservas está
 | Integración en `compresion/shim.py` (variable `FEC`, servidor de línea, métricas) | Implementada y **probada en el laboratorio** con Hamming (22-11), con SECDED y con `CANAL=bsc:1e-3` (23-11) |
 | Endpoints HTTP y página «Laboratorio de síndrome» (`compresion/envio.py`) | Implementados; las pruebas unitarias cubren la validación y el resumen (`test_envio_fec.py`); probados en el laboratorio con `/enviar` y `/fec/inyectar` |
 | Métricas `lab5g_cmp_fec_*` | Verificadas en el pushgateway y en Prometheus (22-11) |
-| Tablero de Grafana | **Construido**, con 7 elementos (un texto y 6 paneles, incluidos «BER de entrada del canal» y «Sobrecoste de la protección») (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus, pero no se ha visto renderizado en un Grafana) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
+| Tablero de Grafana | **Construido**, con 7 elementos (un texto y 6 paneles, incluidos «BER de entrada del canal» y «Sobrecoste de la protección») (`lab5g-cmp-fec`; sus consultas se probaron contra Prometheus y el tablero se vio renderizado en Grafana el 24-11, con datos coherentes con el tráfico) ([§6](#6-grafana-tablero-lab5g-cmp-fec)) |
 | Banco offline (`compresion/banco_fec.py`, `python compresion/evaluar.py fec`) y `compresion/resultados/fec.md` | Implementado y probado con pruebas unitarias; las cifras de [§10](#10-resultados-del-banco-offline) salen de ese archivo |
 
 ---
@@ -785,8 +785,12 @@ se detectan, y con tres o más errores en una palabra SECDED puede corregir mal 
 «corregidos mal» del tercer envío), como predice $d_{min}=4$.
 
 **Consultas de los tableros:** las 96 consultas de los cuatro tableros contestan con
-datos en el Prometheus real, incluidas las 10 del tablero de síndrome. Que se vean
-**renderizados** en un Grafana sigue sin comprobarse por pantalla.
+datos en el Prometheus real, incluidas las 10 del tablero de síndrome. El tablero **se vio renderizado**
+en Grafana el 24-11 (capturas del usuario): «BER de entrada» ≈ 0,1 % (coincide con `bsc:1e-3`),
+«Sobrecoste» ≈ 2,03 (SECDED ×2 más cabecera; antes ≈ 1,75 con Hamming) y «Síndromes observados» con
+los 8 síndromes de las columnas de $H$ casi iguales (~194 000) y, aparte, los de peso par `1001` y
+`1111` (~800), que son los dobles detectados. Limitación: los síndromes salen sin ceros a la
+izquierda (`1` en vez de `0001`).
 
 **Grafana ligero (PR #14):** con los 17 plugins no usados desactivados, un
 `docker start grafana` simple tarda unos 10 s en servir (health 200 local y por el Funnel).

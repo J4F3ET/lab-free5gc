@@ -172,7 +172,7 @@ entrega con errores, por eso a $p$ alto el BER residual supera al de entrada.
 **En la app y en Grafana:** la pestaña muestra el canal activo y «doble detectado» con
 SECDED. El tablero suma dos paneles: «BER de entrada del canal» y «Sobrecoste de la
 protección» (7 elementos en total). Las 96 consultas de los cuatro tableros devuelven
-datos en Prometheus; el tablero de síndrome sigue sin verse renderizado en pantalla.
+datos en Prometheus; el tablero de síndrome se vio renderizado en Grafana el 24-11 y concuerda con el tráfico: BER de entrada ≈ 0,1 % (el `bsc:1e-3` activo), sobrecoste ≈ 2,03 (SECDED) y 8 síndromes de peso impar casi iguales (~194 000) más los de peso par (~800, dobles detectados).
 
 **Por qué no se hizo XOR, Reed-Solomon ni RaptorQ entre paquetes:** reconstruyen un
 paquete perdido a partir de otros, y ese paquete llega tarde; los códecs con estado (como
