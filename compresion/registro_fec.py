@@ -27,9 +27,17 @@ mucho cada INTERVALO_INFORME s y solo si hay palabras nuevas; el emisor aplica l
 informe. Un marco que empieza por 0xFF es siempre un informe: ningún id de código vale 0xFF y el
 KEEPALIVE de shim.py es de 1 byte (el shim lo filtra antes). El MTU de cmp0 en auto es el mínimo de
 la escalera (mtu_auto), así cabe cualquier código que se elija.
+
+Reenvío por NACK (reenvio=True, env REENVIO=1; apagado por defecto). Si el receptor decodifica una
+palabra con doble error detectado (no_corregible), NO entrega el paquete a la TUN: encola su secuencia
+y manda un NACK (0xFE + n + n×uint16 + CRC8). El emisor guarda en un anillo (128 marcos) cada marco
+LIMPIO, antes del canal, y reenvía el que le pidan (máx. 2 veces por secuencia, 8 por segundo); el
+reenvío vuelve a pasar por el canal del receptor, con ruido nuevo. La secuencia del NACK puede ser
+errónea si el error cayó en la cabecera; entonces el NACK no encuentra copia (sin_copia) o pide otra.
 """
 from __future__ import annotations
 
+import struct
 import threading
 import time
 from collections import deque
@@ -88,6 +96,48 @@ def es_informe(marco: bytes) -> bool:
     """Un marco que empieza por MARCA_INFORME es un informe. El KEEPALIVE (1 byte, 0xFF) también lo
     cumple: el shim lo descarta antes de preguntar."""
     return len(marco) > 0 and marco[0] == MARCA_INFORME
+
+
+# --- reenvío por NACK (solo con reenvio=True) ---
+MARCA_NACK = 0xFE                    # no es id de código (1..5), ni MARCA_INFORME (0xFF) ni KEEPALIVE
+NACK_MAX_SECUENCIAS = 8              # secuencias por mensaje NACK
+NACK_COLA_MAX = 16                   # pendientes en el receptor (sin repetir)
+ANILLO_REENVIO = 128                 # marcos limpios que guarda el emisor (evicción FIFO)
+REENVIOS_POR_SECUENCIA = 2           # tope de reenvíos de una misma secuencia
+REENVIOS_POR_SEGUNDO = 8             # tope global de reenvíos por segundo (reloj de CapaFec)
+CLAVES_REENVIO = ("nack_enviados", "nack_recibidos", "reenviados", "sin_copia", "descartados_limite",
+                  "nack_malos")
+
+
+def es_nack(marco: bytes) -> bool:
+    """¿Es un NACK? Empieza por MARCA_NACK, que ningún marco FEC puede empezar (ids 1..5)."""
+    return len(marco) > 0 and marco[0] == MARCA_NACK
+
+
+def codificar_nack(secuencias) -> bytes:
+    """NACK completo para el cable: [MARCA_NACK][n 1 B][n × uint16 big-endian][CRC8 de lo anterior]."""
+    seqs = list(secuencias)
+    if not 1 <= len(seqs) <= NACK_MAX_SECUENCIAS:
+        raise ValueError(f"un NACK lleva de 1 a {NACK_MAX_SECUENCIAS} secuencias, no {len(seqs)}")
+    for s in seqs:
+        if isinstance(s, bool) or not isinstance(s, int) or not 0 <= s <= 0xFFFF:
+            raise ValueError(f"secuencia fuera de 0..65535: {s!r}")
+    cuerpo = bytes([MARCA_NACK, len(seqs)]) + struct.pack(f"!{len(seqs)}H", *seqs)
+    return cuerpo + bytes([adaptativo.crc8(cuerpo)])
+
+
+def decodificar_nack(datos) -> list[int]:
+    """Secuencias de un NACK completo (con su marca). ValueError si la marca, el largo o el CRC no cuadran."""
+    if not isinstance(datos, (bytes, bytearray)) or len(datos) < 2:
+        raise ValueError("NACK demasiado corto")
+    if datos[0] != MARCA_NACK:
+        raise ValueError("no es un NACK")
+    n = datos[1]
+    if not 1 <= n <= NACK_MAX_SECUENCIAS or len(datos) != 3 + 2 * n:
+        raise ValueError(f"NACK de {len(datos)} B con n={n}: el largo no cuadra")
+    if adaptativo.crc8(bytes(datos[:-1])) != datos[-1]:
+        raise ValueError("CRC8 del NACK no coincide")
+    return list(struct.unpack(f"!{n}H", bytes(datos[2:-1])))
 
 
 class RegistroFec:
@@ -240,9 +290,10 @@ class CapaFec:
     informes del receptor y los contadores se etiquetan con el código real de cada marco."""
 
     def __init__(self, codigo, lado: str, capacidad: int = 200, reloj=time.time,
-                 canal=None, semilla_canal: int = 1):
+                 canal=None, semilla_canal: int = 1, reenvio: bool = False):
         """`canal`: objeto de canal.parse_canal (o None = sin canal aleatorio). Cada marco recibido usa
-        la semilla `semilla_canal + n`, con n = marcos recibidos hasta entonces: determinista."""
+        la semilla `semilla_canal + n`, con n = marcos recibidos hasta entonces: determinista.
+        `reenvio`: activa el reenvío por NACK (ver el docstring del módulo); apagado = comportamiento de siempre."""
         self.auto = es_auto(codigo)
         self.codigo = fec.buscar(CODIGO_INICIAL_AUTO if self.auto else codigo)
         self.politica = adaptativo.Politica(TABLA_AUTO, inicial=CODIGO_INICIAL_AUTO) if self.auto else None
@@ -265,6 +316,14 @@ class CapaFec:
         self._paq: dict[tuple[str, str, str], int] = {}     # (codigo, estado, codec) -> n
         self._sind: dict[tuple[str, str], int] = {}         # (codigo, síndrome) -> n
         self.c_codigo: dict[str, dict[str, int]] = {}
+        # Reenvío (solo reenvio=True). Emisor: anillo secuencia -> (marco limpio, código, largo comprimido).
+        self.reenvio = bool(reenvio)
+        self._anillo: dict[int, tuple[bytes, str, int]] = {}
+        self._reenvios_seq: dict[int, int] = {}                 # reenvíos hechos por secuencia (en el anillo)
+        self._reenvio_cola: list[tuple[bytes, str, int]] = []   # marcos limpios por reenviar
+        self._t_reenvios: deque[float] = deque()                # instantes de los últimos reenvíos (1 s)
+        self._nack_cola: list[int] = []                         # receptor: secuencias por pedir
+        self.reenvio_stats = {k: 0 for k in CLAVES_REENVIO}
         self._precargar()
 
     def _fila(self, codigo: str) -> dict[str, int]:
@@ -324,6 +383,8 @@ class CapaFec:
     def emitir(self, marco_comprimido: bytes) -> bytes:
         """Codifica con FEC (secuencia propia mod 65536) y cuenta los bytes de ambos tamaños."""
         marco = fec.codificar(marco_comprimido, self.codigo, self.secuencia)
+        if self.reenvio:   # el marco limpio, antes de cualquier canal o armada
+            self._guardar_anillo(self.secuencia, marco, self.codigo.nombre, len(marco_comprimido))
         self.secuencia = (self.secuencia + 1) & 0xFFFF
         fila = self._fila(self.codigo.nombre)
         fila["comprimido"] += len(marco_comprimido)
@@ -397,6 +458,11 @@ class CapaFec:
                     no_corregibles=res.no_corregibles, sindromes=dict(res.sindromes),
                     posiciones_corregidas=[list(p) for p in res.posiciones_corregidas],
                     estado=estado_de(res))
+        if self.reenvio and res.no_corregibles:
+            # Doble error detectado: no se entrega (la TUN no recibe basura) y se pide la secuencia.
+            self._encolar_nack(res.secuencia)
+            base["integro"] = False
+            return self._cerrar(base), None
         error = None
         try:
             if not comprimido:
@@ -463,6 +529,82 @@ class CapaFec:
             self.informes["recibidos"] += 1
         return True
 
+    # --- reenvío por NACK (solo con reenvio=True) ---
+    def _guardar_anillo(self, secuencia: int, marco: bytes, codigo: str, largo: int) -> None:
+        with self._cerrojo:
+            self._anillo.pop(secuencia, None)   # tras un wrap de 16 bits, la nueva va al final
+            self._anillo[secuencia] = (marco, codigo, largo)
+            self._reenvios_seq.pop(secuencia, None)
+            while len(self._anillo) > ANILLO_REENVIO:
+                vieja = next(iter(self._anillo))
+                del self._anillo[vieja]
+                self._reenvios_seq.pop(vieja, None)
+
+    def _encolar_nack(self, secuencia: int) -> None:
+        with self._cerrojo:
+            if secuencia not in self._nack_cola and len(self._nack_cola) < NACK_COLA_MAX:
+                self._nack_cola.append(secuencia)
+
+    def nack_pendiente(self) -> bytes | None:
+        """NACK con hasta NACK_MAX_SECUENCIAS secuencias encoladas (las quita de la cola), o None."""
+        if not self.reenvio:
+            return None
+        with self._cerrojo:
+            if not self._nack_cola:
+                return None
+            lote = self._nack_cola[:NACK_MAX_SECUENCIAS]
+            del self._nack_cola[:NACK_MAX_SECUENCIAS]
+            self.reenvio_stats["nack_enviados"] += 1
+        return codificar_nack(lote)
+
+    def recibir_nack(self, datos: bytes) -> bool:
+        """Procesa un NACK completo (con su marca, tal como llega). True si era válido. Encola los
+        reenvíos que procedan. Nunca lanza."""
+        if not self.reenvio:
+            return False
+        try:
+            secuencias = decodificar_nack(datos)
+        except ValueError:
+            with self._cerrojo:
+                self.reenvio_stats["nack_malos"] += 1
+            return False
+        ahora = self._reloj()
+        with self._cerrojo:
+            self.reenvio_stats["nack_recibidos"] += 1
+            for seq in secuencias:
+                if seq not in self._anillo:
+                    self.reenvio_stats["sin_copia"] += 1
+                    continue
+                if self._reenvios_seq.get(seq, 0) >= REENVIOS_POR_SECUENCIA:
+                    continue
+                while self._t_reenvios and ahora - self._t_reenvios[0] >= 1.0:
+                    self._t_reenvios.popleft()
+                if len(self._t_reenvios) >= REENVIOS_POR_SEGUNDO:
+                    self.reenvio_stats["descartados_limite"] += 1
+                    continue
+                self._t_reenvios.append(ahora)
+                self._reenvios_seq[seq] = self._reenvios_seq.get(seq, 0) + 1
+                self._reenvio_cola.append(self._anillo[seq])
+        return True
+
+    def reenvios_pendientes(self) -> list[bytes]:
+        """Marcos a reenviar ahora. Cada marco limpio se manda de nuevo tal cual (el receptor le aplica ruido nuevo
+        en recibir(), como a cualquier envío). No incrementa `secuencia` ni vuelve a guardarse en el anillo."""
+        if not self.reenvio:
+            return []
+        with self._cerrojo:
+            cola, self._reenvio_cola = self._reenvio_cola, []
+        salida = []
+        for marco, codigo, largo in cola:
+            enviado = marco   # el ruido del canal lo aplica el RECEPTOR en recibir(); aqui iria doble
+            fila = self._fila(codigo)
+            fila["comprimido"] += largo
+            fila["fec"] += len(enviado)
+            salida.append(enviado)
+        with self._cerrojo:
+            self.reenvio_stats["reenviados"] += len(salida)
+        return salida
+
     # --- métricas y comandos ---
     def texto(self, l: str) -> str:
         """Métricas Prometheus (l = 'lado="ue"')."""
@@ -481,6 +623,10 @@ class CapaFec:
                          for c in ESCALERA_AUTO)
             s += f"lab5g_cmp_fec_cambios_codigo_total{{{l}}} {self.cambios_codigo}\n"
             s += "".join(f'lab5g_cmp_fec_informes_total{{{l},tipo="{t}"}} {v}\n' for t, v in self.informes.items())
+        if self.reenvio:
+            with self._cerrojo:
+                st = dict(self.reenvio_stats)
+            s += "".join(f'lab5g_cmp_fec_reenvio_total{{{l},tipo="{t}"}} {v}\n' for t, v in st.items())
         return s
 
     def describir_codigo(self) -> dict:
@@ -505,10 +651,14 @@ class CapaFec:
             if verbo == "INYECTAR":
                 return {"ok": True, "armada": self.armar(json.loads(resto))}
             if verbo == "CODIGO":
+                extra: dict = {"reenvio": self.reenvio}
+                if self.reenvio:
+                    with self._cerrojo:
+                        extra["reenvio_stats"] = dict(self.reenvio_stats)
                 return {**self.describir_codigo(), "auto": self.auto,
                         "ber_estimado": self.estimador.ber if self.auto else None,
                         "codigo_activo": self.codigo.nombre,
-                        "escalera": list(ESCALERA_AUTO) if self.auto else None}
+                        "escalera": list(ESCALERA_AUTO) if self.auto else None, **extra}
             return {"ok": False, "error": f"comando desconocido: {verbo[:20]!r}"}
         except Exception as e:  # JSONDecodeError, RecursionError por JSON anidado... el hilo no debe morir
             if not isinstance(e, (ValueError, TypeError)):   # los de validación son rutina; el resto, no
