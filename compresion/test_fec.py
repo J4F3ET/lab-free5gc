@@ -1,7 +1,7 @@
 """Pruebas de codificación de canal:  python -m unittest compresion/test_fec.py"""
 from __future__ import annotations
 
-import itertools, random, sys, time, unittest
+import itertools, random, sys, time, tracemalloc, unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -100,7 +100,8 @@ class Bytes(unittest.TestCase):
 
     def test_ids_estables_y_busqueda(self):
         self.assertEqual({i: c.nombre for i, c in fec.CODIGOS.items()},
-                         {1: "repeticion_5_1", 2: "hamming_7_4", 3: "secded_8_4"})
+                         {1: "repeticion_5_1", 2: "hamming_7_4", 3: "secded_8_4",
+                          4: "hamming_15_11", 5: "secded_16_11"})
         self.assertIs(fec.buscar("hamming_7_4"), HAM)
         self.assertIs(fec.buscar("secded_8_4"), SEC)
         self.assertIs(fec.buscar(3), SEC)
@@ -252,6 +253,149 @@ class Secded(unittest.TestCase):
         self.assertGreaterEqual(r.no_corregibles, 1)
         self.assertEqual(r.corregidas, 0)
         self.assertEqual(r.posiciones_corregidas, [])
+
+
+H15 = fec.HAMMING_15_11
+S16 = fec.SECDED_16_11
+
+
+def mensajes(k: int, cantidad: int = 64, semilla: int = 3) -> list[list[int]]:
+    """Mensajes de prueba con semilla fija: el todo-0, el todo-1 y el resto aleatorios."""
+    rnd = random.Random(semilla)
+    return [[0] * k, [1] * k] + [[rnd.randrange(2) for _ in range(k)] for _ in range(cantidad - 2)]
+
+
+class Hamming15(unittest.TestCase):
+    """Hamming (15,11): r = 4, d_min = 3. Corrige 1 error; con 2 corrige mal sin avisar."""
+
+    def test_matriz_y_registro(self):
+        for h in H15.H:
+            for g in H15.G:
+                self.assertEqual(sum(a * b for a, b in zip(h, g)) % 2, 0)
+        self.assertEqual((H15.n, H15.k, H15.id, H15.nombre), (15, 11, 4, "hamming_15_11"))
+        self.assertIs(fec.CODIGOS[4], H15)
+        self.assertIs(fec.buscar("hamming_15_11"), H15)
+        self.assertIs(fec.buscar(4), H15)
+
+    def test_columnas_de_H_son_todos_los_no_nulos_de_4_bits(self):
+        cols = {tuple(H15.H[f][c] for f in range(4)) for c in range(15)}
+        self.assertEqual(cols, {tuple(bits(v, 4)) for v in range(1, 16)})
+
+    def test_un_error_se_corrige_para_todo_mensaje_de_muestra(self):
+        for m in mensajes(11):
+            c = H15.codificar_palabra(m)
+            self.assertEqual(H15.sindrome(c), (0, 0, 0, 0))
+            for i in range(15):
+                p = H15.corregir_palabra(volteado(c, i))
+                self.assertEqual((p.c_corregida, p.m, p.posicion, p.estado), (c, m, i, "corregido"))
+
+    def test_distancia_minima_3(self):
+        for v in range(1, 1 << 11):  # los 2047 mensajes no nulos
+            c = H15.codificar_palabra(bits(v, 11))
+            self.assertGreaterEqual(sum(c), 3, bin(v))
+
+    def test_dos_errores_en_posiciones_1_y_2_corrigen_mal(self):
+        m = [1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0]
+        c = H15.codificar_palabra(m)
+        r = volteado(c, 0, 1)                                  # errores en las posiciones 1 y 2 (1-indexadas)
+        p = H15.corregir_palabra(r)
+        self.assertEqual(p.sindrome, (1, 1, 0, 0))             # = columna 1 + columna 2 de H
+        self.assertEqual(p.sindrome, tuple(H15.H[f][p.posicion] for f in range(4)))  # es una columna de H
+        self.assertEqual((p.estado, p.posicion), ("corregido", 9))
+        self.assertEqual(p.c_corregida, volteado(r, 9))        # voltea un tercer bit...
+        self.assertNotEqual(p.m, m)                            # ...y el mensaje sale mal, sin aviso
+
+    def test_ida_y_vuelta_y_un_bit_en_el_canal(self):
+        for largo in (0, 1, 2, 1400):
+            d = random.Random(largo + 1).randbytes(largo)
+            marco = fec.codificar(d, H15, secuencia=3)
+            self.assertEqual(fec.decodificar(marco)[0], d)
+            palabras = fec.decodificar(marco)[1].palabras
+            salida, r = fec.decodificar(canal.inyectar(marco, [8 + 1 * 15 + 2]))
+            self.assertEqual(salida, d)
+            self.assertEqual((r.corregidas, r.no_corregibles), (1, 0))
+            self.assertEqual(r.posiciones_corregidas, [(1, 2)])
+            self.assertEqual(r.palabras, palabras)
+
+
+class Secded16(unittest.TestCase):
+    """SECDED (16,11): r = 5, d_min = 4. Corrige 1 error y detecta 2 sin corregir mal."""
+
+    def test_matriz_y_registro(self):
+        for h in S16.H:
+            for g in S16.G:
+                self.assertEqual(sum(a * b for a, b in zip(h, g)) % 2, 0)
+        self.assertEqual((S16.n, S16.k, S16.id, S16.nombre), (16, 11, 5, "secded_16_11"))
+        self.assertIs(fec.CODIGOS[5], S16)
+        self.assertIs(fec.buscar("secded_16_11"), S16)
+        self.assertIs(fec.buscar(5), S16)
+
+    def test_columnas_de_H_impares_y_distintas(self):
+        cols = [tuple(S16.H[f][c] for f in range(5)) for c in range(16)]
+        self.assertEqual(len(set(cols)), 16)
+        self.assertTrue(all(sum(c) % 2 == 1 for c in cols))
+
+    def test_un_error_se_corrige_para_todo_mensaje_de_muestra(self):
+        for m in mensajes(11):
+            c = S16.codificar_palabra(m)
+            self.assertEqual(S16.sindrome(c), (0, 0, 0, 0, 0))
+            for i in range(16):
+                p = S16.corregir_palabra(volteado(c, i))
+                self.assertEqual((p.c_corregida, p.m, p.posicion, p.estado), (c, m, i, "corregido"))
+
+    def test_todas_las_parejas_no_corregibles_con_sindrome_de_peso_par(self):
+        for m in mensajes(11, cantidad=8):
+            c = S16.codificar_palabra(m)
+            for i, j in itertools.combinations(range(16), 2):
+                r = volteado(c, i, j)
+                p = S16.corregir_palabra(r)
+                self.assertEqual((p.estado, p.posicion, p.c_corregida), ("no_corregible", None, r))
+                self.assertTrue(any(p.sindrome))
+                self.assertEqual(sum(p.sindrome) % 2, 0)
+                self.assertIsNone(S16.posicion_error(p.sindrome))
+
+    def test_distancia_minima_4(self):
+        for v in range(1, 1 << 11):  # los 2047 mensajes no nulos
+            c = S16.codificar_palabra(bits(v, 11))
+            self.assertGreaterEqual(sum(c), 4, bin(v))
+
+    def test_ida_y_vuelta_y_un_bit_en_el_canal(self):
+        for largo in (0, 1, 2, 1400):
+            d = random.Random(largo + 2).randbytes(largo)
+            marco = fec.codificar(d, S16, secuencia=77)
+            self.assertEqual(fec.decodificar(marco)[0], d)
+            palabras = fec.decodificar(marco)[1].palabras
+            salida, r = fec.decodificar(canal.inyectar(marco, [8 + 1 * 16 + 5]))
+            self.assertEqual(salida, d)
+            self.assertEqual((r.corregidas, r.no_corregibles, r.posiciones_corregidas),
+                             (1, 0, [(1, 5)]))
+            self.assertEqual(r.palabras, palabras)
+            if palabras > 40:
+                dos = canal.inyectar(marco, [8 + 40 * 16 + 0, 8 + 40 * 16 + 1])
+                _, r2 = fec.decodificar(dos)
+                self.assertEqual((r2.no_corregibles, r2.corregidas), (1, 0))
+
+    def test_decodificar_1400_B_en_menos_de_150_ms(self):
+        d = random.Random(21).randbytes(1400)
+        marco = fec.codificar(d, S16)
+        fec.decodificar(marco)  # calienta tablas
+        ts = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            salida, _ = fec.decodificar(marco)
+            ts.append(time.perf_counter() - t0)
+        self.assertEqual(salida, d)
+        self.assertLess(sum(ts) / len(ts), 0.150)
+
+    def test_tablas_pico_de_memoria_menor_de_6_MB(self):
+        tracemalloc.start()
+        try:
+            c = fec.CodigoLineal("secded_16_11_medida", [list(f) for f in S16.P])
+            c._tablas()
+            _, pico = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLess(pico, 6 * 1024 * 1024)
 
 
 class Canal(unittest.TestCase):

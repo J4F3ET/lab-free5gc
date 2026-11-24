@@ -72,7 +72,7 @@ jobs:
 
       # Si falta 'zstandard' las pruebas de zstd se omiten solas.
       - name: Pruebas de compresion
-        run: python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py compresion/test_sumidero.py
+        run: python3 -m unittest compresion/test_compresores.py compresion/test_reproductores.py compresion/test_fec.py compresion/test_envio_fec.py compresion/test_registro_fec.py compresion/test_tablero_fec.py compresion/test_canal.py compresion/test_canal_capa.py compresion/test_banco_fec.py compresion/test_sumidero.py compresion/test_bandido_aire.py
 
   # ------------------------------------------------------------------
   #  2. Capacidad del host: sincroniza /opt/lab5g y comprueba recursos
