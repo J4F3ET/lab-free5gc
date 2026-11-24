@@ -1,7 +1,7 @@
 # 11 — Informe: detección y corrección de errores por síndrome (app y Grafana)
 
 Resumen para el informe final. Detalle técnico y teoría completa en
-[docs/10](10-codificacion-canal.md). Fecha de verificación en el lab: 22-11-2026.
+[docs/10](10-codificacion-canal.md). Verificaciones en el lab: 22, 23 y 24-11-2026 (la ampliación final está en el §8).
 
 ## 1. Qué se hizo
 
@@ -115,15 +115,13 @@ primer evento.
 
 ## 5. Límites que conviene declarar
 
-- El tablero de FEC **no se ha visto aún dibujado en un Grafana real**: las
-  consultas están probadas contra Prometheus, pero no la pantalla. (Grafana estaba
-  sin servir por saturación del host cuando se escribió este informe.)
+- (Resuelto el 24-11) El tablero de FEC se vio dibujado en Grafana y concuerda con el tráfico (§6).
 - La pestaña **no dibuja las palabras una por una** con los bits volteados en
   rojo; muestra las matrices, y los síndromes y las posiciones como texto.
 - «Íntegro» solo significa que el paquete descomprimió sin excepción. Una
   corrección equivocada puede pasar por íntegra; `sha_identico` en `/enviar`
   compara el archivo de ida con el de vuelta.
-- Un paquete `no_corregible` se entrega igual a la TUN.
+- Un paquete `no_corregible` se entrega igual a la TUN, salvo con `REENVIO=1` (§8), que lo descarta y pide el reenvío.
 - El costo de CPU de la FEC está medido en un PC, no en el LXC 110 (más lento).
 - La página de envío no tiene login: no debe exponerse por Funnel.
 - Con SECDED, tres o más errores en una palabra todavía pueden corregirse mal; el
@@ -178,8 +176,111 @@ datos en Prometheus; el tablero de síndrome se vio renderizado en Grafana el 24
 paquete perdido a partir de otros, y ese paquete llega tarde; los códecs con estado (como
 `deflate_flujo`) necesitan los paquetes en orden y se desincronizarían.
 
-## 7. Siguiente entrega
+## 7. Pendiente (no hecho)
 
 CRC-32 del marco (saber con certeza si el paquete llegó íntegro), entrelazado
 (ráfagas), borrado de paquetes, Reed-Solomon y XOR entre paquetes (pérdida de paquetes
 enteros), RaptorQ, y estado del arte de 5G NR (LDPC para datos, Polar para control). Detalle y fuentes en [docs/10 §8-9](10-codificacion-canal.md).
+
+## 8. Ampliación del 24-11: más códigos, código adaptativo y reenvío
+
+Objetivo del cambio: **ahorrar ancho de banda contando los bits de paridad**, no solo la
+velocidad. Todo está apagado por defecto y se activa por variable de entorno.
+
+### 8.1 Dos códigos más, mismo motor
+
+Se añadieron con solo una matriz $P$ nueva: **Hamming (15,11)** y **SECDED (16,11)**
+(Hsiao, $d_{min}=4$). Para el mismo ruido pagan mucho menos que SECDED (8,4):
+
+| Código | $n/k$ | Sobrecoste | MTU de `cmp0` | Detecta 2 errores |
+|---|---|---|---|---|
+| Repetición (5,1) | 5,0 | ×5,00 | 247 | no |
+| Hamming (7,4) | 1,75 | ×1,75 | 780 | no |
+| SECDED (8,4) | 2,00 | ×2,00 | 677 | sí |
+| Hamming (15,11) | 1,36 | ×1,36 | 1011 | no |
+| SECDED (16,11) | 1,45 | ×1,45 | 945 | sí |
+
+Curva BER (banco offline, 300 paquetes de 200 B por punto, `compresion/resultados/fec.md`):
+
+| BER de entrada | Sin código | Hamming (15,11) | SECDED (16,11) | SECDED (8,4) |
+|---|---|---|---|---|
+| 9,6e-04 | 9,6e-04 | 1,5e-05 | 6,3e-06 | 4,2e-06 |
+| 3,1e-03 | 3,1e-03 | 3,6e-03 | 3,5e-03 | 6,9e-05 |
+| 1,0e-02 | 1,0e-02 | 2,2e-02 | 1,8e-02 | 1,1e-02 |
+
+Lectura: con $p\le10^{-3}$ los códigos largos bastan y son más baratos; hacia $3\cdot10^{-3}$
+solo SECDED (8,4) sigue ayudando. **El mejor código depende del ruido.**
+
+**Bandido en bytes del aire.** Se cambió su recompensa a bytes en el aire,
+$aire(L)=33+f\,(4+L)$ con $f=n/k$. Medido offline, ese cambio da **0,00 puntos** de ahorro
+adicional: lo que más pesa en el ancho de banda es la elección del código FEC, no la del
+compresor.
+
+### 8.2 Código adaptativo (`FEC=auto`)
+
+El receptor **mide el ruido con los propios síndromes** y se lo dice al emisor:
+
+1. Estima el BER: $\widehat{p}pprox(\#	ext{síndromes}
+e0+\#	ext{no corregibles})/(	ext{palabras}\cdot n)$,
+   como cociente de sumas con olvido exponencial (alfa 0,02).
+2. Cada ~2 s manda un **informe** de 12 bytes (marca `0xFF`, BER×$10^9$, muestras, secuencia,
+   CRC8). No va protegido por FEC.
+3. El emisor elige con **histéresis** entre Hamming (15,11) ($\widehat p\le10^{-3}$), SECDED
+   (16,11) ($\le2\cdot10^{-3}$) y SECDED (8,4) (resto). Sube protección al instante y la
+   baja solo tras 3 informes con BER bajo la mitad del umbral.
+4. Los marcos son autodescriptivos (el primer byte es el id del código), así que el cambio
+   no necesita acuerdo previo. El MTU de `cmp0` es el mínimo de la escalera (677).
+
+Verificado en el lab real (cada punto con `CANAL` fijo, reiniciando entre uno y otro):
+
+| `CANAL` | BER estimado | Código elegido |
+|---|---|---|
+| `bsc:1e-4` | $pprox3\cdot10^{-5}$ (estimador viejo, subestimaba) | Hamming (15,11) |
+| `bsc:3e-3` | $3{,}0\cdot10^{-3}$ | SECDED (8,4) |
+| `bsc:1e-3` | $1{,}0\cdot10^{-3}$ | SECDED (16,11) |
+
+**Error encontrado y corregido en el lab:** la primera versión promediaba cocientes por
+paquete y estimaba 3 veces menos que el BER real (3e-5 contra 1e-4). Se cambió a cociente de
+sumas con olvido y el estimado coincide con el canal (3,0e-3 contra 3e-3).
+
+No se midió un cambio de ruido en caliente; la subida y bajada con histéresis solo están
+cubiertas por pruebas unitarias.
+
+### 8.3 Reenvío por NACK (`REENVIO=1`)
+
+SECDED **detecta** los dobles errores pero no los corrige. Con `REENVIO=1` el receptor
+descarta el paquete con una palabra no corregible y manda un **NACK** (marca `0xFE`, hasta 8
+secuencias, CRC8). El emisor guarda los últimos 128 marcos limpios y los reenvía, con un
+máximo de 2 reenvíos por secuencia y 8 por segundo.
+
+| Prueba en el lab | Resultado |
+|---|---|
+| SECDED (8,4), BSC 3e-3, archivo | idéntico (SHA); 9 NACK enviados, 10 reenvíos |
+| SECDED (8,4), BSC 1e-2 | la transferencia no termina: casi todos los paquetes (≈2800 palabras) traen algún doble error y el reenvío vuelve a caer en lo mismo |
+| `auto`, BSC 1e-3, ~minutos | miles de NACK y reenvíos, contadores cuadrados entre ambos lados, sin NACK corruptos |
+
+Hamming y repetición no detectan los dobles errores (los corrigen mal en silencio), así que
+ahí no hay NACK y recupera TCP. La página de envío marca en **azul** los paquetes que
+llegaron por reenvío, con filtro «reenviado» y contador en la tarjeta de FEC.
+
+Se corrigió un error de diseño antes de desplegar: el emisor aplicaba ruido a cada reenvío y
+el receptor lo aplicaba otra vez (doble ruido); ahora el emisor reenvía el marco limpio.
+
+### 8.4 Métricas nuevas
+
+`lab5g_cmp_fec_ber_estimado`, `lab5g_cmp_fec_codigo_activo{codigo}`,
+`lab5g_cmp_fec_cambios_codigo_total`, `lab5g_cmp_fec_informes_total{tipo}` y
+`lab5g_cmp_fec_reenvio_total{tipo}`. No se añadieron paneles de Grafana para ellas.
+
+### 8.5 Verificación y límites
+
+- **Pruebas automáticas:** 249 en 14 archivos, listados en `deploy.yml`.
+- **Estado del lab al cerrar:** `FEC=auto`, `CANAL=bsc:1e-3`, `REENVIO=1`.
+- Con tres o más errores en una palabra SECDED corrige mal y no hay NACK.
+- Con compresores con estado (`deflate_flujo`) un reenvío llega fuera de orden y su
+  descompresión puede fallar; no se midió por separado.
+- El reenvío no sirve con ruido extremo (1e-2): descarta casi todo.
+- El informe del receptor y el NACK no llevan FEC, solo CRC8.
+- La confirmación visual del azul en la línea de tiempo depende de quien abra la página.
+- Cada sentido decide su código por separado y el lazo de realimentación tiene un retardo de
+  unos 2 a 6 s.
