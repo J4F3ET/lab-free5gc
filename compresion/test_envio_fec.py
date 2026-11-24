@@ -304,5 +304,46 @@ class EnviarConFec(Base):
             self.shim.codigo = viejo
 
 
+class CanalYSecded(Base):
+    """Pestaña de síndrome: canal aleatorio visible, «doble detectado» con SECDED y la ayuda de cambio de código."""
+
+    def test_codigo_devuelve_el_canal_activo(self):
+        viejo = self.shim.codigo
+        self.shim.codigo = {**CODIGO, "codigo": "secded_8_4", "canal": "bsc:0.001"}
+        try:
+            st, b = self.pedir("/fec/codigo")
+        finally:
+            self.shim.codigo = viejo
+        j = json.loads(b)
+        self.assertEqual((st, j["codigo"], j["canal"]), (200, "secded_8_4", "bsc:0.001"))
+
+    def test_codigo_sin_canal_es_null(self):
+        viejo = self.shim.codigo
+        self.shim.codigo = {**CODIGO, "canal": None}           # el shim real: canal null = sin canal aleatorio
+        try:
+            st, b = self.pedir("/fec/codigo")
+        finally:
+            self.shim.codigo = viejo
+        self.assertEqual((st, json.loads(b)["canal"]), (200, None))
+
+    def test_pagina_tiene_canal_doble_detectado_y_ayuda(self):
+        st, b = self.pedir("/")
+        html = b.decode()
+        self.assertEqual(st, 200)
+        for t in ("doble detectado", "Canal aleatorio", "apagado (solo inyección manual)",
+                  "SECDED detecta 2 errores y no los corrige mal", "lab5g.sh env-set", "secded_8_4",
+                  "reiniciar cmp-ue y cmp-dn"):
+            self.assertIn(t, html, t)
+        self.assertIn("function etiqueta(est)", html)
+        self.assertIn("'no corregible'", html)                  # el resto de códigos sigue diciendo «no corregible»
+
+    def test_el_canal_y_el_codigo_se_insertan_como_texto(self):
+        st, b = self.pedir("/")
+        lab = b.decode()
+        lab = lab[lab.index("Laboratorio de síndrome: todo texto"):]
+        self.assertIn("'Canal aleatorio: '+String(j.canal)", lab)
+        self.assertNotIn("j.canal)}", lab)                      # nada de plantillas HTML con datos del shim
+
+
 if __name__ == "__main__":
     unittest.main()

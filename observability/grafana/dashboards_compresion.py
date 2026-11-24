@@ -630,6 +630,8 @@ L.poner([(texto("Cómo leer este tablero",
                 "- **s = 0**: no se ve error (paquete *limpio*).\n"
                 "- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** "
                 "(paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o *corregido_mal* («corrigió mal»: el síndrome corrigió un bit, pero el paquete no se pudo reconstruir).\n\n"
+                "Con **SECDED (8,4)** 2 errores en una palabra se ven como *no_corregible* («doble detectado»), no como "
+                "*corregido_mal*: SECDED detecta 2 errores y no los corrige mal.\n\n"
                 "Los errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. "
                 "Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. "
                 "Fórmulas y códigos: `docs/10-codificacion-canal.md`."), 24)], 6)
@@ -683,6 +685,30 @@ mapa = calor("Códec del bandido por estado", ctx(
         colores="continuous-BlPu")
 del mapa["fieldConfig"]["defaults"]["max"]
 L.poner([(sind, 12), (mapa, 12)], 9)
+ber = serie("BER de entrada del canal", ctx(
+        "Fracción de los bits del aire que el canal volteó (estimación). Incluye también las inyecciones manuales "
+        "(«Inyectar 1 bit», «bit exacto») que se hayan armado." + NOTA_FEC,
+        "bits invertidos por el canal / bits del marco: increase() de lab5g_cmp_fec_bits_inyectados_total entre "
+        "8 × increase() de lab5g_cmp_fec_bytes_total con tipo=\"fec\" (los bytes con paridad que salen al aire).",
+        "hora.", "fracción de bits, escala logarítmica.",
+        "¿Qué nivel de ruido está viendo el código? Con CANAL=bsc:P este panel debería quedarse cerca de P."),
+        [('sum(increase(lab5g_cmp_fec_bits_inyectados_total{lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])) / '
+          '(8 * sum(increase(lab5g_cmp_fec_bytes_total{tipo="fec",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])))',
+          "BER de entrada")], "percentunit")
+ber["fieldConfig"]["defaults"]["custom"]["scaleDistribution"] = {"type": "log", "log": 10}
+sobre = serie("Sobrecoste de la protección", ctx(
+        "Cuántos bytes salen al aire por cada byte comprimido: la redundancia que añade la FEC. Hamming (7,4) ≈ 1,75; "
+        "SECDED (8,4) ≈ 2; repetición (5,1) = 5, más la cabecera del marco." + NOTA_FEC,
+        "bytes con paridad / bytes comprimidos: cociente de dos increase() de lab5g_cmp_fec_bytes_total, "
+        "tipo=\"fec\" entre tipo=\"comprimido\", en la ventana de gráfica.",
+        "hora.", "veces: bytes al aire por byte comprimido (1 = sin redundancia).",
+        "¿Compensa la redundancia frente a lo que ahorró la compresión? Si el sobrecoste se come el ahorro, la FEC "
+        "cuesta más de lo que el canal justifica."),
+        [('sum(increase(lab5g_cmp_fec_bytes_total{tipo="fec",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval])) / '
+          'sum(increase(lab5g_cmp_fec_bytes_total{tipo="comprimido",lado=~"$lado",codigo=~"$codigo"}[$__rate_interval]))',
+          "sobrecoste")], "none")
+sobre["fieldConfig"]["defaults"]["decimals"] = 2
+L.poner([(ber, 12), (sobre, 12)], 9)
 
 
 def variable_fec(nombre, etiqueta, clave, desc):

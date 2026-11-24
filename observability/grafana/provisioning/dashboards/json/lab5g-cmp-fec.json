@@ -92,7 +92,7 @@
    "title": "Cómo leer este tablero",
    "options": {
     "mode": "markdown",
-    "content": "**Idea de clase.** Se envía una palabra código *r = c + e* (e = el error que mete el canal). El receptor calcula el **síndrome** s = r·Hᵀ = e·Hᵀ: no depende del mensaje, solo del error.\n\n- **s = 0**: no se ve error (paquete *limpio*).\n- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** (paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o *corregido_mal* («corrigió mal»: el síndrome corrigió un bit, pero el paquete no se pudo reconstruir).\n\nLos errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. Fórmulas y códigos: `docs/10-codificacion-canal.md`."
+    "content": "**Idea de clase.** Se envía una palabra código *r = c + e* (e = el error que mete el canal). El receptor calcula el **síndrome** s = r·Hᵀ = e·Hᵀ: no depende del mensaje, solo del error.\n\n- **s = 0**: no se ve error (paquete *limpio*).\n- **s ≠ 0**: s coincide con una **columna de H**, y esa columna dice **qué bit se corrige** (paquete *corregido*). Con más errores de los que el código aguanta, queda *no_corregible* o *corregido_mal* («corrigió mal»: el síndrome corrigió un bit, pero el paquete no se pudo reconstruir).\n\nCon **SECDED (8,4)** 2 errores en una palabra se ven como *no_corregible* («doble detectado»), no como *corregido_mal*: SECDED detecta 2 errores y no los corrige mal.\n\nLos errores se inyectan desde la página de envío, pestaña **Laboratorio de síndrome**. Cada panel explica en su **ⓘ**: significado, cómo funciona, eje X, eje Y y a qué responde. Fórmulas y códigos: `docs/10-codificacion-canal.md`."
    },
    "id": 1,
    "gridPos": {
@@ -591,6 +591,87 @@
     "w": 12,
     "x": 12,
     "y": 15
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "BER de entrada del canal",
+   "description": "**Significado:** Fracción de los bits del aire que el canal volteó (estimación). Incluye también las inyecciones manuales («Inyectar 1 bit», «bit exacto») que se hayan armado. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** bits invertidos por el canal / bits del marco: increase() de lab5g_cmp_fec_bits_inyectados_total entre 8 × increase() de lab5g_cmp_fec_bytes_total con tipo=\"fec\" (los bytes con paridad que salen al aire).\n\n**Eje X:** hora.\n\n**Eje Y:** fracción de bits, escala logarítmica.\n\n**A qué responde:** ¿Qué nivel de ruido está viendo el código? Con CANAL=bsc:P este panel debería quedarse cerca de P.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(increase(lab5g_cmp_fec_bits_inyectados_total{lado=~\"$lado\",codigo=~\"$codigo\"}[$__rate_interval])) / (8 * sum(increase(lab5g_cmp_fec_bytes_total{tipo=\"fec\",lado=~\"$lado\",codigo=~\"$codigo\"}[$__rate_interval])))",
+     "instant": false,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "BER de entrada",
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "custom": {
+      "fillOpacity": 10,
+      "scaleDistribution": {
+       "type": "log",
+       "log": 10
+      }
+     }
+    },
+    "overrides": []
+   },
+   "id": 6,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 24
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Sobrecoste de la protección",
+   "description": "**Significado:** Cuántos bytes salen al aire por cada byte comprimido: la redundancia que añade la FEC. Hamming (7,4) ≈ 1,75; SECDED (8,4) ≈ 2; repetición (5,1) = 5, más la cabecera del marco. Solo hay datos si el shim tiene la FEC activa (página de envío, pestaña «Laboratorio de síndrome»).\n\n**Cómo funciona:** bytes con paridad / bytes comprimidos: cociente de dos increase() de lab5g_cmp_fec_bytes_total, tipo=\"fec\" entre tipo=\"comprimido\", en la ventana de gráfica.\n\n**Eje X:** hora.\n\n**Eje Y:** veces: bytes al aire por byte comprimido (1 = sin redundancia).\n\n**A qué responde:** ¿Compensa la redundancia frente a lo que ahorró la compresión? Si el sobrecoste se come el ahorro, la FEC cuesta más de lo que el canal justifica.",
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(increase(lab5g_cmp_fec_bytes_total{tipo=\"fec\",lado=~\"$lado\",codigo=~\"$codigo\"}[$__rate_interval])) / sum(increase(lab5g_cmp_fec_bytes_total{tipo=\"comprimido\",lado=~\"$lado\",codigo=~\"$codigo\"}[$__rate_interval]))",
+     "instant": false,
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "sobrecoste",
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "custom": {
+      "fillOpacity": 10
+     },
+     "decimals": 2
+    },
+    "overrides": []
+   },
+   "id": 7,
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 24
    },
    "datasource": {
     "type": "prometheus",
