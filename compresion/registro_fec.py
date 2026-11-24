@@ -53,7 +53,9 @@ TUNEL = 28               # IP + UDP del túnel
 MARGEN = 36              # 1464 - 28 - 1400 = lo que deja hoy CMP_MTU por defecto
 MAX_POSICIONES_ARMADA = 256
 CLAVES_CONTADORES = ("paquetes", "con_error_inyectado", "sindromes_no_cero", "corregidas",
-                     "no_corregibles", "invalidos", "bits_inyectados", "palabras", "corregidos_mal")
+                     "no_corregibles", "invalidos", "bits_inyectados", "palabras", "corregidos_mal",
+                     "reenviados")
+# reenviados (receptor, solo REENVIO=1): entradas que llegaron por reenvío tras un NACK propio.
 # corregido_mal (añadido tras la verificación del 22-11): el síndrome indicó una corrección (estado
 # «corregido») pero el paquete no se pudo reconstruir (integro=False), p. ej. 2 errores en Hamming (7,4).
 ESTADOS = ("limpio", "corregido", "corregido_mal", "no_corregible", "invalido")
@@ -105,6 +107,8 @@ NACK_COLA_MAX = 16                   # pendientes en el receptor (sin repetir)
 ANILLO_REENVIO = 128                 # marcos limpios que guarda el emisor (evicción FIFO)
 REENVIOS_POR_SECUENCIA = 2           # tope de reenvíos de una misma secuencia
 REENVIOS_POR_SEGUNDO = 8             # tope global de reenvíos por segundo (reloj de CapaFec)
+NACK_TTL_S = 30.0                    # receptor: cuánto espera un reenvío tras pedirlo (reloj de CapaFec)
+NACK_RECORDADOS_MAX = 64             # receptor: secuencias pedidas recordadas (se olvidan las más viejas)
 CLAVES_REENVIO = ("nack_enviados", "nack_recibidos", "reenviados", "sin_copia", "descartados_limite",
                   "nack_malos")
 
@@ -164,6 +168,7 @@ class RegistroFec:
             t["no_corregibles"] += int(campos.get("no_corregibles") or 0)
             t["invalidos"] += 1 if campos.get("estado") == "invalido" else 0
             t["corregidos_mal"] += 1 if campos.get("estado") == "corregido_mal" else 0
+            t["reenviados"] += 1 if campos.get("reenviado") else 0
             t["bits_inyectados"] += len(campos.get("bits_inyectados") or ())
             t["palabras"] += int(campos.get("palabras") or 0)
             return entrada
@@ -323,6 +328,7 @@ class CapaFec:
         self._reenvio_cola: list[tuple[bytes, str, int]] = []   # marcos limpios por reenviar
         self._t_reenvios: deque[float] = deque()                # instantes de los últimos reenvíos (1 s)
         self._nack_cola: list[int] = []                         # receptor: secuencias por pedir
+        self._nack_secuencias: dict[int, float] = {}            # receptor: secuencia pedida -> instante del NACK
         self.reenvio_stats = {k: 0 for k in CLAVES_REENVIO}
         self._precargar()
 
@@ -444,7 +450,7 @@ class CapaFec:
                     codec_id=None, codec=None, bytes_comprimido=None, bytes_fec=len(marco),
                     bytes_ip=None, bits_inyectados=bits, palabras=0, sindromes_no_cero=0,
                     corregidas=0, no_corregibles=0, sindromes={}, posiciones_corregidas=[],
-                    estado="invalido", integro=False)
+                    estado="invalido", integro=False, reenviado=False)
         try:
             comprimido, res = fec.decodificar(recibido)
         except ValueError as e:
@@ -458,6 +464,8 @@ class CapaFec:
                     no_corregibles=res.no_corregibles, sindromes=dict(res.sindromes),
                     posiciones_corregidas=[list(p) for p in res.posiciones_corregidas],
                     estado=estado_de(res))
+        # Llega por reenvío si pedimos esta secuencia por NACK (el estado sigue siendo el real).
+        base["reenviado"] = self.reenvio and self._es_reenvio(res.secuencia)
         if self.reenvio and res.no_corregibles:
             # Doble error detectado: no se entrega (la TUN no recibe basura) y se pide la secuencia.
             self._encolar_nack(res.secuencia)
@@ -541,9 +549,32 @@ class CapaFec:
                 self._reenvios_seq.pop(vieja, None)
 
     def _encolar_nack(self, secuencia: int) -> None:
+        ahora = self._reloj()
         with self._cerrojo:
-            if secuencia not in self._nack_cola and len(self._nack_cola) < NACK_COLA_MAX:
+            if secuencia not in self._nack_cola:
+                if len(self._nack_cola) >= NACK_COLA_MAX:
+                    return
                 self._nack_cola.append(secuencia)
+            self._recordar_nack(secuencia, ahora)
+
+    def _recordar_nack(self, secuencia: int, ahora: float) -> None:
+        """Llamar con _cerrojo tomado. Recuerda una secuencia pedida; olvida las caducadas (TTL) y,
+        si hay más de NACK_RECORDADOS_MAX, las más viejas."""
+        ds = self._nack_secuencias
+        ds.pop(secuencia, None)
+        for s in [s for s, t in ds.items() if ahora - t > NACK_TTL_S]:
+            del ds[s]
+        ds[secuencia] = ahora
+        while len(ds) > NACK_RECORDADOS_MAX:
+            del ds[next(iter(ds))]
+
+    def _es_reenvio(self, secuencia: int) -> bool:
+        """True si `secuencia` la pedimos por NACK hace menos de NACK_TTL_S. La quita del recuerdo
+        (caducada o no): un marco con esa secuencia solo cuenta como reenvío una vez."""
+        ahora = self._reloj()
+        with self._cerrojo:
+            t = self._nack_secuencias.pop(secuencia, None)
+        return t is not None and ahora - t <= NACK_TTL_S
 
     def nack_pendiente(self) -> bytes | None:
         """NACK con hasta NACK_MAX_SECUENCIAS secuencias encoladas (las quita de la cola), o None."""

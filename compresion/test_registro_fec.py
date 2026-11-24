@@ -294,7 +294,7 @@ class TestComandos(unittest.TestCase):
                           r["bits_inyectados"], r["ultimo_id"]), (11, 1, 1, 1, 1, 11))
         self.assertEqual(set(r), {"ok", "codigo", "lado", "paquetes", "con_error_inyectado", "sindromes_no_cero",
                                   "corregidas", "no_corregibles", "invalidos", "bits_inyectados", "palabras",
-                                  "corregidos_mal", "ultimo_id"})
+                                  "corregidos_mal", "reenviados", "ultimo_id"})
         self.assertEqual(r["palabras"], 11 * fec.decodificar(marco)[1].palabras)
         json.dumps(r)
 

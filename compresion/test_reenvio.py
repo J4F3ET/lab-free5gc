@@ -201,6 +201,74 @@ class TestReenvio(unittest.TestCase):
         self.assertGreater(con, sin)
         self.assertGreater(sin, 0)
 
+    def _doble_error(self, marco: bytes) -> dict:
+        """Entrega `marco` al receptor con un doble error armado en la misma palabra (no corregible)."""
+        self.rx.armar({"posiciones": [76, 77]})
+        _salida, e, _err = entregar(self.rx, marco)
+        return e
+
+    def test_l_entrada_reenviada_lleva_marca_y_la_descartada_no(self):
+        datos = carga(1)
+        marco = self.tx.emitir(datos)
+        descartada = self._doble_error(marco)
+        self.assertIs(descartada["reenviado"], False)
+        self.assertTrue(self.tx.recibir_nack(self.rx.nack_pendiente()))
+        reenvio = self.tx.reenvios_pendientes()[0]
+        _salida, e2, _err = entregar(self.rx, reenvio)
+        self.assertIs(e2["reenviado"], True)
+        self.assertEqual(e2["estado"], "limpio")          # el estado sigue siendo el real
+        self.assertEqual(self.rx.registro.contadores()["reenviados"], 1)
+        self.assertEqual(self.rx._nack_secuencias, {})    # la secuencia se cumplió y sale del recuerdo
+
+    def test_m_ttl_de_30_s_para_reconocer_el_reenvio(self):
+        marco = self.tx.emitir(carga(1))
+        self._doble_error(marco)                          # NACK de la secuencia 0 a t=0
+        self.rx.nack_pendiente()
+        self.t[0] = 29.0
+        self.tx.recibir_nack(codificar_nack([0]))
+        tardio = self.tx.reenvios_pendientes()[0]
+        self.assertIs(entregar(self.rx, tardio)[1]["reenviado"], True)      # dentro de TTL
+        self.t[0] = 0.0
+        marco2 = self.tx.emitir(carga(2))
+        self._doble_error(marco2)                         # NACK de la secuencia 1 a t=0
+        self.rx.nack_pendiente()
+        self.t[0] = 31.0                                  # caducada
+        self.tx.recibir_nack(codificar_nack([1]))
+        tarde = self.tx.reenvios_pendientes()[0]
+        self.assertIs(entregar(self.rx, tarde)[1]["reenviado"], False)
+
+    def test_n_recuerdo_limitado_a_64_secuencias(self):
+        for i in range(70):
+            self._doble_error(self.tx.emitir(carga(i)))
+            self.rx.nack_pendiente()                      # vacía la cola: cada secuencia se recuerda
+        self.assertEqual(len(self.rx._nack_secuencias), 64)
+        self.assertNotIn(0, self.rx._nack_secuencias)     # la más vieja se olvidó
+        self.assertIn(69, self.rx._nack_secuencias)
+        self.assertFalse(self.rx._es_reenvio(0))
+
+    def test_o_sin_reenvio_ninguna_entrada_reenviada(self):
+        tx = CapaFec("secded_8_4", "ue", reloj=lambda: self.t[0])
+        rx = CapaFec("secded_8_4", "dn", reloj=lambda: self.t[0])
+        for i in range(3):
+            rx.armar({"posiciones": [76, 77]})
+            _salida, e, _err = entregar(rx, tx.emitir(carga(i)))
+            self.assertIs(e["reenviado"], False)
+        self.assertEqual(rx.registro.contadores()["reenviados"], 0)
+        self.assertEqual(rx._nack_secuencias, {})
+        self.assertIn("reenviados", rx.registro.contadores())
+
+    def test_p_reenvio_que_vuelve_a_fallar_se_pide_otra_vez(self):
+        marco = self.tx.emitir(carga(1))
+        self._doble_error(marco)
+        self.assertTrue(self.tx.recibir_nack(self.rx.nack_pendiente()))
+        reenvio = self.tx.reenvios_pendientes()[0]
+        e2 = self._doble_error(reenvio)                   # el reenvío vuelve con doble error
+        self.assertIs(e2["reenviado"], True)
+        self.assertEqual(e2["estado"], "no_corregible")
+        self.assertIsNotNone(self.rx.nack_pendiente())    # se pide la secuencia de nuevo
+        self.assertIn(0, self.rx._nack_secuencias)
+        self.assertEqual(self.rx.registro.contadores()["reenviados"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
