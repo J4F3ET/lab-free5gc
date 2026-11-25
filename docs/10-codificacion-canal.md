@@ -1015,3 +1015,33 @@ SECDED detecta los dobles errores pero no los corrige. Con `REENVIO=1` el recept
 - Medido en el laboratorio (24-nov-2026, `secded_8_4`): con BSC 3e-3 el archivo llegó idéntico con 9 NACK y 10 reenvíos; con BSC 1e-2 casi todos los paquetes (≈2800 palabras) traen algún doble error, se descartan casi todos y la transferencia no termina: el reenvío ayuda con ruido moderado, no extremo.
 - Limitación: con compresores con estado (`deflate_flujo`) un reenvío llega fuera de orden y su descompresión puede fallar.
 - En el laboratorio de síndrome, la página marca en azul los paquetes que llegaron por reenvío y filtra por ellos («reenviado»); el contador «reenviados» de la tarjeta FEC cuenta esos mismos paquetes.
+
+## 15. Elegir el algoritmo en caliente
+
+Hasta aquí, cambiar de código FEC exigía fijar `FEC` con `lab5g.sh env-set` y reiniciar cmp-ue y cmp-dn (unos 4 min en el LXC). Con `FEC` en {`auto`, `hamming_15_11`, `secded_16_11`, `secded_8_4`, `hamming_7_4`} el despliegue es **dinámico**: el algoritmo se elige desde la pestaña «Laboratorio de síndrome» sin reiniciar nada.
+
+### 15.1 Cómo se aplica
+
+- Selector «Algoritmo FEC» (Automático, Hamming (15,11), SECDED (16,11), SECDED (8,4), Hamming (7,4)) y botón Aplicar. Llama a `POST /fec/elegir` con `{"codigo": "..."}`, que reenvía `ELEGIR <nombre>` al shim de cmp-dn.
+- **Sentido DN→UE**: cambia al instante, porque lo emite el propio cmp-dn.
+- **Sentido UE→DN**: cmp-dn manda al UE una trama de control de 3 B (`0xFD`, índice del algoritmo, CRC8) por el túnel. El UE la aplica a su emisión. Tarda unos segundos. La trama se repite cada 10 s mientras la elección siga vigente, así que un UE que reinicia la recibe sola.
+- Un marco nunca necesita saber qué código eligió el otro lado: el byte 0 de cada marco dice su código, y el receptor decodifica con ese.
+
+### 15.2 Reglas
+
+- `repeticion_5_1` **no** es dinámico: conserva su MTU de 247 B y, si se fija, la página muestra «hay que reiniciar». Responde 409 a `/fec/elegir`.
+- Con dinámico el MTU de cmp0 es el de `auto` (**677 B**, el mínimo de la escalera), también si el código fijo es `hamming_7_4` (en fijo eran 780 B). Es el precio de poder cambiar a `secded_8_4` sin recalcular el MTU.
+- El receptor informa de su BER (cada ~2 s, 12 B) aunque el código sea fijo. Solo cambia de código el extremo que está en `auto`.
+- Elegir `auto` reinicia la política y empieza en `secded_8_4`. Elegir un código fijo saca de `auto`.
+- Un nombre que no esté en la lista da 400 con las opciones válidas. Una trama de control con CRC malo no cambia nada y cuenta como «mala».
+
+### 15.3 Métricas y verbos
+
+- `CODIGO` añade `dinamico`, `opciones` (null si no es dinámico) y `eleccion` (último nombre elegido, o null). `ELEGIR <nombre>` responde `{"ok": true, "codigo_activo", "auto", "eleccion"}` o `{"ok": false, "error", "dinamico"}`.
+- Con dinámico, `lab5g_cmp_fec_codigo_activo{lado,codigo}` cubre los cuatro códigos (1 el vigente), las series de síndrome y paquetes de los cuatro nacen a 0, y aparece `lab5g_cmp_fec_elegir_total{lado,tipo}` con `tipo` en `elegida_local` (ELEGIR en este lado), `recibida` (trama aplicada) y `mala` (CRC o índice malos).
+
+### 15.4 Limitaciones
+
+- La trama de control no tiene FEC: va en 3 B con CRC8. Si se corrompe, se descarta y la siguiente repetición (10 s después) la reemplaza.
+- Cambiar de código no cambia el canal ni la semilla: el CANAL sigue fijado por entorno y necesita reinicio, como antes.
+- La prueba automática cubre la capa (`registro_fec.py`) y la API (`envio.py`) con `test_elegir.py`. El bucle de `shim.py` solo usa Linux (`fcntl`), así que se verifica en el laboratorio, no en las pruebas unitarias.

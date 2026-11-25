@@ -47,6 +47,8 @@ def contadores() -> dict | None:
 
 PUERTO_FEC = int(os.environ.get("PUERTO_FEC", "7702"))     # servidor de línea del laboratorio de síndrome (shim.py)
 MAX_PAQUETES_FEC = 200                                     # paquetes del shim que se copian al resultado de /enviar
+# Copia de registro_fec.OPCIONES_ELEGIR (este módulo no importa el paquete de compresión); test_elegir.py vigila que sean iguales.
+OPCIONES_ELEGIR = ("auto", "hamming_15_11", "secded_16_11", "secded_8_4", "hamming_7_4")
 
 
 def fec_consulta(linea: str, timeout: float = 2.0) -> dict:
@@ -398,9 +400,32 @@ class Pagina(BaseHTTPRequestHandler):
             return self._json(503, {"ok": False, "disponible": False, "error": "el shim no responde en el puerto FEC"})
         self._json(200 if r.get("ok") else 400, r)
 
+    def _post_elegir(self) -> None:
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            return self._json(415, {"ok": False, "error": "Content-Type debe ser application/json"})
+        n = self._largo()
+        if n <= 0 or n > 1024:
+            return self._json(413, {"error": "el cuerpo debe tener entre 1 B y 1 KB"})
+        try:
+            obj = json.loads(self.rfile.read(n))
+        except ValueError:
+            return self._json(400, {"ok": False, "error": "el cuerpo no es JSON válido"})
+        nombre = obj.get("codigo") if isinstance(obj, dict) else None
+        if not isinstance(nombre, str) or nombre not in OPCIONES_ELEGIR:
+            return self._json(400, {"ok": False, "error": "«codigo» debe ser uno de: " + ", ".join(OPCIONES_ELEGIR)})
+        r = fec_consulta("ELEGIR " + nombre)
+        if not r.get("disponible"):
+            return self._json(503, {"ok": False, "disponible": False, "error": "el shim no responde en el puerto FEC"})
+        if r.get("ok"):
+            return self._json(200, r)
+        # 409: el shim responde pero este despliegue no es dinámico (FEC fijo como repeticion_5_1)
+        self._json(409 if r.get("dinamico") is False else 400, r)
+
     def do_POST(self):
         if self.path == "/fec/inyectar":
             return self._post_inyectar()
+        if self.path == "/fec/elegir":
+            return self._post_elegir()
         if self.path != "/enviar":
             return self._json(404, {"error": "no existe"})
         raw = (self.headers.get("X-Inyectar") or "").strip()
@@ -462,10 +487,10 @@ nav.tabs button.sel{border-color:var(--acc);color:var(--acc)}.btn:hover{border-c
 .aviso{border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:13px}
 .mat{border-collapse:collapse;display:inline-table;margin:4px 14px 8px 0}.mat td{border:1px solid var(--line);padding:2px 7px;text-align:center;font:13px ui-monospace,monospace}
 .mat td.par{background:var(--par)}.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.ctl input{font:inherit;width:90px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
-#linea{display:flex;flex-wrap:wrap;gap:3px;margin:10px 0}#linea button{width:26px;height:26px;padding:0;border-radius:5px;border:2px solid transparent;cursor:pointer;color:#fff;font-size:10px}
+#linea{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;padding:6px;max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}#linea button{width:16px;height:16px;padding:0;border-radius:4px;border:2px solid transparent;cursor:pointer;color:#fff;font-size:9px;flex:none;box-sizing:border-box}.tabla-lab{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px}.tabla-lab table{min-width:640px}.tabla-lab th{position:sticky;top:0;background:var(--card);white-space:nowrap;z-index:1;box-shadow:0 1px 0 var(--line)}.tabla-lab td{white-space:nowrap}.tabla-lab td:last-child{white-space:normal;word-break:break-word;min-width:120px;text-align:left}.tabla-lab th:last-child{text-align:left}
 #linea button.limpio{background:var(--c-limpio)}#linea button.corregido{background:var(--c-corr);border-color:var(--fg)}#linea button.corregido_mal{background:var(--c-cmal);border-color:var(--fg)}#linea button.no_corregible,#linea button.invalido{background:var(--c-mal)}
 #linea button.reenviado{background:var(--c-reenv)}
-#linea button.iny{outline:2px dashed var(--warn);outline-offset:1px}#linea button.act{box-shadow:0 0 0 2px var(--acc)}
+#linea button.iny{outline:2px dashed var(--warn);outline-offset:0}#linea button.act{box-shadow:0 0 0 2px var(--acc)}
 #detalle ol{padding-left:20px}#detalle li{margin:6px 0}.st-limpio{color:var(--c-limpio)}.st-corregido{color:var(--c-corr)}.st-corregido_mal{color:var(--c-cmal)}.st-no_corregible,.st-invalido{color:var(--c-mal)}
 tr.fila{cursor:pointer}tr.fila:hover{background:var(--bg)}
 </style></head><body><main>
@@ -487,7 +512,7 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <div id="vista-lab" hidden>
 <h2 style="font-size:18px;margin:0 0 4px">Laboratorio de síndrome</h2>
 <p class="sub" style="margin-bottom:8px">Detección y corrección de errores con códigos de bloque lineales: recibido r = c + e, síndrome s = r·Hᵀ; s = 0 sin error, s ≠ 0 error, y si coincide con la columna i de H se voltea el bit i.</p>
-<div class="aviso">Para cambiar de código o canal hay que fijar FEC (repeticion_5_1, hamming_7_4, secded_8_4) y CANAL (bsc:P o rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO) con «lab5g.sh env-set» y reiniciar cmp-ue y cmp-dn.</div>
+<div class="aviso">Para cambiar el canal (CANAL=bsc:P o rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO) hay que fijarlo con «lab5g.sh env-set» y reiniciar cmp-ue y cmp-dn. El algoritmo FEC se cambia con el selector de abajo si el despliegue es dinámico (FEC=auto o uno de los cuatro códigos); si no, hay que fijar FEC (repeticion_5_1, hamming_7_4, secded_8_4) con «lab5g.sh env-set» y reiniciar.</div>
 <div class="aviso">Nota: el canal se modela en la recepción del shim de cmp-dn, es decir sobre el tráfico que RECIBE el DN (p. ej. el viaje de vuelta del eco). El error se inyecta ahí, no en la bajada.</div>
 <div class="aviso">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y, si el paquete no se reconstruye, queda como «corrigió mal» (si sí se reconstruye, sigue contado como «corregido»); el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
 <div id="lab-codigo" class="res"></div>
@@ -499,7 +524,7 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido (con SECDED, «doble detectado») · azul: reenviado (llegó porque el receptor pidió el NACK) · borde punteado: con error inyectado. Clic para ver el detalle.</div>
 <div id="linea"></div>
 <div class="ctl"><label class="k">estado <select id="filtro"><option value="">todos</option><option value="limpio">limpio</option><option value="corregido">corregido</option><option value="corregido_mal">corrigió mal</option><option value="no_corregible">no corregible</option><option value="invalido">inválido</option><option value="reenviado">reenviado</option></select></label><span id="cuenta" class="k"></span></div>
-<div class="tabla"><table><thead><tr><th>id</th><th>lado</th><th>sec.</th><th>códec</th><th>estado</th><th>s≠0</th><th>corr.</th><th>no corr.</th><th>bits volteados</th></tr></thead><tbody id="lab-tabla"></tbody></table></div>
+<div class="tabla tabla-lab"><table><thead><tr><th>id</th><th>lado</th><th>sec.</th><th>códec</th><th>estado</th><th>s≠0</th><th>corr.</th><th>no corr.</th><th>bits volteados</th></tr></thead><tbody id="lab-tabla"></tbody></table></div>
 <div id="detalle" class="res" hidden></div>
 </div>
 </main><script>
@@ -562,7 +587,22 @@ async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren();
   const piezas=[h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad) · ${canal}`)),
     matriz('G = [P : I_k]  (k×n)',G,c=>c<r), matriz('H = [I : Pᵀ]  ((n−k)×n)',j.H,c=>c>=r),
     h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).'),
-    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null,j.auto?bloqueAuto(j):null]; cont.append(...piezas.filter(Boolean)); }
+    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null,j.auto?bloqueAuto(j):null,
+    j.dinamico?bloqueElegir(j):h('div',{class:'aviso'},'Para cambiar el algoritmo hay que reiniciar con FEC=... (este despliegue no es dinámico).')]; cont.append(...piezas.filter(Boolean)); }
+/* FEC dinámico: selector de algoritmo. El valor que se aplica lo recibe el shim de cmp-dn (ELEGIR); el UE lo recibe por el túnel. */
+const OPC_ELEGIR=[['auto','Automático'],['hamming_15_11','Hamming (15,11)'],['secded_16_11','SECDED (16,11)'],['secded_8_4','SECDED (8,4)'],['hamming_7_4','Hamming (7,4)']];
+const elegirUI={msg:''};   // último mensaje del selector; sobrevive al refresco de labCodigo()
+function bloqueElegir(j){ const actual=j.auto?'auto':(j.eleccion||j.codigo_activo||j.codigo);
+  const sel=h('select',{id:'sel-algoritmo'},OPC_ELEGIR.map(([v,t])=>h('option',v===actual?{value:v,selected:'selected'}:{value:v},t)));
+  const boton=h('button',{class:'btn',type:'button'},'Aplicar');
+  boton.onclick=async()=>{ boton.disabled=true;
+    try{ const r=await fetch('fec/elegir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codigo:sel.value})});
+      const k=await r.json(); if(!r.ok) throw new Error(k.error||r.status);
+      elegirUI.msg='Aplicado: el sentido DN→UE cambia ya; el UE→DN tarda unos segundos (se lo pasa el túnel).'; }
+    catch(e){ elegirUI.msg='No se pudo aplicar: '+String(e.message||e); }
+    finally{ boton.disabled=false; }
+    labCodigo(); };
+  return h('div',{class:'aviso'},h('label',{},'Algoritmo FEC ',sel),' ',boton,' ',h('span',{class:'k'},elegirUI.msg)); }
 /* FEC=auto: el shim informa código activo, BER estimado (síndromes) y la escalera; campos ausentes = null */
 function bloqueAuto(j){ const ber=typeof j.ber_estimado==='number'?j.ber_estimado.toExponential(2):'—';
   const esc=(j.escalera||[]).join(' → ')||'—';

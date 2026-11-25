@@ -34,6 +34,14 @@ y manda un NACK (0xFE + n + n×uint16 + CRC8). El emisor guarda en un anillo (12
 LIMPIO, antes del canal, y reenvía el que le pidan (máx. 2 veces por secuencia, 8 por segundo); el
 reenvío vuelve a pasar por el canal del receptor, con ruido nuevo. La secuencia del NACK puede ser
 errónea si el error cayó en la cabecera; entonces el NACK no encuentra copia (sin_copia) o pide otra.
+
+Elegir el algoritmo en caliente (dinamico=True, es decir FEC en OPCIONES_ELEGIR). La página de síntoma
+puede cambiar el código sin reiniciar: ELEGIR <nombre> en el shim de cmp-dn cambia su emisión (DN→UE) y
+el shim manda al UE una trama de control de 3 B (0xFD + índice + CRC8) que el UE aplica a su emisión
+(UE→DN). La trama se repite cada ELEGIR_CADA_S s mientras la elección siga vigente, así sobrevive a que
+reinicie el UE. Con dinamico=True la maquinaria de auto (estimador, política, informes) existe siempre:
+el receptor informa de su BER aunque el código sea fijo, y el emisor solo cambia con los informes si está
+en auto. Con dinamico=False (FEC fijo como repeticion_5_1, o vacío) todo se comporta como antes.
 """
 from __future__ import annotations
 
@@ -142,6 +150,50 @@ def decodificar_nack(datos) -> list[int]:
     if adaptativo.crc8(bytes(datos[:-1])) != datos[-1]:
         raise ValueError("CRC8 del NACK no coincide")
     return list(struct.unpack(f"!{n}H", bytes(datos[2:-1])))
+
+
+# --- elegir el algoritmo en caliente (solo con dinamico=True) ---
+OPCIONES_ELEGIR = ("auto", "hamming_15_11", "secded_16_11", "secded_8_4", "hamming_7_4")
+CODIGOS_ELEGIBLES = tuple(o for o in OPCIONES_ELEGIR if o != "auto")   # los códigos que puede tener el marco
+MARCA_ELEGIR = 0xFD                  # trama de control DN→UE; no es id de código (1..5), ni NACK (0xFE), ni INFORME (0xFF)
+ELEGIR_CADA_S = 10.0                 # el DN repite la elección vigente cada tantos s (sobrevive a reinicios del UE)
+
+
+def es_dinamico(valor) -> bool:
+    """¿El valor de FEC permite elegir el algoritmo en caliente? (sin distinguir mayúsculas ni espacios)"""
+    return isinstance(valor, str) and valor.strip().lower() in OPCIONES_ELEGIR
+
+
+def es_eleccion(marco: bytes) -> bool:
+    """¿Es una trama de control de elección? Empieza por MARCA_ELEGIR, que ningún marco FEC puede empezar."""
+    return len(marco) > 0 and marco[0] == MARCA_ELEGIR
+
+
+def codificar_eleccion(nombre: str) -> bytes:
+    """Trama de control para el cable: [MARCA_ELEGIR][índice en OPCIONES_ELEGIR][CRC8 de los 2 anteriores]."""
+    if nombre not in OPCIONES_ELEGIR:
+        raise ValueError(f"algoritmo {nombre!r} no válido; usa uno de: {', '.join(OPCIONES_ELEGIR)}")
+    cuerpo = bytes([MARCA_ELEGIR, OPCIONES_ELEGIR.index(nombre)])
+    return cuerpo + bytes([adaptativo.crc8(cuerpo)])
+
+
+def decodificar_eleccion(marco) -> str:
+    """Nombre del algoritmo de una trama de control. ValueError si el largo, la marca, el CRC o el índice no cuadran."""
+    if not isinstance(marco, (bytes, bytearray)):
+        raise ValueError("la trama de elección debe ser bytes")
+    if len(marco) != 3:
+        raise ValueError(f"trama de elección de {len(marco)} B; debe ser de 3")
+    if marco[0] != MARCA_ELEGIR:
+        raise ValueError("no es una trama de elección")
+    if adaptativo.crc8(bytes(marco[:2])) != marco[2]:
+        raise ValueError("CRC8 de la elección no coincide")
+    if marco[1] >= len(OPCIONES_ELEGIR):
+        raise ValueError(f"índice de elección {marco[1]} fuera de rango (0..{len(OPCIONES_ELEGIR) - 1})")
+    return OPCIONES_ELEGIR[marco[1]]
+
+
+def _nueva_politica() -> adaptativo.Politica:
+    return adaptativo.Politica(TABLA_AUTO, inicial=CODIGO_INICIAL_AUTO)
 
 
 class RegistroFec:
@@ -295,15 +347,22 @@ class CapaFec:
     informes del receptor y los contadores se etiquetan con el código real de cada marco."""
 
     def __init__(self, codigo, lado: str, capacidad: int = 200, reloj=time.time,
-                 canal=None, semilla_canal: int = 1, reenvio: bool = False):
+                 canal=None, semilla_canal: int = 1, reenvio: bool = False, dinamico: bool = False):
         """`canal`: objeto de canal.parse_canal (o None = sin canal aleatorio). Cada marco recibido usa
         la semilla `semilla_canal + n`, con n = marcos recibidos hasta entonces: determinista.
-        `reenvio`: activa el reenvío por NACK (ver el docstring del módulo); apagado = comportamiento de siempre."""
-        self.auto = es_auto(codigo)
+        `reenvio`: activa el reenvío por NACK (ver el docstring del módulo); apagado = comportamiento de siempre.
+        `dinamico`: permite ELEGIR el algoritmo en caliente y crea siempre la maquinaria de auto (ver el módulo)."""
+        self.dinamico = bool(dinamico)
+        self.auto = es_auto(codigo)              # estado mutable: ELEGIR «auto» lo activa, otro código lo quita
         self.codigo = fec.buscar(CODIGO_INICIAL_AUTO if self.auto else codigo)
-        self.politica = adaptativo.Politica(TABLA_AUTO, inicial=CODIGO_INICIAL_AUTO) if self.auto else None
-        self.estimador = adaptativo.Estimador() if self.auto else None
-        self.informes = {"enviados": 0, "recibidos": 0, "malos": 0}   # solo en auto
+        con_maquinaria = self.auto or self.dinamico
+        self.politica = _nueva_politica() if con_maquinaria else None
+        self.estimador = adaptativo.Estimador() if con_maquinaria else None
+        self.eleccion: str | None = None          # último algoritmo elegido en caliente (ELEGIR / trama de control)
+        self.elegir_stats = {"elegida_local": 0, "recibida": 0, "mala": 0}
+        self._elegir_remoto: str | None = None    # DN: elección que se repite hacia el UE
+        self._t_elegir: float | None = None       # DN: instante del último envío de esa elección
+        self.informes = {"enviados": 0, "recibidos": 0, "malos": 0}   # solo en auto (o dinamico al enviar)
         self.cambios_codigo = 0
         self._t_informe: float | None = None
         self._muestras_informadas = 0
@@ -370,7 +429,10 @@ class CapaFec:
         desde el arranque, la primera inyección se ve en Grafana."""
         from compresores import CODECS, CODECS_CON_PERDIDA
         codecs = sorted(set(CODECS.values()) | set(CODECS_CON_PERDIDA.values())) + [CODEC_NA, CODEC_DESCONOCIDO]
-        codigos = ESCALERA_AUTO if self.auto else (self.codigo.nombre,)
+        if self.dinamico:
+            codigos = CODIGOS_ELEGIBLES
+        else:
+            codigos = ESCALERA_AUTO if self.auto else (self.codigo.nombre,)
         for nombre in codigos:
             c = fec.buscar(nombre)
             self._fila(c.nombre)
@@ -382,8 +444,9 @@ class CapaFec:
                 self._sind[(c.nombre, format(v, f"0{r}b"))] = 0
 
     def mtu(self) -> int:
-        """MTU de cmp0 para este lado: el de la escalera en auto, el del código fijo si no."""
-        return mtu_auto() if self.auto else mtu_con_fec(self.codigo)
+        """MTU de cmp0 para este lado: el mínimo de la escalera si puede cambiar de código (auto o dinámico),
+        el del código fijo si no."""
+        return mtu_auto() if (self.auto or self.dinamico) else mtu_con_fec(self.codigo)
 
     # --- emisión ---
     def emitir(self, marco_comprimido: bytes) -> bytes:
@@ -431,7 +494,7 @@ class CapaFec:
     def _codigo_del_marco(self, marco: bytes) -> str:
         """Código que indica el byte 0 del marco en modo auto. Fuera de auto, o con id desconocido,
         el vigente (como siempre)."""
-        if self.auto and marco and marco[0] in fec.CODIGOS:
+        if (self.auto or self.dinamico) and marco and marco[0] in fec.CODIGOS:
             return fec.CODIGOS[marco[0]].nombre
         return self.codigo.nombre
 
@@ -455,7 +518,7 @@ class CapaFec:
             comprimido, res = fec.decodificar(recibido)
         except ValueError as e:
             return self._cerrar(base), e
-        if self.auto:
+        if self.estimador is not None:   # el estimador observa siempre que exista (auto o dinámico)
             self.estimador.observar(res.palabras, res.sindromes_no_cero, res.no_corregibles, fec.buscar(nombre).n)
         cid, cnombre, _hc = info_codec(comprimido) if comprimido else (None, None, False)
         base.update(secuencia=res.secuencia, codec_id=cid, codec=cnombre,
@@ -498,10 +561,11 @@ class CapaFec:
 
     # --- informes del receptor (solo auto) ---
     def informe_pendiente(self, ahora: float) -> bytes | None:
-        """Informe (MARCA_INFORME + 12 B) que el receptor debe mandar ahora, o None. Solo en auto: si
-        pasaron ≥ INTERVALO_INFORME s desde el último y hay palabras medidas desde ese último.
+        """Informe (MARCA_INFORME + 12 B) que el receptor debe mandar ahora, o None. Solo si hay estimador
+        (auto o dinámico: el otro extremo puede estar en auto y los necesita): si pasaron ≥ INTERVALO_INFORME s
+        desde el último y hay palabras medidas desde ese último.
         `ahora` lo pone el llamador (reloj del shim, o un reloj simulado en las pruebas)."""
-        if not self.auto:
+        if self.estimador is None:
             return None
         with self._cerrojo:
             muestras = self.estimador.muestras
@@ -535,6 +599,56 @@ class CapaFec:
             if self.codigo.nombre != anterior:
                 self.cambios_codigo += 1
             self.informes["recibidos"] += 1
+        return True
+
+    # --- elegir el algoritmo en caliente (solo con dinamico=True) ---
+    def elegir(self, nombre) -> dict:
+        """Fija el algoritmo: «auto» activa el modo auto (política nueva, código inicial de la escalera);
+        otro nombre fija ese código y sale de auto. ValueError si el nombre no está en OPCIONES_ELEGIR o
+        si la capa no es dinámica. Devuelve el estado resultante."""
+        if not isinstance(nombre, str) or nombre not in OPCIONES_ELEGIR:
+            raise ValueError(f"algoritmo {nombre!r} no válido; usa uno de: {', '.join(OPCIONES_ELEGIR)}")
+        if not self.dinamico:
+            raise ValueError("este despliegue no es dinámico: el algoritmo se fija con FEC al arrancar")
+        with self._cerrojo:
+            if nombre == "auto":
+                self.auto = True
+                self.politica = _nueva_politica()
+                self.codigo = fec.buscar(CODIGO_INICIAL_AUTO)
+            else:
+                self.auto = False
+                self.codigo = fec.buscar(nombre)
+            self.eleccion = nombre
+            return {"ok": True, "codigo_activo": self.codigo.nombre, "auto": self.auto, "eleccion": self.eleccion}
+
+    def eleccion_pendiente(self, ahora: float) -> bytes | None:
+        """Trama de control que el DN debe mandar al UE ahora, o None. Solo en el lado «dn» y solo si hay
+        una elección fijada con ELEGIR: la primera vez de inmediato y luego cada ELEGIR_CADA_S s."""
+        if self.lado != "dn":
+            return None
+        with self._cerrojo:
+            nombre = self._elegir_remoto
+            if nombre is None:
+                return None
+            if self._t_elegir is not None and ahora - self._t_elegir < ELEGIR_CADA_S:
+                return None
+            self._t_elegir = ahora
+        return codificar_eleccion(nombre)
+
+    def recibir_eleccion(self, marco: bytes) -> bool:
+        """Aplica una trama de control (con su marca). True si era válida y se aplicó. Sin dinamico la ignora
+        sin contarla. Una trama mala no cambia nada y cuenta como «mala». Nunca lanza."""
+        if not self.dinamico:
+            return False
+        try:
+            nombre = decodificar_eleccion(marco)
+        except ValueError:
+            with self._cerrojo:
+                self.elegir_stats["mala"] += 1
+            return False
+        self.elegir(nombre)
+        with self._cerrojo:
+            self.elegir_stats["recibida"] += 1
         return True
 
     # --- reenvío por NACK (solo con reenvio=True) ---
@@ -648,12 +762,17 @@ class CapaFec:
             s += f'lab5g_cmp_fec_palabras_total{{{l},codigo="{cod}"}} {fila["palabras"]}\n'
             s += "".join(f'lab5g_cmp_fec_bytes_total{{{l},codigo="{cod}",tipo="{t}"}} {fila[t]}\n'
                          for t in ("comprimido", "fec"))
-        if self.auto:
+        if self.estimador is not None:   # auto, o dinámico (que siempre tiene estimador)
             s += f"lab5g_cmp_fec_ber_estimado{{{l}}} {self.estimador.ber}\n"
+            codigos = CODIGOS_ELEGIBLES if self.dinamico else ESCALERA_AUTO
             s += "".join(f'lab5g_cmp_fec_codigo_activo{{{l},codigo="{c}"}} {int(c == self.codigo.nombre)}\n'
-                         for c in ESCALERA_AUTO)
+                         for c in codigos)
             s += f"lab5g_cmp_fec_cambios_codigo_total{{{l}}} {self.cambios_codigo}\n"
             s += "".join(f'lab5g_cmp_fec_informes_total{{{l},tipo="{t}"}} {v}\n' for t, v in self.informes.items())
+        if self.dinamico:
+            with self._cerrojo:
+                st_elegir = dict(self.elegir_stats)
+            s += "".join(f'lab5g_cmp_fec_elegir_total{{{l},tipo="{t}"}} {v}\n' for t, v in st_elegir.items())
         if self.reenvio:
             with self._cerrojo:
                 st = dict(self.reenvio_stats)
@@ -681,15 +800,29 @@ class CapaFec:
                 return {"ok": True, "codigo": self.codigo.nombre, "lado": self.lado, **self.registro.contadores()}
             if verbo == "INYECTAR":
                 return {"ok": True, "armada": self.armar(json.loads(resto))}
+            if verbo == "ELEGIR":
+                try:
+                    r = self.elegir(resto.strip())
+                except ValueError as e:
+                    return {"ok": False, "error": str(e)[:200], "dinamico": self.dinamico}
+                with self._cerrojo:
+                    self.elegir_stats["elegida_local"] += 1
+                    if self.lado == "dn":   # el DN reenvía la elección al UE por el túnel (ver eleccion_pendiente)
+                        self._elegir_remoto = r["eleccion"]
+                        self._t_elegir = None
+                return r
             if verbo == "CODIGO":
                 extra: dict = {"reenvio": self.reenvio}
                 if self.reenvio:
                     with self._cerrojo:
                         extra["reenvio_stats"] = dict(self.reenvio_stats)
                 return {**self.describir_codigo(), "auto": self.auto,
-                        "ber_estimado": self.estimador.ber if self.auto else None,
+                        "ber_estimado": self.estimador.ber if self.estimador is not None else None,
                         "codigo_activo": self.codigo.nombre,
-                        "escalera": list(ESCALERA_AUTO) if self.auto else None, **extra}
+                        "escalera": list(ESCALERA_AUTO) if self.auto else None,
+                        "dinamico": self.dinamico,
+                        "opciones": list(OPCIONES_ELEGIR) if self.dinamico else None,
+                        "eleccion": self.eleccion, **extra}
             return {"ok": False, "error": f"comando desconocido: {verbo[:20]!r}"}
         except Exception as e:  # JSONDecodeError, RecursionError por JSON anidado... el hilo no debe morir
             if not isinstance(e, (ValueError, TypeError)):   # los de validación son rutina; el resto, no

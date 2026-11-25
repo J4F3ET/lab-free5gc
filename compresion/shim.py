@@ -30,7 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compresores import CODECS, CODECS_CON_PERDIDA, Descompresor, Modelo, nombre_codec, pasos_desde_texto
 from bandido import RAFAGA_RED, SOMBRA_CADA, EmisorAdaptativo, texto_bandido
-from registro_fec import CapaFec, emitir_marco, es_informe, es_nack, recibir_marco, validar_codigo
+from registro_fec import (CapaFec, emitir_marco, es_dinamico, es_eleccion, es_informe, es_nack, recibir_marco,
+                          validar_codigo)
 from canal import parse_canal
 from sumidero import servir_sumidero_tcp
 
@@ -194,8 +195,10 @@ def main() -> None:
         except ValueError:
             sys.exit(f"[cmp-{lado}] CANAL_SEMILLA={os.environ.get('CANAL_SEMILLA')!r} debe ser un entero")
         # REENVIO=1: si el receptor ve un doble error (no corregible), descarta y pide reenvío por NACK.
+        # FEC en OPCIONES_ELEGIR (incluido «auto») = dinámico: el algoritmo se puede cambiar desde la página
+        # sin reiniciar (ELEGIR). repeticion_5_1 no es dinámico y conserva su MTU de siempre.
         capa = CapaFec(os.environ["FEC"], lado, canal=canal_ruido, semilla_canal=semilla_canal,
-                       reenvio=os.environ.get("REENVIO") == "1")
+                       reenvio=os.environ.get("REENVIO") == "1", dinamico=es_dinamico(os.environ["FEC"]))
     elif os.environ.get("CANAL"):
         print(f"[cmp-{lado}] aviso: CANAL={os.environ['CANAL']!r} se ignora porque FEC está apagado", flush=True)
     if capa is None and os.environ.get("REENVIO") == "1":
@@ -256,7 +259,9 @@ def main() -> None:
                 par = origen  # la dirección del UE tras el NAT del UPF
             if marco != KEEPALIVE and capa is not None and es_nack(marco):
                 capa.recibir_nack(marco)          # NACK: pide reenvío; no es un marco FEC ni cuenta como error
-            elif marco != KEEPALIVE and capa is not None and capa.auto and es_informe(marco):
+            elif marco != KEEPALIVE and capa is not None and es_eleccion(marco):
+                capa.recibir_eleccion(marco)      # elección del DN (ELEGIR): no es un marco FEC ni cuenta como error
+            elif marco != KEEPALIVE and capa is not None and (capa.dinamico or capa.auto) and es_informe(marco):
                 capa.recibir_informe(marco[1:])   # informe del receptor: no es un marco FEC ni cuenta como error
             elif marco != KEEPALIVE and capa:
                 def escribir(pkt: bytes) -> None:
@@ -276,10 +281,13 @@ def main() -> None:
                     met.c["errores"] += 1
                     if met.c["errores"] < 20:
                         print(f"[cmp-{lado}] no se pudo descomprimir: {e!r}", flush=True)
-        if capa is not None and par is not None:   # solo en auto devuelve algo: el informe del receptor
+        if capa is not None and par is not None:   # informe del receptor (con estimador: auto o dinámico)
             inf = capa.informe_pendiente(ahora)
             if inf:
                 sock.sendto(inf, par)
+            ctl = capa.eleccion_pendiente(ahora)   # solo DN y tras ELEGIR: la elección que el UE debe aplicar
+            if ctl:
+                sock.sendto(ctl, par)
             for reenvio_marco in capa.reenvios_pendientes():   # solo con REENVIO=1 (lo pedido por NACK)
                 sock.sendto(reenvio_marco, par)
             nack = capa.nack_pendiente()                       # solo con REENVIO=1
