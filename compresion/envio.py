@@ -467,7 +467,7 @@ HTML = r"""<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Envío por 5G</title>
 <style>
-:root{--bg:#f7f7f5;--fg:#1d1d1b;--mute:#6b6b66;--card:#fff;--line:#e3e2dc;--ok:#1f7a4d;--bad:#b3261e;--acc:#2f5bd3}
+:root{color-scheme:light dark;--bg:#f7f7f5;--fg:#1d1d1b;--mute:#6b6b66;--card:#fff;--line:#e3e2dc;--ok:#1f7a4d;--bad:#b3261e;--acc:#2f5bd3}
 @media (prefers-color-scheme:dark){:root{--bg:#161615;--fg:#ecebe6;--mute:#9a9992;--card:#1f1f1d;--line:#33332f;--ok:#5cc28d;--bad:#ff8a80;--acc:#8fa8ff}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:980px;margin:0 auto;padding:28px 16px 60px}h1{font-size:22px;margin:0 0 4px}p.sub{color:var(--mute);margin:0 0 22px}
@@ -485,12 +485,19 @@ code{font-size:12px;overflow-wrap:anywhere}details{margin-top:10px;color:var(--m
 nav.tabs{display:flex;gap:6px;margin:0 0 18px;flex-wrap:wrap}nav.tabs button,.btn{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
 nav.tabs button.sel{border-color:var(--acc);color:var(--acc)}.btn:hover{border-color:var(--acc)}
 .aviso{border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px 12px;margin:10px 0;font-size:13px}
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}::-webkit-scrollbar-thumb:hover{background:var(--mute)}
+select{font:inherit;color:var(--fg);background-color:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 30px 6px 10px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+select:hover,select:focus{border-color:var(--acc);outline:none}
+.notas{margin:8px 0;color:var(--fg)}.notas summary{display:inline-block;list-style:none;cursor:pointer}.notas summary::-webkit-details-marker{display:none}
+.notas[open] summary{border-color:var(--acc);color:var(--acc)}.notas-c{margin-top:8px;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.notas-c p,.notas-c .nota{margin:8px 0;font-size:13px;color:var(--mute);line-height:1.45}.notas-c .nota b{color:var(--fg);font-weight:600}
 .mat{border-collapse:collapse;display:inline-table;margin:4px 14px 8px 0}.mat td{border:1px solid var(--line);padding:2px 7px;text-align:center;font:13px ui-monospace,monospace}
 .mat td.par{background:var(--par)}.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.ctl input{font:inherit;width:90px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
-#linea{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;padding:6px;max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}#linea button{width:16px;height:16px;padding:0;border-radius:4px;border:2px solid transparent;cursor:pointer;color:#fff;font-size:9px;flex:none;box-sizing:border-box}.tabla-lab{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px}.tabla-lab table{min-width:640px}.tabla-lab th{position:sticky;top:0;background:var(--card);white-space:nowrap;z-index:1;box-shadow:0 1px 0 var(--line)}.tabla-lab td{white-space:nowrap}.tabla-lab td:last-child{white-space:normal;word-break:break-word;min-width:120px;text-align:left}.tabla-lab th:last-child{text-align:left}
+#linea{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;padding:10px;max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}#linea button{position:relative;width:28px;height:28px;padding:0;border-radius:6px;border:2px solid transparent;cursor:pointer;color:#fff;font-size:10px;flex:none;box-sizing:border-box}.tabla-lab{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}.tabla-lab table{min-width:640px}.tabla-lab th{position:sticky;top:0;background:var(--card);white-space:nowrap;z-index:1;box-shadow:0 1px 0 var(--line)}.tabla-lab td{white-space:nowrap}.tabla-lab td:last-child{white-space:normal;word-break:break-word;min-width:120px;text-align:left}.tabla-lab th:last-child{text-align:left}
 #linea button.limpio{background:var(--c-limpio)}#linea button.corregido{background:var(--c-corr);border-color:var(--fg)}#linea button.corregido_mal{background:var(--c-cmal);border-color:var(--fg)}#linea button.no_corregible,#linea button.invalido{background:var(--c-mal)}
 #linea button.reenviado{background:var(--c-reenv)}
-#linea button.iny{outline:2px dashed var(--warn);outline-offset:0}#linea button.act{box-shadow:0 0 0 2px var(--acc)}
+#linea button.iny::after{content:'';position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--warn);border:1px solid var(--card)}#linea button.act{box-shadow:0 0 0 2px var(--acc)}
 #detalle ol{padding-left:20px}#detalle li{margin:6px 0}.st-limpio{color:var(--c-limpio)}.st-corregido{color:var(--c-corr)}.st-corregido_mal{color:var(--c-cmal)}.st-no_corregible,.st-invalido{color:var(--c-mal)}
 tr.fila{cursor:pointer}tr.fila:hover{background:var(--bg)}
 </style></head><body><main>
@@ -512,16 +519,17 @@ Un archivo ya comprimido (MP3, JPG, MP4) casi no ahorra: el bandido aprende a ma
 <div id="vista-lab" hidden>
 <h2 style="font-size:18px;margin:0 0 4px">Laboratorio de síndrome</h2>
 <p class="sub" style="margin-bottom:8px">Detección y corrección de errores con códigos de bloque lineales: recibido r = c + e, síndrome s = r·Hᵀ; s = 0 sin error, s ≠ 0 error, y si coincide con la columna i de H se voltea el bit i.</p>
-<div class="aviso">Para cambiar el canal (CANAL=bsc:P o rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO) hay que fijarlo con «lab5g.sh env-set» y reiniciar cmp-ue y cmp-dn. El algoritmo FEC se cambia con el selector de abajo si el despliegue es dinámico (FEC=auto o uno de los cuatro códigos); si no, hay que fijar FEC (repeticion_5_1, hamming_7_4, secded_8_4) con «lab5g.sh env-set» y reiniciar.</div>
-<div class="aviso">Nota: el canal se modela en la recepción del shim de cmp-dn, es decir sobre el tráfico que RECIBE el DN (p. ej. el viaje de vuelta del eco). El error se inyecta ahí, no en la bajada.</div>
-<div class="aviso">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y, si el paquete no se reconstruye, queda como «corrigió mal» (si sí se reconstruye, sigue contado como «corregido»); el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
+<details class="notas"><summary class="btn">ⓘ Notas</summary><div class="notas-c"><div class="nota">Para cambiar el canal (CANAL=bsc:P o rafaga:P_MALO,P_BUENO_A_MALO,P_MALO_A_BUENO) hay que fijarlo con «lab5g.sh env-set» y reiniciar cmp-ue y cmp-dn. El algoritmo FEC se cambia con el selector de abajo si el despliegue es dinámico (FEC=auto o uno de los cuatro códigos); si no, hay que fijar FEC (repeticion_5_1, hamming_7_4, secded_8_4) con «lab5g.sh env-set» y reiniciar.</div>
+<div class="nota">Nota: el canal se modela en la recepción del shim de cmp-dn, es decir sobre el tráfico que RECIBE el DN (p. ej. el viaje de vuelta del eco). El error se inyecta ahí, no en la bajada.</div>
+<div class="nota">Honestidad: con 2 errores Hamming (7,4) corrige mal (d_min = 3: detecta 2, corrige 1) y, si el paquete no se reconstruye, queda como «corrigió mal» (si sí se reconstruye, sigue contado como «corregido»); el receptor no compara contra el original, así que la columna «íntegro» es lo que dice el shim, no una prueba.</div>
+<div id="notas-dyn"></div></div></details>
 <div id="lab-codigo" class="res"></div>
 <div class="res"><div class="ctl">
 <button class="btn" id="b-uno" type="button">Inyectar 1 bit</button><button class="btn" id="b-dos" type="button">Inyectar 2 bits</button>
 <label class="k">bit exacto <input id="bit-exacto" type="number" min="8" step="1" placeholder="&ge; 8"></label><button class="btn" id="b-exacto" type="button">Inyectar ahí</button>
 </div><div id="armada" class="k"></div></div>
 <h3 style="font-size:15px;margin:18px 0 0">Línea de tiempo de paquetes</h3>
-<div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido (con SECDED, «doble detectado») · azul: reenviado (llegó porque el receptor pidió el NACK) · borde punteado: con error inyectado. Clic para ver el detalle.</div>
+<div class="k">gris: limpio · verde con borde: corregido · naranja con borde: corrigió mal (el síndrome corrigió, el paquete no se reconstruyó) · rojo: no corregible o inválido (con SECDED, «doble detectado») · azul: reenviado (llegó porque el receptor pidió el NACK) · punto amarillo en la esquina: con error inyectado. Clic para ver el detalle.</div>
 <div id="linea"></div>
 <div class="ctl"><label class="k">estado <select id="filtro"><option value="">todos</option><option value="limpio">limpio</option><option value="corregido">corregido</option><option value="corregido_mal">corrigió mal</option><option value="no_corregible">no corregible</option><option value="invalido">inválido</option><option value="reenviado">reenviado</option></select></label><span id="cuenta" class="k"></span></div>
 <div class="tabla tabla-lab"><table><thead><tr><th>id</th><th>lado</th><th>sec.</th><th>códec</th><th>estado</th><th>s≠0</th><th>corr.</th><th>no corr.</th><th>bits volteados</th></tr></thead><tbody id="lab-tabla"></tbody></table></div>
@@ -576,7 +584,7 @@ function vista(cual){ const l=cual==='lab';
 $('#t-envio').onclick=()=>vista('envio'); $('#t-lab').onclick=()=>vista('lab');
 function matriz(titulo,filas,paridad){ return h('div',{style:'display:inline-block;vertical-align:top'},h('div',{class:'k'},titulo),
   h('table',{class:'mat'},filas.map(f=>h('tr',{},f.map((v,j)=>h('td',{class:paridad(j)?'par':''},v)))))); }
-async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren(); secded=false; marcarSecded();
+async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren(); const nd=$('#notas-dyn'); if(nd) nd.replaceChildren(); secded=false; marcarSecded();
   let j; try{ const r=await fetch('fec/codigo'); j=await r.json(); if(!r.ok) throw new Error(j.error||r.status); }
   catch(e){ cont.append(h('b',{},'FEC desactivado'),h('div',{class:'k'},' (sin respuesta del shim: '+String(e.message||e)+')')); lab.codigo=null; return; }
   if(!j.codigo){ cont.append(h('b',{},'FEC desactivado'),h('div',{class:'k'},'El shim no tiene código de canal activo; la página de envío funciona igual.')); lab.codigo=null; return; }
@@ -587,8 +595,10 @@ async function labCodigo(){ const cont=$('#lab-codigo'); cont.replaceChildren();
   const piezas=[h('div',{},h('b',{},'Código activo: '+j.codigo),' ',h('span',{class:'k'},`(n=${n}, k=${k}, ${r} bits de paridad) · ${canal}`)),
     matriz('G = [P : I_k]  (k×n)',G,c=>c<r), matriz('H = [I : Pᵀ]  ((n−k)×n)',j.H,c=>c>=r),
     h('div',{class:'k'},'Celdas sombreadas: la parte de paridad (en G es P; en H es Pᵀ). Palabra código c = m·G, s = r·Hᵀ. Posiciones dentro de una palabra y columnas de H se numeran desde 1, como en clase (el bit 5 de la palabra es la columna 5 de H).'),
-    secded?h('div',{class:'aviso'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'):null,j.auto?bloqueAuto(j):null,
-    j.dinamico?bloqueElegir(j):h('div',{class:'aviso'},'Para cambiar el algoritmo hay que reiniciar con FEC=... (este despliegue no es dinámico).')]; cont.append(...piezas.filter(Boolean)); }
+    j.auto?bloqueAuto(j):null,
+    j.dinamico?bloqueElegir(j):null]; cont.append(...piezas.filter(Boolean));
+  if(nd){ if(secded) nd.append(h('div',{class:'nota'},'SECDED detecta 2 errores y no los corrige mal: con 2 errores en una palabra el estado es «doble detectado» (no_corregible).'));
+    if(!j.dinamico) nd.append(h('div',{class:'nota'},'Para cambiar el algoritmo hay que reiniciar con FEC=... (este despliegue no es dinámico).')); } }
 /* FEC dinámico: selector de algoritmo. El valor que se aplica lo recibe el shim de cmp-dn (ELEGIR); el UE lo recibe por el túnel. */
 const OPC_ELEGIR=[['auto','Automático'],['hamming_15_11','Hamming (15,11)'],['secded_16_11','SECDED (16,11)'],['secded_8_4','SECDED (8,4)'],['hamming_7_4','Hamming (7,4)']];
 const elegirUI={msg:''};   // último mensaje del selector; sobrevive al refresco de labCodigo()
@@ -602,11 +612,11 @@ function bloqueElegir(j){ const actual=j.auto?'auto':(j.eleccion||j.codigo_activ
     catch(e){ elegirUI.msg='No se pudo aplicar: '+String(e.message||e); }
     finally{ boton.disabled=false; }
     labCodigo(); };
-  return h('div',{class:'aviso'},h('label',{},'Algoritmo FEC ',sel),' ',boton,' ',h('span',{class:'k'},elegirUI.msg)); }
+  return h('div',{class:'ctl'},h('label',{class:'k'},'Algoritmo FEC ',sel),boton,h('span',{class:'k'},elegirUI.msg)); }
 /* FEC=auto: el shim informa código activo, BER estimado (síndromes) y la escalera; campos ausentes = null */
 function bloqueAuto(j){ const ber=typeof j.ber_estimado==='number'?j.ber_estimado.toExponential(2):'—';
   const esc=(j.escalera||[]).join(' → ')||'—';
-  return h('div',{class:'aviso'},`Modo automático: código activo ${j.codigo_activo||j.codigo}, BER estimado ${ber} (escalera: ${esc}).`,
+  return h('div',{class:'k',style:'margin:8px 0'},`Modo automático: código activo ${j.codigo_activo||j.codigo}, BER estimado ${ber} (escalera: ${esc}).`,
     h('br'),'El receptor mide el BER con los síndromes y se lo informa al emisor cada ~2 s, con histéresis: el código sube al instante y baja solo tras 3 informes con BER bajo.'); }
 function columnasH(){ const H=lab.codigo&&lab.codigo.H; if(!H) return {}; const m={};
   for(let j=0;j<H[0].length;j++){ m[H.map(f=>f[j]).join('')]=j; } return m; }
